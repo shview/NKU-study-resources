@@ -1,0 +1,83 @@
+---
+import Layout from "../layouts/Layout.astro";
+import links from "../data/links.json";
+import { markdownToHtml } from "../lib/markdown";
+
+const mutualLinks = (links.links ?? []).filter((item) => item.type !== "recommended" && item.hidden !== true);
+const recommendedLinks = (links.links ?? []).filter((item) => item.type === "recommended" && item.hidden !== true);
+const plainText = (value) => String(value ?? "")
+  .replace(/```[\s\S]*?```/g, " ")
+  .replace(/`([^`]+)`/g, "$1")
+  .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+  .replace(/[#>*_~`-]+/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+---
+
+<Layout title="友链" eyebrow="Links">
+  <section class="content">
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>{links.title ?? "友情链接"}</h2>
+          {links.intro && <div class="muted markdown-body" set:html={markdownToHtml(links.intro)} />}
+        </div>
+      </div>
+      <div class="panel-body link-page">
+        {mutualLinks.length > 0 && (
+          <section class="link-section">
+            <h3>{links.mutualTitle ?? "友情链接"}</h3>
+            <div class="link-grid">
+              {mutualLinks.map((item) => (
+                <a class="link-card" href={item.url} target="_blank" rel="noreferrer">
+                  <strong>{item.name}</strong>
+                  {item.description && <p>{plainText(item.description)}</p>}
+                  <small>{item.url}</small>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {recommendedLinks.length > 0 && (
+          <section class="link-section">
+            <h3>{links.recommendedTitle ?? "推荐链接"}</h3>
+            <div class="link-grid">
+              {recommendedLinks.map((item) => (
+                <a class="link-card" href={item.url} target="_blank" rel="noreferrer">
+                  <strong>{item.name}</strong>
+                  {item.description && <p>{plainText(item.description)}</p>}
+                  <small>{item.url}</small>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!mutualLinks.length && !recommendedLinks.length && (
+          <p class="empty">暂未添加友链。</p>
+        )}
+
+        <section class="link-section">
+          <h3>{links.siteInfoTitle ?? "本站信息"}</h3>
+          <div class="link-site-info">
+            <dl>
+              <div>
+                <dt>名称</dt>
+                <dd>{links.siteInfo?.name ?? "NKUStudy"}</dd>
+              </div>
+              <div>
+                <dt>地址</dt>
+                <dd><a href={links.siteInfo?.url ?? "https://nkustudy.top/"}>{links.siteInfo?.url ?? "https://nkustudy.top/"}</a></dd>
+              </div>
+              <div>
+                <dt>简介</dt>
+                <dd class="markdown-body" set:html={markdownToHtml(links.siteInfo?.description ?? "面向南开课程资料整理、课程导航与教师评价的轻量级站点。")}></dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+      </div>
+    </article>
+  </section>
+</Layout>

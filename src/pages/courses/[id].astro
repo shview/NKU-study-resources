@@ -1,0 +1,316 @@
+﻿---
+import Layout from "../../layouts/Layout.astro";
+import { courses, countFiles, fileUrl, formatBytes, manifest, totalSize, visibleFiles } from "../../lib/resources";
+import { markdownToHtml } from "../../lib/markdown";
+
+export function getStaticPaths() {
+  return courses.map((course) => ({
+    params: { id: course.id },
+    props: { course },
+  }));
+}
+
+const { course } = Astro.props;
+
+function fileParts(section, file) {
+  const parts = String(file.path || file.title || "").split("/").filter(Boolean);
+  if (parts[0] === section.title) parts.shift();
+  return parts;
+}
+
+const sortedSections = course.sections.map((section) => {
+  const files = visibleFiles(section.files);
+  const directFiles = [];
+  const groups = new Map();
+  for (const file of files) {
+    const parts = fileParts(section, file);
+    if (parts.length > 1) {
+      const groupTitle = parts[0];
+      if (!groups.has(groupTitle)) groups.set(groupTitle, []);
+      groups.get(groupTitle).push(file);
+    } else {
+      directFiles.push(file);
+    }
+  }
+  return {
+    ...section,
+    files,
+    directFiles,
+    groups: Array.from(groups, ([title, files]) => ({ title, files })),
+  };
+});
+
+
+const directDownloadUrl = (file) => {
+  const url = fileUrl(course, file);
+  const separator = url.includes("?") ? "&" : "?";
+  const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(file.title || "download")}`;
+  return `${url}${separator}response-content-disposition=${encodeURIComponent(disposition)}`;
+};
+
+const contributors = course.contributors ?? [];
+const blockedTag = "无固定年级";
+const hiddenMetaTags = new Set([...(course.hiddenMetaTags ?? []), ...(manifest.hiddenMetaTags ?? [])]);
+const showMetaTag = (tag) => tag && tag !== blockedTag && !hiddenMetaTags.has(tag);
+const visibleTags = (course.tags ?? []).filter(showMetaTag);
+---
+
+<Layout title={course.title} eyebrow={`${course.term} / ${course.group}`}>
+  <section class="content">
+    <article class="panel">
+      <div class="panel-header">
+        <div class="course-meta">
+          <span class="pill">更新 {course.updated}</span>
+          {showMetaTag(course.assessment) && <span class="pill">{course.assessment}</span>}
+          <span class="pill">{countFiles(course)} 个文件</span>
+          <span class="pill">{formatBytes(totalSize(course))}</span>
+          {contributors.length > 0 && (
+            <details class="contributors-popover">
+              <summary>{contributors.length} 位贡献者</summary>
+              <div>
+                {contributors.map((name) => <span class="tag">{name}</span>)}
+              </div>
+            </details>
+          )}
+          <a class="button secondary meta-return" href="/courses/">返回</a>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="course-summary markdown-body" set:html={markdownToHtml(course.summary)} />
+        {course.grades?.length > 0 && (
+          <>
+            <h3 style="margin-top: 20px;">适用提示</h3>
+            <div class="course-tips markdown-body" set:html={markdownToHtml(course.grades.join("\n"))} />
+          </>
+        )}
+        {visibleTags.length > 0 && (
+          <>
+            <h3 style="margin-top: 20px;">标签</h3>
+            <div class="course-meta">
+              {visibleTags.map((tag) => <span class="tag">{tag}</span>)}
+            </div>
+          </>
+        )}
+      </div>
+    </article>
+
+    <section class="panel" id="resources" style="margin-top: 22px;">
+      <div class="panel-header">
+        <h2>资源树</h2>
+      </div>
+      <div class="panel-body">
+        <input class="searchbar" id="resource-search" type="search" placeholder="搜索文件名、说明、板块" autocomplete="off" />
+        <div class="resource-bulk-toolbar">
+          <label class="resource-check-all">
+            <input id="select-visible-files" type="checkbox" />
+            <span>选择当前显示文件</span>
+          </label>
+          <button class="button" id="download-selected-files" type="button" disabled>打包下载选中</button>
+          <a class="button secondary" id="save-zip-link" href="#" download hidden>保存 ZIP</a>
+          <button class="button secondary" id="clear-selected-files" type="button" disabled>清除选择</button>
+          <span class="muted" id="selected-file-count">已选 0 个文件</span>
+        </div>
+        <div class="section-stack" id="resource-list" style="margin-top: 16px;">
+          {sortedSections.map((section) => (
+            <details class="resource-section" open data-search={`${section.title} ${section.note ?? ""} ${section.files.map((file) => `${file.title} ${file.description ?? ""}`).join(" ")}`}>
+              <summary>{section.title} <span class="muted">({section.files.length})</span></summary>
+              {section.note && <div class="section-note markdown-body" set:html={markdownToHtml(section.note)} />}
+              {section.files.length > 0 ? (
+                <>
+                  {section.groups.map((group) => (
+                    <details class="resource-subsection" open data-search={`${section.title} ${group.title} ${group.files.map((file) => `${file.title} ${file.description ?? ""}`).join(" ")}`}>
+                      <summary>{group.title} <span class="muted">({group.files.length})</span></summary>
+                      <div class="file-list">
+                        {group.files.map((file) => (
+                          <div class="file-row" data-search={`${section.title} ${group.title} ${file.title} ${file.description ?? ""}`}>
+                            <input class="resource-file-check" type="checkbox" aria-label={`閫夋嫨 ${file.title}`} data-url={directDownloadUrl(file)} data-fetch-url={fileUrl(course, file)} data-name={file.title} data-folder={`${section.title}/${group.title}`} />
+                            <div>
+                              <strong>{file.title}</strong>
+                              {file.description && <div class="file-description markdown-body" set:html={markdownToHtml(file.description)} />}
+                            </div>
+                            <span class="pill">{formatBytes(file.size)}</span>
+                            <a class="button file-download" href={directDownloadUrl(file)} download={file.title}>下载</a>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                  {section.directFiles.length > 0 && (
+                    <div class="file-list">
+                      {section.directFiles.map((file) => (
+                        <div class="file-row" data-search={`${section.title} ${file.title} ${file.description ?? ""}`}>
+                          <input class="resource-file-check" type="checkbox" aria-label={`閫夋嫨 ${file.title}`} data-url={directDownloadUrl(file)} data-fetch-url={fileUrl(course, file)} data-name={file.title} data-folder={section.title} />
+                          <div>
+                            <strong>{file.title}</strong>
+                            {file.description && <div class="file-description markdown-body" set:html={markdownToHtml(file.description)} />}
+                          </div>
+                          <span class="pill">{formatBytes(file.size)}</span>
+                          <a class="button file-download" href={directDownloadUrl(file)} download={file.title}>下载</a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p class="empty">此板块暂无文件。</p>
+              )}
+            </details>
+          ))}
+
+        </div>
+        <p class="empty" id="resource-empty" hidden>没有找到匹配资源。</p>
+      </div>
+    </section>
+  </section>
+
+  <script>
+    import JSZip from "jszip";
+
+    const courseTitle = document.querySelector(".topbar h1")?.textContent?.trim() || "课程资源";
+    const input = document.querySelector("#resource-search");
+    const sections = Array.from(document.querySelectorAll("#resource-list .resource-section"));
+    const empty = document.querySelector("#resource-empty");
+    const checks = Array.from(document.querySelectorAll(".resource-file-check"));
+    const selectVisible = document.querySelector("#select-visible-files");
+    const downloadSelected = document.querySelector("#download-selected-files");
+    const saveZipLink = document.querySelector("#save-zip-link");
+    const clearSelected = document.querySelector("#clear-selected-files");
+    const selectedCount = document.querySelector("#selected-file-count");
+    let currentZipUrl = "";
+
+    function safeZipName(value) {
+      return String(value || "file").replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, " ").trim();
+    }
+
+    function visibleChecks() {
+      return checks.filter((check) => !check.closest(".file-row")?.hidden && !check.closest(".resource-section")?.hidden && !check.closest(".resource-subsection")?.hidden);
+    }
+
+    function updateSelectionState() {
+      const selected = checks.filter((check) => check.checked);
+      const visible = visibleChecks();
+      selectedCount.textContent = "已选 " + selected.length + " 个文件";
+      downloadSelected.disabled = selected.length === 0;
+      clearSelected.disabled = selected.length === 0;
+      selectVisible.checked = visible.length > 0 && visible.every((check) => check.checked);
+      selectVisible.indeterminate = visible.some((check) => check.checked) && !selectVisible.checked;
+    }
+
+    function clearPreparedZip() {
+      if (currentZipUrl) URL.revokeObjectURL(currentZipUrl);
+      currentZipUrl = "";
+      saveZipLink.hidden = true;
+      saveZipLink.removeAttribute("href");
+      saveZipLink.removeAttribute("download");
+    }
+
+    function applySearch() {
+      const keyword = input.value.trim().toLowerCase();
+      let visibleSections = 0;
+      for (const section of sections) {
+        const rows = Array.from(section.querySelectorAll(".file-row"));
+        let visibleRows = 0;
+        for (const row of rows) {
+          const matched = row.dataset.search.toLowerCase().includes(keyword);
+          row.hidden = keyword ? !matched : false;
+          if (matched || !keyword) visibleRows += 1;
+        }
+        const sectionMatched = section.dataset.search.toLowerCase().includes(keyword);
+        const shouldShow = keyword ? sectionMatched || visibleRows > 0 : true;
+        for (const subsection of Array.from(section.querySelectorAll(".resource-subsection"))) {
+          const subsectionRows = Array.from(subsection.querySelectorAll(".file-row"));
+          const visibleSubRows = subsectionRows.filter((row) => !row.hidden).length;
+          const subsectionMatched = subsection.dataset.search.toLowerCase().includes(keyword);
+          const showSubsection = keyword ? subsectionMatched || visibleSubRows > 0 : true;
+          subsection.hidden = !showSubsection;
+          subsection.open = keyword ? showSubsection : subsection.open;
+        }
+        section.hidden = !shouldShow;
+        section.open = keyword ? shouldShow : section.open;
+        if (shouldShow) visibleSections += 1;
+      }
+      if (empty) empty.hidden = visibleSections !== 0;
+      updateSelectionState();
+    }
+
+    async function downloadSelectedAsZip() {
+      const selected = checks.filter((check) => check.checked);
+      if (!selected.length) return;
+      clearPreparedZip();
+      const originalText = downloadSelected.textContent;
+      downloadSelected.disabled = true;
+      downloadSelected.textContent = "正在打包 0%";
+      try {
+        const zip = new JSZip();
+        const usedNames = new Map();
+        for (let index = 0; index < selected.length; index += 1) {
+          const check = selected[index];
+          const response = await fetch(check.dataset.fetchUrl || check.dataset.url, {
+            mode: "cors",
+            credentials: "omit",
+            cache: "no-store",
+          });
+          if (!response.ok) throw new Error("下载失败：" + (check.dataset.name || response.status));
+          const blob = await response.blob();
+          const folder = safeZipName(check.dataset.folder || "资源");
+          const name = safeZipName(check.dataset.name || ("file-" + (index + 1)));
+          const key = folder + "/" + name;
+          const seen = usedNames.get(key) || 0;
+          usedNames.set(key, seen + 1);
+          const zipName = seen ? folder + "/" + (seen + 1) + "-" + name : key;
+          zip.file(zipName, blob);
+          downloadSelected.textContent = "正在打包 " + Math.round(((index + 1) / selected.length) * 80) + "%";
+        }
+        const zipBlob = await zip.generateAsync({ type: "blob" }, (metadata) => {
+          downloadSelected.textContent = "正在打包 " + (80 + Math.round(metadata.percent * 0.2)) + "%";
+        });
+        currentZipUrl = URL.createObjectURL(zipBlob);
+        const filename = "NKUStudy-" + safeZipName(courseTitle) + "-资源.zip";
+        saveZipLink.href = currentZipUrl;
+        saveZipLink.download = filename;
+        saveZipLink.hidden = false;
+        saveZipLink.textContent = "保存 ZIP";
+        selectedCount.textContent = "打包完成：" + selected.length + " 个文件";
+        const link = document.createElement("a");
+        link.href = currentZipUrl;
+        link.download = filename;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        downloadSelected.textContent = originalText;
+      } catch (error) {
+        alert(`${error.message || "批量下载失败"}\n\n如果一直失败，需要给 resources.nkustudy.top 配置允许跨域读取的 CORS。`);
+        downloadSelected.textContent = originalText;
+      } finally {
+        updateSelectionState();
+      }
+    }
+
+    input?.addEventListener("input", applySearch);
+    checks.forEach((check) => check.addEventListener("change", () => {
+      clearPreparedZip();
+      updateSelectionState();
+    }));
+
+    selectVisible?.addEventListener("change", () => {
+      const next = selectVisible.checked;
+      visibleChecks().forEach((check) => {
+        check.checked = next;
+      });
+      clearPreparedZip();
+      updateSelectionState();
+    });
+
+    clearSelected?.addEventListener("click", () => {
+      checks.forEach((check) => {
+        check.checked = false;
+      });
+      clearPreparedZip();
+      updateSelectionState();
+    });
+
+    downloadSelected?.addEventListener("click", downloadSelectedAsZip);
+
+    updateSelectionState();
+  </script>
+</Layout>

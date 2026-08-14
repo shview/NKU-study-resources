@@ -1,0 +1,28 @@
+{
+  "name": "nkustudy",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "build": "astro build",
+    "build:fixtures": "node scripts/build-with-fixtures.mjs",
+    "admin:server": "node server/admin-server.mjs",
+    "check:content": "node scripts/validate-manifest.mjs",
+    "preview": "astro preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@aws-sdk/client-s3": "^3.1081.0",
+    "@types/markdown-it": "^14.1.2",
+    "astro": "^7.0.6",
+    "busboy": "^1.6.0",
+    "jszip": "^3.10.1",
+    "markdown-it": "^14.3.0",
+    "typescript": "^5.9.3",
+    "vditor": "^3.11.2"
+  }
+}

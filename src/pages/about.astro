@@ -1,0 +1,26 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { openListUrl, repositoryUrl } from "../lib/resources";
+import about from "../data/about.json";
+import { markdownToHtml } from "../lib/markdown";
+
+const aboutContent = about.content ?? "";
+---
+
+<Layout title="关于" eyebrow="About">
+  <section class="content">
+    <article class="panel">
+      <div class="panel-header split-header">
+        <h2>{about.title}</h2>
+        <div class="header-actions">
+          <a class="button secondary" href={repositoryUrl} target="_blank" rel="noreferrer">GitHub 仓库</a>
+          <a class="button secondary" href={openListUrl} target="_blank" rel="noreferrer">OpenList</a>
+          <a class="button secondary" href="/admin/">管理</a>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="markdown-body" set:html={markdownToHtml(aboutContent)} />
+      </div>
+    </article>
+  </section>
+</Layout>

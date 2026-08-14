@@ -1,0 +1,255 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { courses, countFiles, coursePath, manifest } from "../../lib/resources";
+
+const blockedTag = "无固定年级";
+const visibleTag = (tag) => tag && tag !== blockedTag;
+const globalHiddenTags = new Set(manifest.hiddenMetaTags ?? []);
+const courseHiddenTags = (course) => new Set([...(course.hiddenMetaTags ?? []), ...globalHiddenTags]);
+const uniqueTags = (tags) => Array.from(new Set(tags.filter(Boolean)));
+const visibleCourseTags = (course) => uniqueTags([course.term, course.group, course.assessment, ...(course.tags ?? [])])
+  .filter((tag) => visibleTag(tag) && !courseHiddenTags(course).has(tag));
+const filterTags = Array.from(new Set(courses.flatMap((course) => visibleCourseTags(course))));
+
+const coursesByTerm = courses.reduce((map, course) => {
+  const term = course.term || "未设置学期";
+  if (!map.has(term)) map.set(term, new Map());
+  const groupMap = map.get(term);
+  if (!groupMap.has(course.group)) groupMap.set(course.group, []);
+  groupMap.get(course.group).push(course);
+  return map;
+}, new Map());
+
+const cardSearch = (course) => `${course.title} ${course.term} ${course.group} ${course.assessment ?? ""} ${(course.tags ?? []).join(" ")} ${course.summary ?? ""}`;
+const cardTags = (course) => visibleCourseTags(course).join("|");
+const summaryText = (value) => String(value ?? "")
+  .replace(/```[\s\S]*?```/g, " ")
+  .replace(/`([^`]+)`/g, "$1")
+  .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+  .replace(/[#>*_~`-]+/g, " ")
+  .replace(/\s+/g, " ")
+  .trim() || "待补充课程简介。";
+---
+
+<Layout title="课程" eyebrow="资源索引">
+  <section class="content">
+    <div class="card">
+      <div class="filter-row">
+        <input class="searchbar" id="course-search" type="search" placeholder="搜索课程、学期、分类、标签" autocomplete="off" />
+        <button class="button secondary" id="tree-toggle" type="button" aria-pressed="false">层级结构</button>
+        <div class="segmented" aria-label="标签筛选模式">
+          <button class="active" data-filter-mode="multi" type="button">多选</button>
+          <button data-filter-mode="single" type="button">单选</button>
+        </div>
+      </div>
+      <div class="tag-filter" id="tag-filter" aria-label="可用分类">
+        {filterTags.map((tag) => <button class="tag" type="button" data-tag={tag}>{tag}</button>)}
+      </div>
+    </div>
+
+    <div class="course-list" id="course-list" style="margin-top: 18px;">
+      {courses.map((course) => (
+        <a
+          class="course-card"
+          href={coursePath(course)}
+          data-search={cardSearch(course)}
+          data-tags={cardTags(course)}
+        >
+          <div class="course-meta">
+            {visibleCourseTags(course).map((tag) => <span class="pill">{tag}</span>)}
+            <span class="pill">更新 {course.updated}</span>
+            <span class="pill">{countFiles(course)} 个文件</span>
+          </div>
+          <h2>{course.title}</h2>
+          <p class="course-summary">{summaryText(course.summary)}</p>
+        </a>
+      ))}
+    </div>
+
+    <div class="course-tree-list" id="course-tree-list" hidden style="margin-top: 18px;">
+      {Array.from(coursesByTerm).map(([term, groupMap]) => (
+        <details class="resource-section course-tree-term" open>
+          <summary>{term}</summary>
+          <div class="course-tree-body">
+            {Array.from(groupMap).map(([group, termCourses]) => (
+              <details class="resource-section course-tree-group" open>
+                <summary>{group} <span class="muted">({termCourses.length})</span></summary>
+                <div class="course-list">
+                  {termCourses.map((course) => (
+                    <a
+                      class="course-card"
+                      href={coursePath(course)}
+                      data-search={cardSearch(course)}
+                      data-tags={cardTags(course)}
+                    >
+                      <div class="course-meta">
+                        {visibleCourseTags(course).map((tag) => <span class="pill">{tag}</span>)}
+                        <span class="pill">更新 {course.updated}</span>
+                        <span class="pill">{countFiles(course)} 个文件</span>
+                      </div>
+                      <h2>{course.title}</h2>
+                      <p class="course-summary">{summaryText(course.summary)}</p>
+                    </a>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+        </details>
+      ))}
+    </div>
+
+    <div class="pagination" id="course-pagination" hidden></div>
+    <p class="empty" id="empty-state" hidden>没有找到匹配课程。</p>
+  </section>
+
+  <script>
+    const pageSize = 10;
+    const input = document.querySelector("#course-search");
+    const listView = document.querySelector("#course-list");
+    const treeView = document.querySelector("#course-tree-list");
+    const treeToggle = document.querySelector("#tree-toggle");
+    const tagButtons = Array.from(document.querySelectorAll("#tag-filter [data-tag]"));
+    const modeButtons = Array.from(document.querySelectorAll("[data-filter-mode]"));
+    const listCards = Array.from(listView.querySelectorAll(".course-card"));
+    const treeCards = Array.from(treeView.querySelectorAll(".course-card"));
+    const empty = document.querySelector("#empty-state");
+    const pagination = document.querySelector("#course-pagination");
+    const selectedTags = new Set();
+    let filterMode = "multi";
+    let currentPage = 1;
+    let treeMode = false;
+
+    function currentCards() {
+      return treeMode ? treeCards : listCards;
+    }
+
+    function inactiveCards() {
+      return treeMode ? listCards : treeCards;
+    }
+
+    function activeItems() {
+      return currentCards().filter((item) => item.dataset.filtered === "true");
+    }
+
+    function matchesTags(item) {
+      if (!selectedTags.size) return true;
+      const tags = new Set((item.dataset.tags || "").split("|").filter(Boolean));
+      if (filterMode === "single") return Array.from(selectedTags).some((tag) => tags.has(tag));
+      return Array.from(selectedTags).every((tag) => tags.has(tag));
+    }
+
+    function updateTreeContainers() {
+      document.querySelectorAll(".course-tree-group").forEach((group) => {
+        const hasVisible = Array.from(group.querySelectorAll(".course-card")).some((item) => !item.hidden);
+        group.hidden = !hasVisible;
+      });
+      document.querySelectorAll(".course-tree-term").forEach((term) => {
+        const hasVisible = Array.from(term.querySelectorAll(".course-tree-group")).some((group) => !group.hidden);
+        term.hidden = !hasVisible;
+      });
+    }
+
+    function renderPagination() {
+      inactiveCards().forEach((item) => {
+        item.hidden = true;
+        item.dataset.filtered = "false";
+      });
+
+      const items = activeItems();
+      const pages = Math.max(1, Math.ceil(items.length / pageSize));
+      currentPage = Math.min(currentPage, pages);
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+      currentCards().forEach((item) => {
+        item.hidden = true;
+      });
+      items.forEach((item, index) => {
+        item.hidden = index < start || index >= end;
+      });
+      updateTreeContainers();
+
+      pagination.hidden = items.length <= pageSize;
+      pagination.innerHTML = "";
+      if (items.length <= pageSize) return;
+
+      const prev = document.createElement("button");
+      prev.className = "button secondary";
+      prev.type = "button";
+      prev.textContent = "上一页";
+      prev.disabled = currentPage === 1;
+      prev.addEventListener("click", () => { currentPage -= 1; renderPagination(); });
+
+      const next = document.createElement("button");
+      next.className = "button secondary";
+      next.type = "button";
+      next.textContent = "下一页";
+      next.disabled = currentPage === pages;
+      next.addEventListener("click", () => { currentPage += 1; renderPagination(); });
+
+      const label = document.createElement("span");
+      label.className = "muted";
+      label.textContent = `第 ${currentPage} / ${pages} 页，共 ${items.length} 项`;
+      pagination.append(prev, label, next);
+    }
+
+    function applyFilters(resetPage = true) {
+      const keyword = input.value.trim().toLowerCase();
+      let visible = 0;
+      for (const item of currentCards()) {
+        const matched = item.dataset.search.toLowerCase().includes(keyword) && matchesTags(item);
+        item.dataset.filtered = String(matched);
+        if (matched) visible += 1;
+      }
+      if (resetPage) currentPage = 1;
+      if (empty) empty.hidden = visible !== 0;
+      renderPagination();
+    }
+
+    input?.addEventListener("input", () => applyFilters());
+
+    tagButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const tag = button.dataset.tag;
+        if (filterMode === "single") {
+          selectedTags.clear();
+          tagButtons.forEach((item) => item.dataset.active = "false");
+        }
+        if (selectedTags.has(tag)) {
+          selectedTags.delete(tag);
+          button.dataset.active = "false";
+        } else {
+          selectedTags.add(tag);
+          button.dataset.active = "true";
+        }
+        applyFilters();
+      });
+    });
+
+    modeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        filterMode = button.dataset.filterMode;
+        modeButtons.forEach((item) => item.classList.toggle("active", item === button));
+        if (filterMode === "single" && selectedTags.size > 1) {
+          const first = Array.from(selectedTags)[0];
+          selectedTags.clear();
+          selectedTags.add(first);
+          tagButtons.forEach((item) => item.dataset.active = item.dataset.tag === first ? "true" : "false");
+        }
+        applyFilters();
+      });
+    });
+
+    treeToggle?.addEventListener("click", () => {
+      treeMode = treeView.hidden;
+      treeView.hidden = !treeMode;
+      listView.hidden = treeMode;
+      treeToggle.setAttribute("aria-pressed", String(treeMode));
+      treeToggle.textContent = treeMode ? "列表视图" : "层级结构";
+      currentPage = 1;
+      applyFilters(false);
+    });
+
+    applyFilters();
+  </script>
+</Layout>

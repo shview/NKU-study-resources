@@ -1,0 +1,289 @@
+﻿---
+import Layout from "../layouts/Layout.astro";
+import feedbackData from "../data/feedback.json";
+import { markdownToHtml } from "../lib/markdown";
+import "vditor/dist/index.css";
+---
+
+<Layout title="反馈" eyebrow="Feedback">
+  <section class="content">
+    <div class="panel">
+      <div class="panel-header review-head">
+        <h2 id="feedback-title">{feedbackData.title ?? "问题与建议"}</h2>
+        <button class="button" id="open-feedback-form" type="button">提交反馈</button>
+      </div>
+      <div class="panel-body">
+        <div
+          class="review-announcement markdown-body"
+          id="feedback-announcement"
+          hidden={!feedbackData.announcement}
+          set:html={markdownToHtml(feedbackData.announcement ?? "")}
+        />
+        <div class="review-list" id="feedback-list">
+          <p class="empty">正在加载反馈。</p>
+        </div>
+        <div class="pagination" id="feedback-pagination" hidden></div>
+      </div>
+    </div>
+
+    <div class="panel" id="feedback-submit-panel" hidden style="margin-top: 20px;">
+      <div class="panel-header">
+        <h2>提交反馈</h2>
+      </div>
+      <div class="panel-body">
+        <form class="review-form" id="feedback-form">
+          <label class="admin-field">
+            <span>类型</span>
+            <select name="type">
+              <option value="bug">Bug</option>
+              <option value="feature">功能改进</option>
+              <option value="content">内容问题</option>
+            </select>
+          </label>
+          <label class="admin-field">
+            <span>标题</span>
+            <input name="title" placeholder="简短说明问题或建议" autocomplete="off" required />
+            <small class="field-hint">建议 5-40 字，便于管理员快速判断。</small>
+          </label>
+          <div class="admin-field">
+            <span>内容</span>
+            <div class="markdown-editor user-markdown-editor" id="feedback-content-editor"></div>
+            <input type="hidden" name="content" id="feedback-content-value" />
+            <small class="field-hint">最短允许 5 字；公开显示前管理员可修改状态或隐藏。</small>
+          </div>
+          <label class="admin-field">
+            <span>联系方式（可选）</span>
+            <input name="contact" placeholder="邮箱、QQ 或其他联系方式" autocomplete="off" />
+            <small class="field-hint">只供管理员联系核对，公开页不会展示联系方式。</small>
+          </label>
+          <input class="review-honeypot" name="website" tabindex="-1" autocomplete="off" />
+          <div class="filter-row">
+            <button class="button" type="submit">提交</button>
+            <button class="button secondary" id="close-feedback-form" type="button">取消</button>
+            <span class="muted" id="feedback-submit-status"></span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import Vditor from "vditor";
+    import MarkdownIt from "markdown-it";
+    import { normalizeMarkdown } from "../lib/markdown";
+
+    const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
+    const pageSize = 10;
+    const titleEl = document.querySelector("#feedback-title");
+    const announcementEl = document.querySelector("#feedback-announcement");
+    const list = document.querySelector("#feedback-list");
+    const pagination = document.querySelector("#feedback-pagination");
+    const openButton = document.querySelector("#open-feedback-form");
+    const closeButton = document.querySelector("#close-feedback-form");
+    const panel = document.querySelector("#feedback-submit-panel");
+    const form = document.querySelector("#feedback-form");
+    const statusEl = document.querySelector("#feedback-submit-status");
+    const contentEditorNode = document.querySelector("#feedback-content-editor");
+    const contentValue = document.querySelector("#feedback-content-value");
+    let feedback = [];
+    let currentPage = 1;
+    let contentEditor = null;
+    let editorSettings = null;
+
+    const statusLabel = { open: "开放", completed: "已完成", rejected: "不予完成", parked: "搁置" };
+    const typeLabel = { bug: "Bug", feature: "功能改进", content: "内容问题" };
+    const escapeHtml = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+    const markdownToHtml = (value = "") => markdown.render(normalizeMarkdown(value));
+
+    function toolbarFor(mode = "user") {
+      const source = editorSettings?.[mode]?.toolbar;
+      const toolbar = Array.isArray(source) && source.length
+        ? source
+        : ["bold", "italic", "strike", "headings", "link", "list", "ordered-list", "check", "quote", "code", "line", "table", "preview", "fullscreen"];
+      if (mode !== "user") {
+        const firstSafe = ["bold", "italic", "strike", "link", "list", "ordered-list", "check"];
+        return [
+          ...firstSafe.filter((item) => toolbar.includes(item)),
+          ...toolbar.filter((item) => !firstSafe.includes(item)),
+        ];
+      }
+      const publicAllowed = ["preview", "fullscreen", "link", "list", "ordered-list", "check", "quote", "code", "line", "table"];
+      const ordered = publicAllowed.filter((item) => toolbar.includes(item));
+      return ordered.length ? ordered : ["preview", "fullscreen"];
+    }
+
+    async function loadEditorSettings() {
+      try {
+        const response = await fetch("/editor-settings");
+        const data = await response.json();
+        editorSettings = data.data || null;
+      } catch {
+        editorSettings = null;
+      }
+    }
+
+    function enhanceVditorToolbar(root) {
+      const labels = {
+        bold: "粗体 Ctrl+B",
+        italic: "斜体 Ctrl+I",
+        strike: "删除线",
+        headings: "标题",
+        link: "链接",
+        list: "无序列表",
+        "ordered-list": "有序列表",
+        check: "任务列表",
+        quote: "引用",
+        code: "代码块",
+        line: "分割线",
+        table: "表格",
+        preview: "预览",
+        fullscreen: "全屏",
+      };
+      const blurToolbar = () => root.querySelectorAll(".vditor-toolbar button").forEach((button) => button.blur());
+      root.querySelectorAll(".vditor-toolbar button").forEach((button) => {
+        const type = button.dataset?.type || "";
+        const label = button.getAttribute("aria-label") || labels[type] || button.title;
+        if (label) {
+          button.title = label;
+          button.setAttribute("aria-label", label);
+        }
+        button.tabIndex = -1;
+        button.addEventListener("focus", () => window.setTimeout(() => button.blur(), 0));
+        button.addEventListener("mousedown", () => window.setTimeout(() => button.blur(), 0));
+      });
+      root.addEventListener("pointerdown", (event) => {
+        if (!event.target?.closest?.(".vditor-toolbar")) window.setTimeout(blurToolbar, 0);
+      });
+    }
+
+    function mountContentEditor() {
+      if (!contentEditorNode) return;
+      contentEditor = new Vditor(contentEditorNode, {
+        mode: "sv",
+        value: "",
+        height: 220,
+        placeholder: "请描述出现位置、复现方式或希望改进的地方",
+        cache: { enable: false },
+        toolbar: toolbarFor("user"),
+        toolbarConfig: { pin: false },
+        preview: {
+          actions: ["desktop", "tablet", "mobile"],
+          markdown: {
+            breaks: true,
+          },
+        },
+        after() {
+          enhanceVditorToolbar(contentEditorNode);
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        },
+        input(value) {
+          if (contentValue) contentValue.value = value;
+        },
+      });
+    }
+
+    function renderPagination(total) {
+      const pages = Math.max(1, Math.ceil(total / pageSize));
+      currentPage = Math.min(currentPage, pages);
+      pagination.hidden = total <= pageSize;
+      pagination.innerHTML = "";
+      if (total <= pageSize) return;
+      const prev = document.createElement("button");
+      prev.className = "button secondary";
+      prev.type = "button";
+      prev.textContent = "上一页";
+      prev.disabled = currentPage === 1;
+      prev.addEventListener("click", () => { currentPage -= 1; renderFeedback(); });
+      const next = document.createElement("button");
+      next.className = "button secondary";
+      next.type = "button";
+      next.textContent = "下一页";
+      next.disabled = currentPage === pages;
+      next.addEventListener("click", () => { currentPage += 1; renderFeedback(); });
+      const label = document.createElement("span");
+      label.className = "muted";
+      label.textContent = `第 ${currentPage} / ${pages} 页，共 ${total} 条`;
+      pagination.append(prev, label, next);
+    }
+
+    function renderFeedback() {
+      if (!feedback.length) {
+        list.innerHTML = `<p class="empty">还没有公开反馈。</p>`;
+        pagination.hidden = true;
+        return;
+      }
+      const start = (currentPage - 1) * pageSize;
+      const pageItems = feedback.slice(start, start + pageSize);
+      list.innerHTML = pageItems.map((item) => `
+        <article class="review-card">
+          <div class="course-meta">
+            <span class="pill">${escapeHtml(typeLabel[item.type] || item.type || "反馈")}</span>
+            <span class="pill">${escapeHtml(statusLabel[item.status] || item.status || "开放")}</span>
+          </div>
+          <h3 style="margin: 12px 0 0;">${escapeHtml(item.title)}</h3>
+          <div class="markdown-body">${markdownToHtml(item.content)}</div>
+          <small class="muted">${escapeHtml((item.createdAt || "").slice(0, 10))}</small>
+        </article>
+      `).join("");
+      renderPagination(feedback.length);
+    }
+
+    async function loadFeedback() {
+      try {
+        const response = await fetch("/feedback-api/feedback");
+        const data = await response.json();
+        if (titleEl) titleEl.textContent = data.title || "问题与建议";
+        const announcement = data.announcement || "";
+        if (announcementEl) {
+          announcementEl.innerHTML = markdownToHtml(announcement);
+          announcementEl.hidden = !announcement;
+        }
+        feedback = data.items || [];
+      } catch {
+        feedback = [];
+      }
+      currentPage = 1;
+      renderFeedback();
+    }
+
+    openButton?.addEventListener("click", () => {
+      panel.hidden = false;
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    closeButton?.addEventListener("click", () => { panel.hidden = true; });
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      statusEl.textContent = "提交中...";
+      const data = new FormData(form);
+      const content = contentEditor?.getValue?.() || String(contentValue?.value || data.get("content") || "").trim();
+      if (!content.trim()) {
+        statusEl.textContent = "请先填写反馈内容。";
+        return;
+      }
+      try {
+        const response = await fetch("/feedback-api/submit", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            type: data.get("type"),
+            title: data.get("title"),
+            content,
+            contact: data.get("contact"),
+            website: data.get("website"),
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok || result.ok === false) throw new Error(result.error || "提交失败");
+        form.reset();
+        contentEditor?.setValue?.("");
+        if (contentValue) contentValue.value = "";
+        statusEl.textContent = "已提交。";
+        await loadFeedback();
+      } catch (error) {
+        statusEl.textContent = error.message;
+      }
+    });
+
+    Promise.all([loadEditorSettings(), loadFeedback()]).then(mountContentEditor);
+  </script>
+</Layout>

@@ -1,0 +1,164 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { courses, countFiles, coursePath, formatBytes, manifest, totalSize } from "../lib/resources";
+import home from "../data/home.json";
+import { markdownToHtml } from "../lib/markdown";
+
+const fileCount = courses.reduce((sum, course) => sum + countFiles(course), 0);
+const size = courses.reduce((sum, course) => sum + totalSize(course), 0);
+const latest = [...courses].sort((a, b) => b.updated.localeCompare(a.updated));
+const blockedTag = "无固定年级";
+const visibleTag = (tag) => tag && tag !== blockedTag;
+const globalHiddenTags = new Set(manifest.hiddenMetaTags ?? []);
+const uniqueTags = (tags) => Array.from(new Set(tags.filter(Boolean)));
+const visibleCourseTags = (course) => {
+  const hidden = new Set([...(course.hiddenMetaTags ?? []), ...globalHiddenTags]);
+  return uniqueTags([course.term, course.group, course.assessment, ...(course.tags ?? [])])
+    .filter((tag) => visibleTag(tag) && !hidden.has(tag));
+};
+const summaryText = (value) => String(value ?? "")
+  .replace(/```[\s\S]*?```/g, " ")
+  .replace(/`([^`]+)`/g, "$1")
+  .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+  .replace(/[#>*_~`-]+/g, " ")
+  .replace(/\s+/g, " ")
+  .trim() || "待补充课程简介。";
+---
+
+<Layout title="首页" eyebrow="NKUStudy">
+  <section class="content">
+    <div class="hero-note markdown-body" set:html={markdownToHtml(home.announcement)} />
+
+    <div class="grid cols-3">
+      <div class="card stat">
+        <span class="stat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v15H6.5A2.5 2.5 0 0 0 4 21.5v-15Z"/><path d="M8 8h8M8 12h6"/></svg>
+        </span>
+        <div>
+          <h3>{courses.length} 门课程</h3>
+          <p>按学期和课程类型整理</p>
+        </div>
+      </div>
+      <div class="card stat">
+        <span class="stat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h5l2 2h6A1.5 1.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-11Z"/></svg>
+        </span>
+        <div>
+          <h3>{fileCount} 个文件</h3>
+          <p>课程大纲、PPT、真题等</p>
+        </div>
+      </div>
+      <div class="card stat">
+        <span class="stat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="m8 10 4 4 4-4"/><path d="M5 18h14"/></svg>
+        </span>
+        <div>
+          <h3>{formatBytes(size)}</h3>
+          <p>已索引资源体量</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top: 22px;">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>最近更新</h2>
+        </div>
+        <div class="panel-body">
+          <input class="searchbar" id="home-search" type="search" placeholder="搜索最近更新的课程、分类、标签" autocomplete="off" />
+          <div class="course-list" id="home-course-list" style="margin-top: 16px;">
+            {latest.map((course) => (
+              <a
+                class="course-card"
+                href={coursePath(course)}
+                data-search={`${course.title} ${course.term} ${course.group} ${course.assessment ?? ""} ${(course.tags ?? []).join(" ")} ${course.summary}`}
+              >
+                <div class="course-meta">
+                  {visibleCourseTags(course).map((tag) => <span class="pill">{tag}</span>)}
+                  <span class="pill">更新 {course.updated}</span>
+                </div>
+                <h2>{course.title}</h2>
+                <p class="course-summary">{summaryText(course.summary)}</p>
+              </a>
+            ))}
+          </div>
+          <div class="pagination" id="home-pagination" hidden></div>
+          <p class="empty" id="home-empty" hidden>没有找到匹配课程。</p>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <script>
+    const pageSize = 10;
+    const input = document.querySelector("#home-search");
+    const list = Array.from(document.querySelectorAll("#home-course-list .course-card"));
+    const empty = document.querySelector("#home-empty");
+    const pagination = document.querySelector("#home-pagination");
+    let currentPage = 1;
+
+    function filteredItems() {
+      return list.filter((item) => item.dataset.filtered === "true");
+    }
+
+    function renderPagination() {
+      const items = filteredItems();
+      const pages = Math.max(1, Math.ceil(items.length / pageSize));
+      currentPage = Math.min(currentPage, pages);
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+
+      list.forEach((item) => {
+        item.hidden = true;
+      });
+      items.forEach((item, index) => {
+        item.hidden = index < start || index >= end;
+      });
+
+      pagination.hidden = items.length <= pageSize;
+      pagination.innerHTML = "";
+      if (items.length <= pageSize) return;
+
+      const prev = document.createElement("button");
+      prev.className = "button secondary";
+      prev.type = "button";
+      prev.textContent = "上一页";
+      prev.disabled = currentPage === 1;
+      prev.addEventListener("click", () => {
+        currentPage -= 1;
+        renderPagination();
+      });
+
+      const next = document.createElement("button");
+      next.className = "button secondary";
+      next.type = "button";
+      next.textContent = "下一页";
+      next.disabled = currentPage === pages;
+      next.addEventListener("click", () => {
+        currentPage += 1;
+        renderPagination();
+      });
+
+      const label = document.createElement("span");
+      label.className = "muted";
+      label.textContent = `第 ${currentPage} / ${pages} 页，共 ${items.length} 项`;
+      pagination.append(prev, label, next);
+    }
+
+    function applySearch(resetPage = true) {
+      const keyword = input.value.trim().toLowerCase();
+      let visible = 0;
+      for (const item of list) {
+        const matched = item.dataset.search.toLowerCase().includes(keyword);
+        item.dataset.filtered = String(matched);
+        if (matched) visible += 1;
+      }
+      if (resetPage) currentPage = 1;
+      if (empty) empty.hidden = visible !== 0;
+      renderPagination();
+    }
+
+    input?.addEventListener("input", () => applySearch());
+    applySearch();
+  </script>
+</Layout>

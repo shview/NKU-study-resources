@@ -1,0 +1,282 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout title="评价详情" eyebrow="Review Detail">
+  <section class="content">
+    <div class="panel">
+      <div class="panel-header review-detail-head">
+        <div>
+          <h2 id="review-detail-title">评价详情</h2>
+          <p class="muted" id="review-detail-teacher"></p>
+        </div>
+        <a class="button secondary" href="/reviews/">返回评价索引</a>
+      </div>
+      <div class="panel-body review-summary-grid" id="review-summary">
+        <p class="empty">正在加载评价。</p>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-header review-head">
+        <h2>全部评价</h2>
+        <div class="review-submit-shortcut">
+          <a class="button" id="detail-submit-review" href="/reviews/#submit">提交新的评价</a>
+          <small class="muted">针对本课程与老师</small>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="review-toolbar">
+          <label>
+            <span>排序依据</span>
+            <select id="review-sort-field">
+              <option value="time">时间</option>
+              <option value="rating">分数</option>
+            </select>
+          </label>
+          <label>
+            <span>排序方向</span>
+            <select id="review-sort-order">
+              <option value="desc">逆序</option>
+              <option value="asc">正序</option>
+            </select>
+          </label>
+        </div>
+        <div class="review-list" id="review-detail-list">
+          <p class="empty">正在加载评价。</p>
+        </div>
+        <div class="pagination" id="review-detail-pagination" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import MarkdownIt from "markdown-it";
+    import { normalizeMarkdown } from "../../lib/markdown";
+
+    const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
+    const titleEl = document.querySelector("#review-detail-title");
+    const teacherEl = document.querySelector("#review-detail-teacher");
+    const summaryEl = document.querySelector("#review-summary");
+    const listEl = document.querySelector("#review-detail-list");
+    const paginationEl = document.querySelector("#review-detail-pagination");
+    const submitLink = document.querySelector("#detail-submit-review");
+    const sortFieldEl = document.querySelector("#review-sort-field");
+    const sortOrderEl = document.querySelector("#review-sort-order");
+    const pageSize = 10;
+    let currentPage = 1;
+    let currentGroup = [];
+    let sortedGroup = [];
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+    const markdownToHtml = (value = "") => markdown.render(normalizeMarkdown(value));
+
+    function keyFromLocation() {
+      const params = new URLSearchParams(window.location.search);
+      const queryKey = params.get("key");
+      if (queryKey) return queryKey;
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      if (parts[0] === "reviews" && parts[1] && parts[1] !== "detail") {
+        return decodeURIComponent(parts.slice(1).join("/"));
+      }
+      return "";
+    }
+
+    function keyFor(review) {
+      return `${review.courseTitle}-${review.teacher}`;
+    }
+
+    function averageRating(items) {
+      if (!items.length) return 0;
+      const total = items.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+      return total / items.length;
+    }
+
+    function ratingCounts(items) {
+      return items.reduce((counts, review) => {
+        const rating = Math.max(1, Math.min(5, Number(review.rating || 0)));
+        counts[rating] = (counts[rating] || 0) + 1;
+        return counts;
+      }, { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 });
+    }
+
+    function updateSubmitLink(review) {
+      if (!review) return;
+      const params = new URLSearchParams({
+        courseTitle: review.courseTitle || "",
+        teacher: review.teacher || "",
+      });
+      submitLink.href = `/reviews/?${params.toString()}#submit`;
+    }
+
+    function sortedReviews() {
+      const field = sortFieldEl.value;
+      const order = sortOrderEl.value;
+      const direction = order === "asc" ? 1 : -1;
+      const withOriginalIndex = currentGroup.map((review, index) => ({ review, index }));
+      withOriginalIndex.sort((left, right) => {
+        let result = 0;
+        if (field === "rating") {
+          result = Number(left.review.rating || 0) - Number(right.review.rating || 0);
+        } else {
+          result = String(left.review.createdAt ?? "").localeCompare(String(right.review.createdAt ?? ""));
+        }
+        if (result === 0) {
+          result = String(left.review.createdAt ?? "").localeCompare(String(right.review.createdAt ?? ""));
+        }
+        if (result === 0) result = left.index - right.index;
+        return result * direction;
+      });
+      return withOriginalIndex.map((entry) => entry.review);
+    }
+
+    function floorNumberFor(review) {
+      const chronological = currentGroup
+        .map((item, index) => ({ item, index }))
+        .sort((left, right) => {
+          const timeCompare = String(left.item.createdAt ?? "").localeCompare(String(right.item.createdAt ?? ""));
+          if (timeCompare !== 0) return timeCompare;
+          return left.index - right.index;
+        });
+      return chronological.findIndex((entry) => entry.item === review) + 1;
+    }
+
+    function renderPagination() {
+      const totalPages = Math.max(1, Math.ceil(sortedGroup.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      paginationEl.hidden = sortedGroup.length <= pageSize;
+      paginationEl.innerHTML = "";
+      if (sortedGroup.length <= pageSize) return;
+
+      const prev = document.createElement("button");
+      prev.className = "button secondary";
+      prev.type = "button";
+      prev.textContent = "上一页";
+      prev.disabled = currentPage === 1;
+      prev.addEventListener("click", () => {
+        currentPage -= 1;
+        renderReviewList();
+      });
+
+      const next = document.createElement("button");
+      next.className = "button secondary";
+      next.type = "button";
+      next.textContent = "下一页";
+      next.disabled = currentPage === totalPages;
+      next.addEventListener("click", () => {
+        currentPage += 1;
+        renderReviewList();
+      });
+
+      const label = document.createElement("span");
+      label.className = "muted";
+      label.textContent = `第 ${currentPage} / ${totalPages} 页，共 ${sortedGroup.length} 条`;
+      paginationEl.append(prev, label, next);
+    }
+
+    function renderReviewList() {
+      sortedGroup = sortedReviews();
+      const start = (currentPage - 1) * pageSize;
+      const pageItems = sortedGroup.slice(start, start + pageSize);
+      listEl.innerHTML = pageItems.map((review) => {
+        const floor = floorNumberFor(review);
+        return `
+          <article class="review-card">
+            <div class="course-meta">
+              <span class="pill">${escapeHtml(review.courseTitle)}</span>
+              <span class="pill">${escapeHtml(review.teacher)}</span>
+              <span class="pill">${"★".repeat(Number(review.rating || 0))}</span>
+            </div>
+            <div class="markdown-body">${markdownToHtml(review.content)}</div>
+            <small class="muted review-card-foot">
+              <span>${escapeHtml(String(review.createdAt ?? "").slice(0, 10))}</span>
+              <strong class="floor-badge">${floor}F</strong>
+            </small>
+          </article>
+        `;
+      }).join("");
+      renderPagination();
+    }
+
+    function renderGroup(group) {
+      currentGroup = group;
+      currentPage = 1;
+      const average = averageRating(group);
+      const counts = ratingCounts(group);
+      const maxCount = Math.max(1, ...Object.values(counts));
+      const first = group[0];
+      titleEl.textContent = first.courseTitle;
+      teacherEl.textContent = first.teacher;
+      document.title = `${first.courseTitle} / ${first.teacher} | NKUStudy`;
+      updateSubmitLink(first);
+
+      summaryEl.innerHTML = `
+        <div class="review-score-hero flat">
+          <strong>${average.toFixed(1)}</strong>
+          <span>
+            <b>平均评分</b>
+            <small>${group.length} 人评价，由当前公开评价自动汇总。</small>
+          </span>
+        </div>
+        <div class="rating-bars" aria-label="评分分布">
+          ${[5, 4, 3, 2, 1].map((rating) => `
+            <div class="rating-row">
+              <span class="review-stars">${"★".repeat(rating)}</span>
+              <span class="rating-track">
+                <span style="width:${(counts[rating] / maxCount) * 100}%"></span>
+              </span>
+              <strong>${counts[rating]}</strong>
+            </div>
+          `).join("")}
+        </div>
+      `;
+
+      renderReviewList();
+    }
+
+    async function loadDetail() {
+      const key = keyFromLocation();
+      if (!key) {
+        summaryEl.innerHTML = `<p class="empty">缺少评价索引。</p>`;
+        listEl.innerHTML = "";
+        submitLink.href = "/reviews/#submit";
+        return;
+      }
+      try {
+        const response = await fetch("/review-api/reviews");
+        const data = await response.json();
+        const group = (data.reviews || []).filter((review) => keyFor(review) === key);
+        if (!group.length) {
+          titleEl.textContent = "未找到评价";
+          teacherEl.textContent = key;
+          summaryEl.innerHTML = `<p class="empty">还没有公开的评价，或该评价尚未通过审核。</p>`;
+          listEl.innerHTML = "";
+          paginationEl.hidden = true;
+          submitLink.href = "/reviews/#submit";
+          return;
+        }
+        renderGroup(group);
+      } catch (error) {
+        summaryEl.innerHTML = `<p class="empty">${escapeHtml(error.message || "评价加载失败。")}</p>`;
+        listEl.innerHTML = "";
+        paginationEl.hidden = true;
+      }
+    }
+
+    sortFieldEl.addEventListener("change", () => {
+      currentPage = 1;
+      renderReviewList();
+    });
+    sortOrderEl.addEventListener("change", () => {
+      currentPage = 1;
+      renderReviewList();
+    });
+
+    loadDetail();
+  </script>
+</Layout>

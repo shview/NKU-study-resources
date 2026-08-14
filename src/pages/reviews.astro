@@ -1,0 +1,489 @@
+﻿---
+import Layout from "../layouts/Layout.astro";
+import { courses } from "../lib/resources";
+import "vditor/dist/index.css";
+---
+
+<Layout title="评价" eyebrow="Teacher Reviews">
+  <section class="content">
+    <div class="panel review-public-notice" id="review-public-announcement-panel" hidden>
+      <div class="panel-header review-head">
+        <h2>评价公告</h2>
+        <button class="admin-icon-button" id="close-review-announcement" type="button" aria-label="关闭评价公告" title="关闭评价公告">×</button>
+      </div>
+      <div class="panel-body">
+        <div class="markdown-body" id="review-public-announcement"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header review-head">
+        <h2>评价索引</h2>
+        <button class="button" id="open-review-form" type="button">提交新的评价</button>
+      </div>
+      <div class="panel-body">
+        <div class="filter-row">
+          <input class="searchbar" id="review-search" type="search" placeholder="搜索课程或老师" autocomplete="off" />
+        </div>
+        <div class="review-index-grid" id="review-index">
+          <p class="empty">正在加载评价索引。</p>
+        </div>
+        <div class="pagination" id="review-pagination" hidden></div>
+      </div>
+    </div>
+
+    <div class="panel" id="review-submit-panel" hidden style="margin-top: 20px;">
+      <div class="panel-header review-head">
+        <h2>提交评价</h2>
+        <button class="button secondary" id="close-review-form" type="button">取消</button>
+      </div>
+      <div class="panel-body">
+        <div class="review-announcement" id="review-announcement"></div>
+        <form class="review-form" id="review-form">
+          <label class="admin-field">
+            <span>课程</span>
+            <input name="courseTitle" list="course-title-options" placeholder="课程名称" autocomplete="off" required />
+            <small class="field-hint">可以填写资源库里还没有的课程，提交时会询问是否新建评价索引。</small>
+            <datalist id="course-title-options">
+              {courses.map((course) => <option value={course.title} />)}
+            </datalist>
+          </label>
+          <label class="admin-field">
+            <span>老师</span>
+            <input name="teacher" placeholder="老师姓名" autocomplete="off" required />
+            <small class="field-hint">请填写任课老师姓名，同一课程的不同老师会分开统计。</small>
+          </label>
+          <label class="admin-field">
+            <span>评分</span>
+            <select name="rating">
+              <option value="5">5 分</option>
+              <option value="4">4 分</option>
+              <option value="3">3 分</option>
+              <option value="2">2 分</option>
+              <option value="1">1 分</option>
+            </select>
+            <small class="field-hint">1-5 分，分数越高代表越推荐。</small>
+          </label>
+          <div class="review-editor-switch">
+            <span class="muted" id="review-editor-mode-hint">默认普通编辑，点击“高级编辑”可切换到 Markdown 编辑器。</span>
+            <button class="button secondary" id="toggle-review-editor" type="button">高级编辑</button>
+          </div>
+          <label class="admin-field">
+            <span>评价</span>
+            <textarea class="review-basic-editor" id="review-basic-content" placeholder="可以写授课风格、作业考试情况、适合人群等"></textarea>
+            <small class="field-hint">直接输入文本即可；如果需要标题、列表、加粗等格式，请打开高级编辑。</small>
+          </label>
+          <div class="admin-field" id="review-advanced-editor-panel" hidden>
+            <div class="review-editor-switch">
+              <span>高级 Markdown 编辑</span>
+              <button class="button secondary" id="toggle-review-editor-mode" type="button">切换到双栏</button>
+            </div>
+            <div class="markdown-editor user-markdown-editor" id="review-content-editor"></div>
+            <small class="field-hint" id="review-advanced-mode-hint">当前为即时渲染单栏模式，适合手机编辑。</small>
+          </div>
+          <input type="hidden" name="content" id="review-content-value" />
+          <small class="field-hint" id="review-content-hint">最短允许 5 字；内容会先进入审核。</small>
+          <input class="review-honeypot" name="website" tabindex="-1" autocomplete="off" />
+          <div class="filter-row">
+            <button class="button" type="submit">提交到审核</button>
+            <span class="muted" id="review-submit-status"></span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import Vditor from "vditor";
+    import MarkdownIt from "markdown-it";
+    import { normalizeMarkdown } from "../lib/markdown";
+
+    const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
+    const pageSize = 10;
+    const existingCourses = new Set(Array.from(document.querySelectorAll("#course-title-options option")).map((option) => option.value));
+    const indexEl = document.querySelector("#review-index");
+    const pagination = document.querySelector("#review-pagination");
+    const search = document.querySelector("#review-search");
+    const openButton = document.querySelector("#open-review-form");
+    const closeButton = document.querySelector("#close-review-form");
+    const panel = document.querySelector("#review-submit-panel");
+    const form = document.querySelector("#review-form");
+    const statusEl = document.querySelector("#review-submit-status");
+    const announcement = document.querySelector("#review-announcement");
+    const publicAnnouncement = document.querySelector("#review-public-announcement");
+    const publicAnnouncementPanel = document.querySelector("#review-public-announcement-panel");
+    const closeAnnouncement = document.querySelector("#close-review-announcement");
+    const toggleEditorButton = document.querySelector("#toggle-review-editor");
+    const toggleEditorModeButton = document.querySelector("#toggle-review-editor-mode");
+    const editorModeHint = document.querySelector("#review-editor-mode-hint");
+    const advancedModeHint = document.querySelector("#review-advanced-mode-hint");
+    const basicEditor = document.querySelector("#review-basic-content");
+    const advancedEditorPanel = document.querySelector("#review-advanced-editor-panel");
+    const contentHint = document.querySelector("#review-content-hint");
+    const contentEditorNode = document.querySelector("#review-content-editor");
+    const contentValue = document.querySelector("#review-content-value");
+    const urlParams = new URLSearchParams(window.location.search);
+    let reviews = [];
+    let currentPage = 1;
+    let contentEditor = null;
+    let advancedEditorMounted = false;
+    let advancedEditorVisible = false;
+    let contentEditorMode = "ir";
+    let editorSettings = null;
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    function markdownToHtml(value = "") {
+      return markdown.render(normalizeMarkdown(value));
+    }
+
+    function toolbarFor(mode = "user") {
+      const source = editorSettings?.[mode]?.toolbar;
+      const toolbar = Array.isArray(source) && source.length
+        ? source
+        : ["bold", "italic", "strike", "headings", "link", "list", "ordered-list", "check", "quote", "code", "line", "table", "preview", "fullscreen"];
+      return toolbar;
+    }
+
+    async function loadEditorSettings() {
+      try {
+        const response = await fetch("/editor-settings");
+        const data = await response.json();
+        editorSettings = data.data || null;
+      } catch {
+        editorSettings = null;
+      }
+    }
+
+    function enhanceVditorToolbar(root) {
+      const labels = {
+        bold: "粗体 Ctrl+B",
+        italic: "斜体 Ctrl+I",
+        strike: "删除线",
+        headings: "标题",
+        link: "链接",
+        list: "无序列表",
+        "ordered-list": "有序列表",
+        check: "任务列表",
+        quote: "引用",
+        code: "代码块",
+        line: "分割线",
+        table: "表格",
+        preview: "预览",
+        fullscreen: "全屏",
+      };
+      const toolbarNodes = () => Array.from(root.querySelectorAll(".vditor-toolbar button, .vditor-toolbar [data-type], .vditor-toolbar__item"));
+      const blurToolbar = () => toolbarNodes().forEach((button) => button.blur?.());
+      toolbarNodes().forEach((button) => {
+        const type = button.dataset?.type || "";
+        const label = button.getAttribute("aria-label") || labels[type] || button.title;
+        if (label) {
+          button.title = label;
+          button.setAttribute("aria-label", label);
+          button.setAttribute("data-tooltip", label);
+          button.closest?.(".vditor-toolbar__item")?.setAttribute("title", label);
+          button.closest?.(".vditor-toolbar__item")?.setAttribute("aria-label", label);
+        }
+        button.tabIndex = -1;
+        button.addEventListener("focus", () => window.setTimeout(() => button.blur(), 0));
+        button.addEventListener("mousedown", () => window.setTimeout(() => button.blur(), 0));
+      });
+      root.addEventListener("pointerdown", (event) => {
+        if (!event.target?.closest?.(".vditor-toolbar")) window.setTimeout(blurToolbar, 0);
+      });
+    }
+
+    function mountContentEditor() {
+      if (!contentEditorNode || contentEditor) return;
+      contentEditor = new Vditor(contentEditorNode, {
+        mode: contentEditorMode,
+        value: String(contentValue?.value || basicEditor?.value || ""),
+        height: contentEditorMode === "ir" ? 260 : 320,
+        placeholder: "可以写授课风格、作业考试情况、适合人群等",
+        cache: { enable: false },
+        toolbar: toolbarFor("user"),
+        toolbarConfig: { pin: false },
+        preview: {
+          actions: ["desktop", "tablet", "mobile"],
+          markdown: {
+            breaks: true,
+          },
+        },
+        after() {
+          enhanceVditorToolbar(contentEditorNode);
+          if (contentValue?.value) contentEditor.setValue?.(contentValue.value);
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        },
+        input(value) {
+          if (basicEditor && basicEditor.value !== value) basicEditor.value = value;
+          if (contentValue) contentValue.value = value;
+        },
+      });
+      advancedEditorMounted = true;
+    }
+
+    function updateEditorModeUi() {
+      if (toggleEditorModeButton) {
+        toggleEditorModeButton.textContent = contentEditorMode === "ir" ? "切换到双栏" : "切换到单栏";
+      }
+      if (advancedModeHint) {
+        advancedModeHint.textContent = contentEditorMode === "ir"
+          ? "当前为即时渲染单栏模式，适合手机编辑。"
+          : "当前为双栏分屏模式，适合大屏编辑。";
+      }
+    }
+
+    function remountContentEditor(nextMode, { focus = true } = {}) {
+      const current = contentEditor?.getValue?.() || String(contentValue?.value || basicEditor?.value || "");
+      contentEditorMode = nextMode;
+      if (contentValue) contentValue.value = current;
+      try {
+        contentEditor?.destroy?.();
+      } catch {}
+      contentEditor = null;
+      advancedEditorMounted = false;
+      if (contentEditorNode) contentEditorNode.innerHTML = "";
+      updateEditorModeUi();
+      mountContentEditor();
+      contentEditor?.setValue?.(current);
+      if (focus) requestAnimationFrame(() => contentEditor?.focus?.());
+    }
+
+    function syncReviewContent(value) {
+      if (contentValue) contentValue.value = value;
+      if (basicEditor && basicEditor.value !== value) basicEditor.value = value;
+      if (contentEditor && contentEditor.getValue?.() !== value) {
+        contentEditor.setValue?.(value);
+      }
+    }
+
+    function setAdvancedEditorVisible(visible, { focus = false } = {}) {
+      advancedEditorVisible = visible;
+      if (advancedEditorPanel) advancedEditorPanel.hidden = !visible;
+      if (toggleEditorButton) toggleEditorButton.textContent = visible ? "普通编辑" : "高级编辑";
+      if (editorModeHint) {
+        editorModeHint.textContent = visible
+          ? "当前为高级编辑，可以使用 Markdown 工具栏。"
+          : "默认普通编辑，点击“高级编辑”可切换到 Markdown 编辑器。";
+      }
+      if (visible) {
+        updateEditorModeUi();
+        mountContentEditor();
+        contentEditor?.setValue?.(String(contentValue?.value || basicEditor?.value || ""));
+        if (focus) requestAnimationFrame(() => contentEditor?.focus?.());
+      } else {
+        const current = contentEditor?.getValue?.() || String(basicEditor?.value || contentValue?.value || "");
+        syncReviewContent(current);
+        if (focus) basicEditor?.focus?.();
+      }
+    }
+
+    basicEditor?.addEventListener("input", () => {
+      if (!advancedEditorVisible) syncReviewContent(basicEditor.value);
+    });
+
+    toggleEditorButton?.addEventListener("click", () => {
+      setAdvancedEditorVisible(!advancedEditorVisible, { focus: true });
+    });
+
+    toggleEditorModeButton?.addEventListener("click", () => {
+      remountContentEditor(contentEditorMode === "ir" ? "sv" : "ir", { focus: true });
+    });
+
+    updateEditorModeUi();
+
+    if (window.matchMedia?.("(max-width: 768px)")?.matches) {
+      contentEditorMode = "ir";
+      updateEditorModeUi();
+    }
+
+    function keyFor(review) {
+      return `${review.courseTitle}-${review.teacher}`;
+    }
+
+    function reviewPath(key) {
+      return `/reviews/detail/?key=${encodeURIComponent(key)}`;
+    }
+
+    function averageRating(items) {
+      if (!items.length) return 0;
+      const total = items.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+      return total / items.length;
+    }
+
+    function groupedReviews() {
+      const groups = new Map();
+      for (const review of reviews) {
+        const key = keyFor(review);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(review);
+      }
+      return Array.from(groups, ([key, group]) => ({
+        key,
+        courseTitle: group[0]?.courseTitle || "",
+        teacher: group[0]?.teacher || "",
+        reviews: group,
+        average: averageRating(group),
+      })).sort((a, b) => b.reviews.length - a.reviews.length || b.average - a.average || a.key.localeCompare(b.key, "zh-CN"));
+    }
+
+    function filteredGroups() {
+      const keyword = search.value.trim().toLowerCase();
+      return groupedReviews().filter((group) => {
+        const indexText = `${group.courseTitle} ${group.teacher} ${group.key}`.toLowerCase();
+        return !keyword || indexText.includes(keyword);
+      });
+    }
+
+    function renderIndex() {
+      const groups = filteredGroups();
+      if (!groups.length) {
+        indexEl.innerHTML = `<p class="empty">${reviews.length ? "没有找到匹配的课程-老师索引。" : "还没有已公开的课程-老师评价索引。"}</p>`;
+        pagination.hidden = true;
+        return;
+      }
+      const pages = Math.max(1, Math.ceil(groups.length / pageSize));
+      currentPage = Math.min(currentPage, pages);
+      const start = (currentPage - 1) * pageSize;
+      const pageGroups = groups.slice(start, start + pageSize);
+      indexEl.innerHTML = pageGroups.map((group) => `
+        <a class="review-index-card compact" href="${reviewPath(group.key)}" data-review-key="${escapeHtml(group.key)}">
+          <span class="review-index-main">
+            <strong>${escapeHtml(group.courseTitle)}</strong>
+            <small>${escapeHtml(group.teacher)}</small>
+          </span>
+          <span class="review-index-score" aria-label="${group.average.toFixed(1)} 分，${group.reviews.length} 人评价">
+            <strong>${group.average.toFixed(1)}</strong>
+            <small>${group.reviews.length} 人评价</small>
+          </span>
+        </a>
+      `).join("");
+      renderPagination(groups.length, pages);
+    }
+
+    function renderPagination(total, pages) {
+      pagination.hidden = total <= pageSize;
+      pagination.innerHTML = "";
+      if (total <= pageSize) return;
+      const prev = document.createElement("button");
+      prev.className = "button secondary";
+      prev.type = "button";
+      prev.textContent = "上一页";
+      prev.disabled = currentPage === 1;
+      prev.addEventListener("click", () => { currentPage -= 1; renderIndex(); });
+      const next = document.createElement("button");
+      next.className = "button secondary";
+      next.type = "button";
+      next.textContent = "下一页";
+      next.disabled = currentPage === pages;
+      next.addEventListener("click", () => { currentPage += 1; renderIndex(); });
+      const label = document.createElement("span");
+      label.className = "muted";
+      label.textContent = `第 ${currentPage} / ${pages} 页，共 ${total} 项`;
+      pagination.append(prev, label, next);
+    }
+
+    async function loadReviews() {
+      try {
+        const response = await fetch("/review-api/reviews");
+        const data = await response.json();
+        reviews = data.reviews || [];
+        const announcementText = data.rules?.announcement || "";
+        const minLength = Number(data.rules?.minLength || 5);
+        if (contentHint) contentHint.textContent = `最短允许 ${minLength} 字；内容会先进入审核。`;
+        announcement.innerHTML = markdownToHtml(announcementText);
+        announcement.hidden = !announcementText;
+        const dismissed = localStorage.getItem("nkustudy-review-announcement-dismissed") === announcementText;
+        publicAnnouncement.innerHTML = markdownToHtml(announcementText);
+        publicAnnouncementPanel.dataset.announcement = announcementText;
+        publicAnnouncementPanel.hidden = !announcementText || dismissed;
+      } catch {
+        reviews = [];
+      }
+      renderIndex();
+    }
+
+    openButton?.addEventListener("click", () => {
+      panel.hidden = false;
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    function openPrefilledForm() {
+      const courseTitle = urlParams.get("courseTitle") || "";
+      const teacher = urlParams.get("teacher") || "";
+      if (!courseTitle && !teacher && window.location.hash !== "#submit") return;
+      panel.hidden = false;
+      if (courseTitle) form.elements.courseTitle.value = courseTitle;
+      if (teacher) form.elements.teacher.value = teacher;
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    closeButton?.addEventListener("click", () => {
+      panel.hidden = true;
+    });
+
+    closeAnnouncement?.addEventListener("click", () => {
+      const text = publicAnnouncementPanel.dataset.announcement || "";
+      localStorage.setItem("nkustudy-review-announcement-dismissed", text);
+      publicAnnouncementPanel.hidden = true;
+    });
+
+    search?.addEventListener("input", () => {
+      currentPage = 1;
+      renderIndex();
+    });
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const courseTitle = String(data.get("courseTitle") || "").trim();
+      const content = advancedEditorVisible
+        ? String(contentEditor?.getValue?.() || contentValue?.value || "").trim()
+        : String(basicEditor?.value || contentValue?.value || data.get("content") || "").trim();
+      if (!content.trim()) {
+        statusEl.textContent = "请先填写评价内容。";
+        return;
+      }
+      if (!existingCourses.has(courseTitle) && !confirm(`课程“${courseTitle}”还不在资源库中，仍然提交并创建新的评价索引吗？`)) {
+        return;
+      }
+      statusEl.textContent = "提交中...";
+      try {
+        const response = await fetch("/review-api/submit", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            courseTitle,
+            teacher: data.get("teacher"),
+            rating: data.get("rating"),
+            content,
+            website: data.get("website"),
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok || result.ok === false) throw new Error(result.error || "提交失败");
+        statusEl.textContent = result.review?.status === "approved" ? "已提交并公开" : "已提交，等待审核";
+        form.reset();
+        contentEditor?.setValue?.("");
+        if (basicEditor) basicEditor.value = "";
+        if (contentValue) contentValue.value = "";
+        setAdvancedEditorVisible(false);
+        await loadReviews();
+      } catch (error) {
+        statusEl.textContent = error.message;
+      }
+    });
+
+    Promise.all([loadEditorSettings(), loadReviews()]).then(() => {
+      if (contentValue) contentValue.value = "";
+      if (basicEditor) basicEditor.value = "";
+      setAdvancedEditorVisible(false);
+      openPrefilledForm();
+    });
+  </script>
+</Layout>

@@ -1,0 +1,2636 @@
+﻿---
+import Layout from "../layouts/Layout.astro";
+import "vditor/dist/index.css";
+---
+
+<Layout title="内容管理" eyebrow="Admin">
+  <section class="content admin-content">
+    <div class="panel" id="login-panel">
+      <div class="panel-header">
+        <h2>后台登录</h2>
+      </div>
+      <div class="panel-body">
+        <form class="admin-form" id="login-form">
+          <label class="admin-field">
+            <span>管理密码</span>
+            <input id="admin-password" type="password" autocomplete="current-password" />
+          </label>
+          <div class="filter-row">
+            <button class="button" type="submit">登录</button>
+            <span class="muted" id="login-status"></span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="admin-app" hidden>
+      <div class="admin-tabs">
+        <button class="button" type="button" data-admin-tab="resources">课程资源</button>
+        <button class="button secondary" type="button" data-admin-tab="reviews">评价审核</button>
+        <button class="button secondary" type="button" data-admin-tab="participate">参与页面</button>
+        <button class="button secondary" type="button" data-admin-tab="feedback">反馈管理</button>
+        <button class="button secondary" type="button" data-admin-tab="links">友链页面</button>
+        <button class="button secondary" type="button" data-admin-tab="home">首页设置</button>
+        <button class="button secondary" type="button" data-admin-tab="footer">页脚设置</button>
+        <button class="button secondary" type="button" data-admin-tab="editor-settings">编辑器设置</button>
+        <button class="button secondary" type="button" data-admin-tab="stats">访问统计</button>
+        <button class="button secondary" type="button" data-admin-tab="about">关于页面</button>
+        <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
+      </div>
+
+      <div id="resource-admin-panel">
+        <div class="panel admin-toolbar">
+          <div class="panel-header">
+            <h2>课程资源管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="publish" type="button">保存并发布</button>
+              <button class="button secondary" id="sync-r2" type="button">从 R2 同步当前课程</button>
+              <button class="button secondary" id="sync-r2-all" type="button">从 R2 重建课程树</button>
+              <button class="button secondary" id="add-course" type="button">新增课程</button>
+              <button class="button secondary" id="download-json" type="button">下载 JSON</button>
+              <button class="button secondary" id="download-backup" type="button">备份</button>
+              <button class="button secondary" id="logout" type="button">退出</button>
+              <span class="muted" id="publish-status"></span>
+            </div>
+            <div class="admin-form admin-toolbar-settings" id="manifest-settings" style="margin-top: 14px;"></div>
+          </div>
+        </div>
+
+        <div class="admin-workbench">
+          <aside class="panel admin-tree-panel">
+            <div class="panel-header">
+              <h2>课程树</h2>
+              <button class="admin-icon-button" id="collapse-tree" type="button" title="收拢左侧">‹</button>
+            </div>
+            <div class="panel-body">
+              <input class="searchbar" id="admin-search" type="search" placeholder="搜索课程" autocomplete="off" />
+              <div class="admin-tree" id="admin-course-tree"></div>
+            </div>
+          </aside>
+
+          <button class="admin-resizer" id="admin-resizer" type="button" title="拖动调整宽度"></button>
+
+          <section class="panel admin-editor-panel">
+            <div class="panel-header">
+              <h2 id="editor-title">选择课程</h2>
+            </div>
+            <div class="panel-body" id="editor">
+              <p class="empty">正在加载内容。</p>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div id="review-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>评价审核管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-reviews" type="button">保存评价设置</button>
+              <button class="button secondary" id="reload-reviews" type="button">重新加载</button>
+              <button class="button secondary" id="logout-reviews" type="button">退出</button>
+              <span class="muted" id="review-admin-status"></span>
+            </div>
+            <div class="review-admin-layout">
+              <details class="card admin-collapsible-card" open>
+                <summary>审核规则框架</summary>
+                <div class="admin-form" id="review-rules-editor" style="margin-top: 14px;"></div>
+              </details>
+              <div class="card">
+                <h3>评论内容</h3>
+                <input class="searchbar" id="review-admin-search" type="search" placeholder="搜索课程或老师" autocomplete="off" style="margin-top: 14px;" />
+                <select class="searchbar" id="review-status-filter" style="margin-top: 10px;">
+                  <option value="all">全部状态</option>
+                  <option value="pending">待审</option>
+                  <option value="approved">已通过</option>
+                  <option value="hidden">已隐藏</option>
+                  <option value="visible">显示中</option>
+                </select>
+                <div class="review-admin-list" id="review-admin-list" style="margin-top: 14px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="participate-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>参与页面管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-participate" type="button">保存并发布参与页</button>
+              <button class="button secondary" id="reload-participate" type="button">重新加载</button>
+              <span class="muted" id="participate-admin-status"></span>
+            </div>
+            <div class="admin-form" id="participate-admin-editor"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="feedback-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>反馈管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-feedback" type="button">保存反馈</button>
+              <button class="button secondary" id="reload-feedback" type="button">重新加载</button>
+              <span class="muted" id="feedback-admin-status"></span>
+            </div>
+            <details class="card admin-collapsible-card" open>
+              <summary>反馈规则框架</summary>
+              <div class="admin-form" id="feedback-settings-editor" style="margin-top: 14px;"></div>
+              <div class="admin-form" id="feedback-rules-editor" style="margin-top: 14px;"></div>
+            </details>
+            <div class="card" style="margin-top: 18px;">
+              <h3>反馈内容</h3>
+              <input class="searchbar" id="feedback-admin-search" type="search" placeholder="搜索标题、内容或联系方式" autocomplete="off" />
+              <div class="review-admin-list" id="feedback-admin-list" style="margin-top: 14px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="links-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>友链页面管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-links" type="button">保存并发布友链页</button>
+              <button class="button secondary" id="reload-links" type="button">重新加载</button>
+              <button class="button secondary" id="add-link-item" type="button">新增链接</button>
+              <span class="muted" id="links-admin-status"></span>
+            </div>
+            <details class="card admin-collapsible-card" open>
+              <summary>页面与本站信息</summary>
+              <div class="admin-form" id="links-settings-editor" style="margin-top: 14px;"></div>
+            </details>
+            <div class="card" style="margin-top: 18px;">
+              <h3>链接内容</h3>
+              <div class="review-admin-list" id="links-admin-list" style="margin-top: 14px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="stats-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>访问统计</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button secondary" id="reload-stats" type="button">重新加载</button>
+              <span class="muted" id="stats-admin-status"></span>
+            </div>
+            <div class="backup-grid" id="stats-admin-summary" style="margin-top: 18px;"></div>
+            <details class="card admin-collapsible-card" style="margin-top: 18px;">
+              <summary>页面访问明细</summary>
+              <div class="review-admin-list" id="stats-admin-pages" style="margin-top: 14px;"></div>
+            </details>
+            <details class="card admin-collapsible-card" style="margin-top: 18px;">
+              <summary>最近去重 IP</summary>
+              <div class="review-admin-list" id="stats-admin-visitors" style="margin-top: 14px;"></div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div id="about-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>关于页面管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-about" type="button">保存并发布关于页</button>
+              <button class="button secondary" id="reload-about" type="button">重新加载</button>
+              <span class="muted" id="about-admin-status"></span>
+            </div>
+            <div class="admin-form" id="about-admin-editor"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="home-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>首页设置</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-home" type="button">保存并发布首页</button>
+              <button class="button secondary" id="reload-home" type="button">重新加载</button>
+              <span class="muted" id="home-admin-status"></span>
+            </div>
+            <div class="admin-form" id="home-admin-editor"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="footer-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>页脚设置</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-footer" type="button">保存并发布页脚</button>
+              <button class="button secondary" id="reload-footer" type="button">重新加载</button>
+              <span class="muted" id="footer-admin-status"></span>
+            </div>
+            <div class="admin-form" id="footer-admin-editor"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="editor-settings-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>编辑器设置</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-editor-settings" type="button">保存编辑器设置</button>
+              <button class="button secondary" id="reload-editor-settings" type="button">重新加载</button>
+              <span class="muted" id="editor-settings-admin-status"></span>
+            </div>
+            <div class="editor-settings-grid">
+              <details class="card admin-collapsible-card" open>
+                <summary>用户 Markdown 编辑器</summary>
+                <div class="admin-form" id="editor-user-settings" style="margin-top: 14px;"></div>
+              </details>
+              <details class="card admin-collapsible-card" open>
+                <summary>管理 Markdown 编辑器</summary>
+                <div class="admin-form" id="editor-admin-settings" style="margin-top: 14px;"></div>
+              </details>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="backup-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>备份</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-backup-settings" type="button">保存备份设置</button>
+              <button class="button secondary" id="reload-backup-settings" type="button">重新加载</button>
+              <button class="button secondary" id="run-backup-now" type="button">立即执行备份</button>
+            </div>
+            <div class="card" style="margin: 18px 0;">
+              <h3>自动备份规则</h3>
+              <div class="admin-form" id="backup-settings-editor" style="margin-top: 14px;"></div>
+            </div>
+            <div class="card" style="margin-bottom: 18px;">
+              <h3>WebDAV 备份目标</h3>
+              <div class="admin-form" id="webdav-settings-editor" style="margin-top: 14px;"></div>
+              <button class="button secondary" id="add-webdav-destination" type="button" style="margin-top: 12px;">新增 WebDAV 目标</button>
+            </div>
+            <details class="card admin-collapsible-card">
+              <summary>下载备份</summary>
+              <div class="backup-grid" style="margin-top: 14px;">
+                <article class="card">
+                  <h3>整体站点数据</h3>
+                  <p class="muted">包含课程树、评价、反馈、首页、关于页、参与页、友链页和安全配置摘要。</p>
+                  <button class="button" type="button" data-backup-scope="all">下载整体备份</button>
+                </article>
+                <article class="card">
+                  <h3>课程树</h3>
+                  <p class="muted">只下载 manifest.json 对应的课程、板块、文件索引。</p>
+                  <button class="button secondary" type="button" data-backup-scope="manifest">下载课程树</button>
+                </article>
+                <article class="card">
+                  <h3>评价内容</h3>
+                  <p class="muted">只下载评价审核规则和全部评价记录。</p>
+                  <button class="button secondary" type="button" data-backup-scope="reviews">下载评价</button>
+                </article>
+                <article class="card">
+                  <h3>反馈内容</h3>
+                  <p class="muted">只下载反馈规则和全部反馈记录，包含后台可见联系方式。</p>
+                  <button class="button secondary" type="button" data-backup-scope="feedback">下载反馈</button>
+                </article>
+                <article class="card">
+                  <h3>页面内容</h3>
+                  <p class="muted">只下载首页、关于页、参与页、友链页、页脚这些可编辑页面内容。</p>
+                  <button class="button secondary" type="button" data-backup-scope="pages">下载页面内容</button>
+                </article>
+                <article class="card">
+                  <h3>访问统计</h3>
+                  <p class="muted">只下载访问总数、每日统计、页面统计和短期去重 IP 记录。</p>
+                  <button class="button secondary" type="button" data-backup-scope="stats">下载访问统计</button>
+                </article>
+                <article class="card">
+                  <h3>配置摘要</h3>
+                  <p class="muted">只下载运行路径和 R2 配置摘要，不包含密码和密钥。</p>
+                  <button class="button secondary" type="button" data-backup-scope="config">下载配置摘要</button>
+                </article>
+              </div>
+            </details>
+            <p class="muted" id="backup-admin-status" style="margin-top: 14px;"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import Vditor from "vditor";
+
+    let state = null;
+    let selectedId = null;
+    let originalCourseHashes = new Map();
+    let originalCourseBasePaths = new WeakMap();
+    let reviewState = null;
+    let feedbackState = null;
+    let aboutState = null;
+    let homeState = null;
+    let footerState = null;
+    let statsState = null;
+    let participateState = null;
+    let linksState = null;
+    let backupState = null;
+    let editorSettingsState = null;
+    const adminPageSize = 10;
+    let reviewAdminPage = 1;
+    let feedbackAdminPage = 1;
+    const selectedAdminFiles = new WeakSet();
+
+    const loginPanel = document.querySelector("#login-panel");
+    const loginForm = document.querySelector("#login-form");
+    const loginStatus = document.querySelector("#login-status");
+    const adminApp = document.querySelector("#admin-app");
+    const workbench = document.querySelector(".admin-workbench");
+    const collapseTreeButton = document.querySelector("#collapse-tree");
+    const resizer = document.querySelector("#admin-resizer");
+    const treeEl = document.querySelector("#admin-course-tree");
+    const editorEl = document.querySelector("#editor");
+    const editorTitle = document.querySelector("#editor-title");
+    const searchEl = document.querySelector("#admin-search");
+    const publishStatus = document.querySelector("#publish-status");
+    const manifestSettings = document.querySelector("#manifest-settings");
+    const resourceAdminPanel = document.querySelector("#resource-admin-panel");
+    const reviewAdminPanel = document.querySelector("#review-admin-panel");
+    const reviewRulesEditor = document.querySelector("#review-rules-editor");
+    const reviewAdminList = document.querySelector("#review-admin-list");
+    const reviewAdminSearch = document.querySelector("#review-admin-search");
+    const reviewStatusFilter = document.querySelector("#review-status-filter");
+    const reviewAdminStatus = document.querySelector("#review-admin-status");
+    const feedbackAdminPanel = document.querySelector("#feedback-admin-panel");
+    const feedbackAdminList = document.querySelector("#feedback-admin-list");
+    const feedbackAdminSearch = document.querySelector("#feedback-admin-search");
+    const feedbackSettingsEditor = document.querySelector("#feedback-settings-editor");
+    const feedbackRulesEditor = document.querySelector("#feedback-rules-editor");
+    const feedbackAdminStatus = document.querySelector("#feedback-admin-status");
+    const linksAdminPanel = document.querySelector("#links-admin-panel");
+    const linksSettingsEditor = document.querySelector("#links-settings-editor");
+    const linksAdminList = document.querySelector("#links-admin-list");
+    const linksAdminStatus = document.querySelector("#links-admin-status");
+    const participateAdminPanel = document.querySelector("#participate-admin-panel");
+    const participateAdminEditor = document.querySelector("#participate-admin-editor");
+    const participateAdminStatus = document.querySelector("#participate-admin-status");
+    const aboutAdminPanel = document.querySelector("#about-admin-panel");
+    const aboutAdminEditor = document.querySelector("#about-admin-editor");
+    const aboutAdminStatus = document.querySelector("#about-admin-status");
+    const homeAdminPanel = document.querySelector("#home-admin-panel");
+    const homeAdminEditor = document.querySelector("#home-admin-editor");
+    const homeAdminStatus = document.querySelector("#home-admin-status");
+    const footerAdminPanel = document.querySelector("#footer-admin-panel");
+    const footerAdminEditor = document.querySelector("#footer-admin-editor");
+    const footerAdminStatus = document.querySelector("#footer-admin-status");
+    const editorSettingsAdminPanel = document.querySelector("#editor-settings-admin-panel");
+    const editorSettingsAdminStatus = document.querySelector("#editor-settings-admin-status");
+    const editorUserSettings = document.querySelector("#editor-user-settings");
+    const editorAdminSettings = document.querySelector("#editor-admin-settings");
+    const statsAdminPanel = document.querySelector("#stats-admin-panel");
+    const statsAdminSummary = document.querySelector("#stats-admin-summary");
+    const statsAdminPages = document.querySelector("#stats-admin-pages");
+    const statsAdminVisitors = document.querySelector("#stats-admin-visitors");
+    const statsAdminStatus = document.querySelector("#stats-admin-status");
+    const backupAdminPanel = document.querySelector("#backup-admin-panel");
+    const backupAdminStatus = document.querySelector("#backup-admin-status");
+    const backupSettingsEditor = document.querySelector("#backup-settings-editor");
+    const webdavSettingsEditor = document.querySelector("#webdav-settings-editor");
+    const toolbarOptions = [
+      ["headings", "标题"],
+      ["bold", "加粗"],
+      ["italic", "斜体"],
+      ["strike", "删除线"],
+      ["line", "分割线"],
+      ["quote", "引用"],
+      ["list", "无序列表"],
+      ["ordered-list", "有序列表"],
+      ["check", "任务列表"],
+      ["outdent", "减少缩进"],
+      ["indent", "增加缩进"],
+      ["code", "代码块"],
+      ["inline-code", "行内代码"],
+      ["insert-after", "后插入"],
+      ["insert-before", "前插入"],
+      ["undo", "撤销"],
+      ["redo", "重做"],
+      ["upload", "上传（预留）"],
+      ["link", "链接"],
+      ["table", "表格"],
+      ["record", "录音"],
+      ["edit-mode", "编辑模式"],
+      ["both", "双栏模式"],
+      ["preview", "预览"],
+      ["fullscreen", "全屏"],
+      ["outline", "大纲"],
+      ["code-theme", "代码主题"],
+      ["content-theme", "内容主题"],
+      ["export", "导出"],
+      ["devtools", "调试"],
+      ["info", "信息"],
+      ["help", "帮助"],
+      ["br", "换行"],
+    ];
+    const defaultUserToolbar = ["bold", "italic", "strike", "headings", "link", "list", "ordered-list", "check", "quote", "code", "line", "table", "preview", "fullscreen"];
+    const defaultAdminToolbar = ["bold", "italic", "strike", "headings", "link", "list", "ordered-list", "check", "quote", "code", "line", "table", "preview", "fullscreen", "outline"];
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    function beijingDate(value = new Date()) {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Shanghai",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(value);
+    }
+
+    function beijingDateTime(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(date);
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(`/admin-api${path}`, {
+        ...options,
+        headers: {
+          "content-type": "application/json",
+          ...(options.headers || {}),
+        },
+      });
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || data.errors?.join("\n") || "请求失败");
+      }
+      return data;
+    }
+
+    const makeId = (title) => title
+      .trim()
+      .toLowerCase()
+      .replace(/[^\w\u4e00-\u9fa5]+/g, "-")
+      .replace(/^-+|-+$/g, "") || `course-${Date.now()}`;
+
+    const courseBasePath = (course) => {
+      const parts = [course.term, course.group, course.title]
+        .map((part) => String(part ?? "").trim())
+        .filter(Boolean);
+      return `${parts.join("/")}/`;
+    };
+
+    function syncCourseBasePath(course) {
+      course.basePath = courseBasePath(course);
+    }
+
+    function isOpenListPlaceholder(file) {
+      const text = `${file?.title ?? ""}/${file?.path ?? ""}`.toLowerCase();
+      return text.includes(".openlist");
+    }
+
+    function filePathParts(section, file) {
+      const parts = String(file?.path || file?.title || "").split("/").filter(Boolean);
+      if (parts[0] === section.title) parts.shift();
+      return parts;
+    }
+
+    function groupedSectionFiles(section) {
+      const visible = (section.files ?? []).filter((file) => !isOpenListPlaceholder(file));
+      const direct = [];
+      const groups = new Map();
+      for (const file of visible) {
+        const parts = filePathParts(section, file);
+        if (parts.length > 1) {
+          const groupName = parts[0];
+          if (!groups.has(groupName)) groups.set(groupName, []);
+          groups.get(groupName).push(file);
+        } else {
+          direct.push(file);
+        }
+      }
+      return {
+        visible,
+        direct,
+        groups: Array.from(groups, ([title, files]) => ({ title, files })),
+      };
+    }
+
+    const sectionRank = (title = "") => {
+      const lower = title.toLowerCase();
+      if (title.includes("大纲") || title.includes("说明")) return 0;
+      if (title.includes("真题") || title.includes("试题") || title.includes("试卷")) return 1;
+      if (lower.includes("ppt") || title.includes("课件")) return 2;
+      return 3;
+    };
+
+    function today() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function courseHash(course) {
+      const copy = structuredClone(course);
+      delete copy.updated;
+      return JSON.stringify(copy);
+    }
+
+    function captureCourseHashes() {
+      originalCourseHashes = new Map(state.courses.map((course) => [course.id, courseHash(course)]));
+      originalCourseBasePaths = new WeakMap();
+      state.courses.forEach((course) => originalCourseBasePaths.set(course, course.basePath));
+    }
+
+    function touchChangedCourses() {
+      for (const course of state.courses) {
+        if (originalCourseHashes.get(course.id) !== courseHash(course)) {
+          course.updated = today();
+        }
+      }
+    }
+
+    function sortSections(course) {
+      course.sections = [...(course.sections ?? [])].sort((a, b) => {
+        const rank = sectionRank(a.title) - sectionRank(b.title);
+        return rank || (course.sections ?? []).indexOf(a) - (course.sections ?? []).indexOf(b);
+      });
+    }
+
+    function renderManifestSettings() {
+      if (!state || !manifestSettings) return;
+      manifestSettings.innerHTML = "";
+      manifestSettings.append(
+        field("全站隐藏课程标签，逗号分隔", (state.hiddenMetaTags ?? []).join(", "), (value) => {
+          state.hiddenMetaTags = value.split(",").map((tag) => tag.trim()).filter(Boolean);
+        })
+      );
+    }
+
+    async function loadManifest() {
+      if (!editorSettingsState) {
+        try {
+          const settings = await api("/editor-settings");
+          editorSettingsState = settings.data;
+        } catch {}
+      }
+      const data = await api("/manifest");
+      state = data.manifest;
+      captureCourseHashes();
+      selectedId = state.courses[0]?.id ?? null;
+      loginPanel.hidden = true;
+      adminApp.hidden = false;
+      renderManifestSettings();
+      renderTree();
+      renderEditor();
+    }
+
+    async function loadReviewsAdmin() {
+      const data = await api("/reviews");
+      reviewState = data.data;
+      renderReviewAdmin();
+    }
+
+    async function loadFeedbackAdmin() {
+      const data = await api("/feedback");
+      feedbackState = data.data;
+      renderFeedbackAdmin();
+    }
+
+    async function loadParticipateAdmin() {
+      const data = await api("/participate");
+      participateState = data.data;
+      renderParticipateAdmin();
+    }
+
+    async function loadLinksAdmin() {
+      const data = await api("/links");
+      linksState = data.data;
+      renderLinksAdmin();
+    }
+
+    async function loadAboutAdmin() {
+      const data = await api("/about");
+      aboutState = data.data;
+      renderAboutAdmin();
+    }
+
+    async function loadHomeAdmin() {
+      const data = await api("/home");
+      homeState = data.data;
+      renderHomeAdmin();
+    }
+
+    async function loadFooterAdmin() {
+      const data = await api("/footer");
+      footerState = data.data;
+      renderFooterAdmin();
+    }
+
+    async function loadStatsAdmin() {
+      const data = await api("/visit-stats");
+      statsState = data;
+      renderStatsAdmin();
+    }
+
+    async function loadBackupAdmin() {
+      const data = await api("/backup-settings");
+      backupState = data.data;
+      renderBackupAdmin();
+    }
+
+    async function loadEditorSettingsAdmin() {
+      const data = await api("/editor-settings");
+      editorSettingsState = data.data;
+      renderEditorSettingsAdmin();
+    }
+
+    async function checkSession() {
+      try {
+        await api("/session");
+        await loadManifest();
+      } catch {
+        loginPanel.hidden = false;
+        adminApp.hidden = true;
+      }
+    }
+
+    function selectedCourse() {
+      return state?.courses.find((item) => item.id === selectedId);
+    }
+
+    function renderTree() {
+      const keyword = searchEl.value.trim().toLowerCase();
+      treeEl.innerHTML = "";
+      const terms = new Map();
+
+      for (const course of state.courses) {
+        const text = `${course.title} ${course.term} ${course.group} ${(course.tags ?? []).join(" ")}`.toLowerCase();
+        if (keyword && !text.includes(keyword)) continue;
+        if (!terms.has(course.term)) terms.set(course.term, new Map());
+        const groups = terms.get(course.term);
+        if (!groups.has(course.group)) groups.set(course.group, []);
+        groups.get(course.group).push(course);
+      }
+
+      for (const [term, groups] of terms) {
+        const termDetails = document.createElement("details");
+        termDetails.className = "admin-tree-node";
+        termDetails.open = true;
+        termDetails.innerHTML = `<summary>${escapeHtml(term || "未设置学期")}</summary>`;
+
+        for (const [group, courses] of groups) {
+          const groupDetails = document.createElement("details");
+          groupDetails.className = "admin-tree-node admin-tree-group";
+          groupDetails.open = true;
+          groupDetails.innerHTML = `<summary>${escapeHtml(group || "未设置分类")}</summary>`;
+
+          for (const course of courses) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "admin-tree-course";
+            button.dataset.active = course.id === selectedId ? "true" : "false";
+            button.innerHTML = `
+              <strong>${escapeHtml(course.title || "未命名课程")}</strong>
+              <small>${escapeHtml(course.updated || "")}</small>
+            `;
+            button.addEventListener("click", () => {
+              selectedId = course.id;
+              renderTree();
+              renderEditor();
+            });
+            groupDetails.append(button);
+          }
+          termDetails.append(groupDetails);
+        }
+        treeEl.append(termDetails);
+      }
+    }
+
+    function setTreeWidth(width) {
+      const next = Math.min(620, Math.max(220, width));
+      workbench.style.setProperty("--tree-width", `${next}px`);
+      localStorage.setItem("nkustudy-admin-tree-width", String(next));
+    }
+
+    function restoreWorkbench() {
+      const width = Number(localStorage.getItem("nkustudy-admin-tree-width"));
+      if (width) setTreeWidth(width);
+      if (localStorage.getItem("nkustudy-admin-tree-collapsed") === "true") {
+        workbench.dataset.collapsed = "true";
+        collapseTreeButton.textContent = "›";
+        collapseTreeButton.title = "展开左侧";
+      }
+    }
+
+    function field(label, value, onInput, textarea = false) {
+      const wrap = document.createElement("label");
+      wrap.className = "admin-field";
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label;
+      const input = document.createElement(textarea ? "textarea" : "input");
+      input.value = value ?? "";
+      input.addEventListener("input", () => onInput(input.value, input));
+      wrap.append(labelEl, input);
+      return wrap;
+    }
+
+    let markdownEditors = [];
+
+    function destroyMarkdownEditors() {
+      for (const editor of markdownEditors) {
+        try {
+          editor?.destroy?.();
+        } catch {}
+      }
+      markdownEditors = [];
+    }
+
+    function markdownField(label, value, onInput, options = {}) {
+      const markdownValue = String(value ?? "");
+      const wrap = document.createElement("div");
+      wrap.className = "admin-field admin-markdown-field";
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label;
+      const shell = document.createElement("div");
+      shell.className = "markdown-shell";
+      const fallback = document.createElement("textarea");
+      fallback.className = "markdown-fallback";
+      fallback.value = markdownValue;
+      fallback.style.minHeight = `${Number(options.height ?? 320)}px`;
+      const editor = document.createElement("div");
+      editor.className = "markdown-editor";
+      editor.dataset.markdownEditor = "true";
+      editor.dataset.markdownValue = markdownValue;
+      editor.dataset.markdownHeight = String(options.height ?? 320);
+      editor.dataset.markdownPlaceholder = options.placeholder ?? "";
+      editor.dataset.markdownMode = options.mode ?? "sv";
+      editor.__markdownOnInput = onInput;
+      fallback.addEventListener("input", () => onInput(fallback.value, fallback));
+      shell.append(fallback, editor);
+      wrap.append(labelEl, shell);
+      return wrap;
+    }
+
+    function toolbarFor(mode) {
+      const source = editorSettingsState?.[mode]?.toolbar;
+      const toolbar = Array.isArray(source) && source.length
+        ? source
+        : (mode === "admin" ? defaultAdminToolbar : defaultUserToolbar);
+      const firstSafe = ["bold", "italic", "strike", "link", "list", "ordered-list", "check"];
+      return [
+        ...firstSafe.filter((item) => toolbar.includes(item)),
+        ...toolbar.filter((item) => !firstSafe.includes(item)),
+      ];
+    }
+
+    function enhanceVditorToolbar(root) {
+      const toolbarNodes = () => Array.from(root.querySelectorAll(".vditor-toolbar button, .vditor-toolbar [data-type], .vditor-toolbar__item"));
+      const blurToolbar = () => toolbarNodes().forEach((button) => button.blur?.());
+      const applyTitles = () => {
+        toolbarNodes().forEach((button) => {
+          const type = button.dataset?.type || "";
+          const label = toolbarItemLabel(type) || button.getAttribute("aria-label") || button.title;
+          if (label) {
+            button.title = label;
+            button.setAttribute("aria-label", label);
+            button.setAttribute("data-tooltip", label);
+            button.closest(".vditor-toolbar__item")?.setAttribute("title", label);
+            button.closest(".vditor-toolbar__item")?.setAttribute("aria-label", label);
+          }
+          button.tabIndex = -1;
+          if (!button.dataset.nkustudyToolbarBound) {
+            button.dataset.nkustudyToolbarBound = "true";
+            button.addEventListener("focus", () => window.setTimeout(() => button.blur(), 0));
+            button.addEventListener("mousedown", () => window.setTimeout(() => button.blur(), 0));
+          }
+        });
+      };
+      applyTitles();
+      requestAnimationFrame(applyTitles);
+      window.setTimeout(applyTitles, 80);
+      if (!root.__nkustudyToolbarObserver) {
+        root.__nkustudyToolbarObserver = new MutationObserver(applyTitles);
+        root.__nkustudyToolbarObserver.observe(root, { childList: true, subtree: true });
+      }
+      root.addEventListener("pointerdown", (event) => {
+        if (!event.target?.closest?.(".vditor-toolbar")) window.setTimeout(blurToolbar, 0);
+      });
+    }
+
+    function mountMarkdownEditors(root, mode = "admin") {
+      destroyMarkdownEditors();
+      const editors = Array.from(root?.querySelectorAll?.("[data-markdown-editor]") ?? []);
+      for (const node of editors) {
+        const shell = node.closest(".markdown-shell");
+        const fallback = shell?.querySelector(".markdown-fallback");
+        try {
+          let editor;
+          editor = new Vditor(node, {
+            mode: node.dataset.markdownMode || "sv",
+            value: node.dataset.markdownValue ?? "",
+            height: Number(node.dataset.markdownHeight || 320),
+            placeholder: node.dataset.markdownPlaceholder || "",
+            cache: { enable: false },
+            toolbar: toolbarFor(mode),
+            toolbarConfig: { pin: false },
+            preview: {
+              actions: ["desktop", "tablet", "mobile"],
+              markdown: {
+                breaks: true,
+              },
+            },
+            after() {
+              const initialValue = node.dataset.markdownValue ?? "";
+              editor?.setValue?.(initialValue);
+              if (fallback) fallback.value = initialValue;
+              enhanceVditorToolbar(node);
+              shell?.classList.add("is-mounted");
+              requestAnimationFrame(() => {
+                node.querySelector(".vditor-toolbar button")?.blur?.();
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+              });
+            },
+            input(value) {
+              if (fallback) fallback.value = value;
+              node.__markdownOnInput?.(value);
+            },
+          });
+          markdownEditors.push(editor);
+        } catch {
+          shell?.classList.remove("is-mounted");
+        }
+      }
+    }
+
+    function toolbarItemLabel(value) {
+      return toolbarOptions.find(([key]) => key === value)?.[1] || value;
+    }
+
+    function renderToolbarCheckGroup(root, toolbar, onChange) {
+      root.innerHTML = "";
+      let current = [...toolbar];
+      const items = document.createElement("div");
+      items.className = "editor-toolbar-grid";
+      for (const [key, label] of toolbarOptions) {
+        const item = document.createElement("label");
+        item.className = "admin-check-field editor-toolbar-option";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = current.includes(key);
+        input.addEventListener("change", () => {
+          if (input.checked) {
+            if (!current.includes(key)) current.push(key);
+          } else {
+            current = current.filter((item) => item !== key);
+          }
+          onChange([...current]);
+        });
+        const text = document.createElement("span");
+        text.textContent = label;
+        item.append(input, text);
+        items.append(item);
+      }
+      root.append(items);
+    }
+
+    function renderEditorSettingsAdmin() {
+      if (!editorSettingsState) return;
+      editorSettingsAdminStatus.textContent = "";
+      editorUserSettings.innerHTML = "";
+      editorAdminSettings.innerHTML = "";
+      const userWrap = document.createElement("div");
+      userWrap.className = "editor-settings-block";
+      userWrap.innerHTML = `<p class="muted">用户提交评价/反馈时可使用的 Markdown 工具栏选项。</p>`;
+      const userToolbar = document.createElement("div");
+      renderToolbarCheckGroup(userToolbar, editorSettingsState.user?.toolbar || defaultUserToolbar, (next) => {
+        editorSettingsState.user = editorSettingsState.user || {};
+        editorSettingsState.user.toolbar = next;
+      });
+      userWrap.append(userToolbar);
+
+      const adminWrap = document.createElement("div");
+      adminWrap.className = "editor-settings-block";
+      adminWrap.innerHTML = `<p class="muted">后台页面中可用的 Markdown 工具栏选项。</p>`;
+      const adminToolbar = document.createElement("div");
+      renderToolbarCheckGroup(adminToolbar, editorSettingsState.admin?.toolbar || defaultAdminToolbar, (next) => {
+        editorSettingsState.admin = editorSettingsState.admin || {};
+        editorSettingsState.admin.toolbar = next;
+      });
+      adminWrap.append(adminToolbar);
+
+      editorUserSettings.append(userWrap);
+      editorAdminSettings.append(adminWrap);
+    }
+
+    async function saveEditorSettings(message = "已保存编辑器设置") {
+      editorSettingsAdminStatus.textContent = "保存中...";
+      const data = await api("/editor-settings", {
+        method: "POST",
+        body: JSON.stringify({ data: editorSettingsState }),
+      });
+      editorSettingsState = data.data;
+      editorSettingsAdminStatus.textContent = message;
+      renderEditorSettingsAdmin();
+    }
+
+    function checkboxField(label, value, onInput) {
+      const wrap = document.createElement("label");
+      wrap.className = "admin-check-field";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = Boolean(value);
+      input.addEventListener("change", () => onInput(input.checked));
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label;
+      wrap.append(input, labelEl);
+      return wrap;
+    }
+
+    function numberField(label, value, onInput) {
+      const wrap = field(label, value, (next) => onInput(Number(next || 0)));
+      wrap.querySelector("input").type = "number";
+      wrap.querySelector("input").min = "0";
+      return wrap;
+    }
+
+    function selectField(label, value, options, onInput) {
+      const wrap = document.createElement("label");
+      wrap.className = "admin-field";
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label;
+      const select = document.createElement("select");
+      for (const [optionValue, optionLabel] of options) {
+        const option = document.createElement("option");
+        option.value = optionValue;
+        option.textContent = optionLabel;
+        option.selected = String(value ?? "") === String(optionValue);
+        select.append(option);
+      }
+      select.addEventListener("change", () => onInput(select.value, select));
+      wrap.append(labelEl, select);
+      return wrap;
+    }
+
+    function appendPagination(container, total, currentPage, onPage) {
+      if (total <= adminPageSize) return;
+      const pages = Math.max(1, Math.ceil(total / adminPageSize));
+      const pager = document.createElement("div");
+      pager.className = "pagination";
+      const prev = document.createElement("button");
+      prev.type = "button";
+      prev.className = "button secondary";
+      prev.textContent = "上一页";
+      prev.disabled = currentPage <= 1;
+      prev.addEventListener("click", () => onPage(currentPage - 1));
+      const next = document.createElement("button");
+      next.type = "button";
+      next.className = "button secondary";
+      next.textContent = "下一页";
+      next.disabled = currentPage >= pages;
+      next.addEventListener("click", () => onPage(currentPage + 1));
+      const label = document.createElement("span");
+      label.className = "muted";
+      label.textContent = `第 ${currentPage} / ${pages} 页，共 ${total} 项`;
+      pager.append(prev, label, next);
+      container.append(pager);
+    }
+
+    async function saveReviewState(message = "已保存") {
+      reviewAdminStatus.textContent = "保存中...";
+      const data = await api("/reviews", {
+        method: "POST",
+        body: JSON.stringify({ data: reviewState }),
+      });
+      reviewState = data.data;
+      reviewAdminStatus.textContent = message;
+      renderReviewAdmin();
+    }
+
+    function renderReviewAdmin() {
+      if (!reviewState) return;
+      const rules = reviewState.rules ??= {};
+      reviewRulesEditor.innerHTML = "";
+      reviewRulesEditor.append(
+        checkboxField("开放用户提交", rules.submissionOpen, (value) => { rules.submissionOpen = value; }),
+        checkboxField("提交后需要审核", rules.moderationRequired, (value) => { rules.moderationRequired = value; }),
+        checkboxField("启用 Turnstile（预留）", rules.turnstileEnabled, (value) => { rules.turnstileEnabled = value; }),
+        numberField("每小时提交上限", rules.hourlyLimit ?? 3, (value) => { rules.hourlyLimit = value; }),
+        numberField("每日提交上限", rules.dailyLimit ?? 10, (value) => { rules.dailyLimit = value; }),
+        numberField("评价最少字数", rules.minLength ?? 12, (value) => { rules.minLength = value; }),
+        markdownField("评价公告栏（支持 Markdown）", rules.announcement ?? "", (value) => { rules.announcement = value; }),
+        markdownField("规则备注", rules.notes ?? "", (value) => { rules.notes = value; }, { height: 150 })
+      );
+
+      const keyword = reviewAdminSearch.value.trim().toLowerCase();
+      const statusFilter = reviewStatusFilter.value;
+      const reviews = (reviewState.reviews ?? []).filter((review) => {
+        const text = `${review.courseTitle} ${review.teacher}`.toLowerCase();
+        const status = String(review.status || "pending");
+        const matchesStatus =
+          statusFilter === "all" ||
+          (statusFilter === "hidden" && review.hidden) ||
+          (statusFilter === "visible" && !review.hidden) ||
+          (statusFilter === status);
+        return matchesStatus && (!keyword || text.includes(keyword));
+      });
+
+      reviewAdminList.innerHTML = "";
+      if (!reviews.length) {
+        reviewAdminList.innerHTML = `<p class="empty">暂无匹配评价。</p>`;
+        mountMarkdownEditors(document.querySelector("#review-admin-panel"));
+        return;
+      }
+      const reviewPages = Math.max(1, Math.ceil(reviews.length / adminPageSize));
+      reviewAdminPage = Math.min(reviewAdminPage, reviewPages);
+      const pageReviews = reviews.slice((reviewAdminPage - 1) * adminPageSize, reviewAdminPage * adminPageSize);
+
+      const groupedReviews = new Map();
+      for (const review of pageReviews) {
+        const key = `${review.courseTitle || "未命名课程"}-${review.teacher || "未填写老师"}`;
+        if (!groupedReviews.has(key)) groupedReviews.set(key, []);
+        groupedReviews.get(key).push(review);
+      }
+
+      for (const [groupName, groupReviews] of groupedReviews) {
+        const group = document.createElement("details");
+        group.className = "resource-section review-admin-group";
+        group.open = true;
+        group.innerHTML = `<summary>${escapeHtml(groupName)} <span class="muted">(${groupReviews.length})</span></summary>`;
+        const groupBody = document.createElement("div");
+        groupBody.className = "admin-section-body";
+
+        for (const review of groupReviews) {
+        const item = document.createElement("div");
+        item.className = "review-admin-item";
+        item.innerHTML = `
+          <div class="course-meta">
+            <span class="pill">${escapeHtml(review.status || "pending")}</span>
+            <span class="pill">${escapeHtml(review.hidden ? "已隐藏" : "显示中")}</span>
+            <span class="pill">${escapeHtml(review.courseTitle || "")}</span>
+            <span class="pill">${escapeHtml(review.teacher || "")}</span>
+            <span class="pill">${"★".repeat(Number(review.rating || 0))}</span>
+          </div>
+          <p>${escapeHtml(review.content || "")}</p>
+          <small class="muted">${escapeHtml(review.createdAt || "")}</small>
+        `;
+        const editForm = document.createElement("div");
+        editForm.className = "admin-form admin-inline-editor";
+        editForm.append(
+          field("课程", review.courseTitle ?? "", (value) => {
+            review.courseTitle = value.trim();
+            review.updatedAt = new Date().toISOString();
+          }),
+          field("老师", review.teacher ?? "", (value) => {
+            review.teacher = value.trim();
+            review.updatedAt = new Date().toISOString();
+          }),
+          selectField("评分", String(review.rating ?? 5), [["5", "5 分"], ["4", "4 分"], ["3", "3 分"], ["2", "2 分"], ["1", "1 分"]], (value) => {
+            review.rating = Number(value);
+            review.updatedAt = new Date().toISOString();
+          }),
+          markdownField("评价内容", review.content ?? "", (value) => {
+            review.content = value;
+            review.updatedAt = new Date().toISOString();
+          })
+        );
+        editForm.hidden = true;
+        const actions = document.createElement("div");
+        actions.className = "filter-row";
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "button secondary";
+        edit.textContent = "编辑";
+        edit.addEventListener("click", () => {
+          editForm.hidden = !editForm.hidden;
+          edit.textContent = editForm.hidden ? "编辑" : "收起编辑";
+        });
+        const approve = document.createElement("button");
+        approve.type = "button";
+        approve.className = "button secondary";
+        approve.textContent = "通过";
+        approve.addEventListener("click", async () => {
+          review.status = "approved";
+          review.hidden = false;
+          review.updatedAt = new Date().toISOString();
+          await saveReviewState("已通过并公开");
+        });
+        const pending = document.createElement("button");
+        pending.type = "button";
+        pending.className = "button secondary";
+        pending.textContent = "待审";
+        pending.addEventListener("click", async () => {
+          review.status = "pending";
+          review.updatedAt = new Date().toISOString();
+          await saveReviewState("已设为待审");
+        });
+        const hide = document.createElement("button");
+        hide.type = "button";
+        hide.className = "button secondary";
+        hide.textContent = review.hidden ? "取消隐藏" : "隐藏";
+        hide.addEventListener("click", async () => {
+          review.hidden = !review.hidden;
+          review.updatedAt = new Date().toISOString();
+          await saveReviewState(review.hidden ? "已隐藏" : "已取消隐藏");
+        });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "button secondary";
+        remove.textContent = "删除";
+        remove.addEventListener("click", async () => {
+          if (!confirm("删除这条评价？")) return;
+          reviewState.reviews = (reviewState.reviews ?? []).filter((item) => item.id !== review.id);
+          await saveReviewState("已删除");
+        });
+        actions.append(edit, approve, pending, hide, remove);
+        item.append(editForm, actions);
+        groupBody.append(item);
+        }
+        group.append(groupBody);
+        reviewAdminList.append(group);
+      }
+      appendPagination(reviewAdminList, reviews.length, reviewAdminPage, (page) => {
+        reviewAdminPage = page;
+        renderReviewAdmin();
+      });
+      mountMarkdownEditors(document.querySelector("#review-admin-panel"));
+    }
+
+    async function saveFeedbackState(message = "已保存") {
+      feedbackAdminStatus.textContent = "保存中...";
+      const data = await api("/feedback", {
+        method: "POST",
+        body: JSON.stringify({ data: feedbackState }),
+      });
+      feedbackState = data.data;
+      feedbackAdminStatus.textContent = message;
+      renderFeedbackAdmin();
+    }
+
+    function renderFeedbackAdmin() {
+      if (!feedbackState) return;
+      feedbackState.rules ??= {};
+      feedbackSettingsEditor.innerHTML = "";
+      feedbackSettingsEditor.append(
+        field("反馈页标题", feedbackState.title ?? "问题与建议", (value) => {
+          feedbackState.title = value;
+        }),
+        markdownField("反馈页公告（支持 Markdown）", feedbackState.announcement ?? "", (value) => {
+          feedbackState.announcement = value;
+        })
+      );
+      feedbackRulesEditor.innerHTML = "";
+      feedbackRulesEditor.append(
+        checkboxField("开放用户提交", feedbackState.rules.submissionOpen !== false, (value) => {
+          feedbackState.rules.submissionOpen = value;
+        }),
+        numberField("每小时提交上限", feedbackState.rules.hourlyLimit ?? 3, (value) => {
+          feedbackState.rules.hourlyLimit = value;
+        }),
+        numberField("每日提交上限", feedbackState.rules.dailyLimit ?? 15, (value) => {
+          feedbackState.rules.dailyLimit = value;
+        }),
+        numberField("反馈最少字数", feedbackState.rules.minLength ?? 5, (value) => {
+          feedbackState.rules.minLength = value;
+        }),
+        markdownField("规则备注", feedbackState.rules.notes ?? "", (value) => {
+          feedbackState.rules.notes = value;
+        }, { height: 150 })
+      );
+      const keyword = feedbackAdminSearch.value.trim().toLowerCase();
+      const items = (feedbackState.items ?? []).filter((item) => {
+        const text = `${item.title} ${item.content} ${item.contact} ${item.type} ${item.status}`.toLowerCase();
+        return !keyword || text.includes(keyword);
+      });
+
+      feedbackAdminList.innerHTML = "";
+      if (!items.length) {
+        feedbackAdminList.innerHTML = `<p class="empty">暂无匹配反馈。</p>`;
+        mountMarkdownEditors(document.querySelector("#feedback-admin-panel"));
+        return;
+      }
+      const feedbackPages = Math.max(1, Math.ceil(items.length / adminPageSize));
+      feedbackAdminPage = Math.min(feedbackAdminPage, feedbackPages);
+      const pageItems = items.slice((feedbackAdminPage - 1) * adminPageSize, feedbackAdminPage * adminPageSize);
+
+      const statusOptions = [
+        ["open", "开放"],
+        ["hidden", "隐藏"],
+        ["completed", "已完成"],
+        ["rejected", "不予完成"],
+        ["parked", "搁置"],
+      ];
+
+      for (const item of pageItems) {
+        const wrap = document.createElement("div");
+        wrap.className = "review-admin-item";
+        wrap.innerHTML = `
+          <div class="course-meta">
+            <span class="pill">${escapeHtml(item.type || "feedback")}</span>
+            <span class="pill">${escapeHtml(item.status || "open")}</span>
+            <span class="pill">${escapeHtml(item.hidden ? "已隐藏" : "显示中")}</span>
+          </div>
+          <h3 style="margin: 12px 0 0;">${escapeHtml(item.title || "")}</h3>
+          <p>${escapeHtml(item.content || "")}</p>
+          <small class="muted">${escapeHtml(item.contact || "无联系方式")} · ${escapeHtml(item.createdAt || "")}</small>
+        `;
+
+        const editForm = document.createElement("div");
+        editForm.className = "admin-form admin-inline-editor";
+        editForm.append(
+          selectField("类型", item.type ?? "bug", [["bug", "Bug"], ["feature", "功能改进"], ["content", "内容问题"]], (value) => {
+            item.type = value;
+            item.updatedAt = new Date().toISOString();
+          }),
+          field("标题", item.title ?? "", (value) => {
+            item.title = value;
+            item.updatedAt = new Date().toISOString();
+          }),
+          markdownField("反馈内容", item.content ?? "", (value) => {
+            item.content = value;
+            item.updatedAt = new Date().toISOString();
+          }),
+          field("联系方式", item.contact ?? "", (value) => {
+            item.contact = value;
+            item.updatedAt = new Date().toISOString();
+          })
+        );
+        editForm.hidden = true;
+
+        const actions = document.createElement("div");
+        actions.className = "filter-row";
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "button secondary";
+        edit.textContent = "编辑";
+        edit.addEventListener("click", () => {
+          editForm.hidden = !editForm.hidden;
+          edit.textContent = editForm.hidden ? "编辑" : "收起编辑";
+        });
+        const select = document.createElement("select");
+        select.className = "searchbar";
+        select.style.maxWidth = "180px";
+        for (const [value, label] of statusOptions) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          option.selected = (item.status || "open") === value;
+          select.append(option);
+        }
+        select.addEventListener("change", async () => {
+          item.status = select.value;
+          item.hidden = select.value === "hidden";
+          item.updatedAt = new Date().toISOString();
+          await saveFeedbackState("已更新状态");
+        });
+
+        const hide = document.createElement("button");
+        hide.type = "button";
+        hide.className = "button secondary";
+        hide.textContent = item.hidden ? "取消隐藏" : "隐藏";
+        hide.addEventListener("click", async () => {
+          item.hidden = !item.hidden;
+          if (item.hidden) item.status = "hidden";
+          else if (item.status === "hidden") item.status = "open";
+          item.updatedAt = new Date().toISOString();
+          await saveFeedbackState(item.hidden ? "已隐藏" : "已取消隐藏");
+        });
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "button secondary";
+        remove.textContent = "删除";
+        remove.addEventListener("click", async () => {
+          if (!confirm("删除这条反馈？")) return;
+          feedbackState.items = (feedbackState.items ?? []).filter((entry) => entry.id !== item.id);
+          await saveFeedbackState("已删除");
+        });
+        actions.append(edit, select, hide, remove);
+        wrap.append(editForm, actions);
+        feedbackAdminList.append(wrap);
+      }
+      appendPagination(feedbackAdminList, items.length, feedbackAdminPage, (page) => {
+        feedbackAdminPage = page;
+        renderFeedbackAdmin();
+      });
+      mountMarkdownEditors(document.querySelector("#feedback-admin-panel"));
+    }
+
+    function renderLinksAdmin() {
+      if (!linksState) return;
+      linksState.siteInfo ??= {};
+      linksState.links ??= [];
+      linksSettingsEditor.innerHTML = "";
+      linksSettingsEditor.append(
+        field("页面标题", linksState.title ?? "友情链接", (value) => { linksState.title = value; }),
+        markdownField("页面说明", linksState.intro ?? "", (value) => { linksState.intro = value; }),
+        field("友情链接分组标题", linksState.mutualTitle ?? "友情链接", (value) => { linksState.mutualTitle = value; }),
+        field("推荐链接分组标题", linksState.recommendedTitle ?? "推荐链接", (value) => { linksState.recommendedTitle = value; }),
+        field("本站信息标题", linksState.siteInfoTitle ?? "本站信息", (value) => { linksState.siteInfoTitle = value; }),
+        field("本站名称", linksState.siteInfo.name ?? "NKUStudy", (value) => { linksState.siteInfo.name = value; }),
+        field("本站地址", linksState.siteInfo.url ?? "https://nkustudy.top/", (value) => { linksState.siteInfo.url = value; }),
+        markdownField("本站简介", linksState.siteInfo.description ?? "", (value) => { linksState.siteInfo.description = value; })
+      );
+
+      linksAdminList.innerHTML = "";
+      if (!linksState.links.length) {
+        linksAdminList.innerHTML = `<p class="empty">暂未添加链接。</p>`;
+        mountMarkdownEditors(document.querySelector("#links-admin-panel"));
+        return;
+      }
+
+      for (const item of linksState.links) {
+        const wrap = document.createElement("div");
+        wrap.className = "review-admin-item";
+        wrap.innerHTML = `
+          <div class="course-meta">
+            <span class="pill">${escapeHtml(item.type === "recommended" ? "推荐链接" : "友情链接")}</span>
+            <span class="pill">${escapeHtml(item.hidden ? "已隐藏" : "显示中")}</span>
+          </div>
+        `;
+        const form = document.createElement("div");
+        form.className = "admin-form";
+        form.append(
+          selectField("链接类型", item.type ?? "mutual", [["mutual", "友情链接"], ["recommended", "推荐链接（单向）"]], (value) => {
+            item.type = value;
+          }),
+          checkboxField("隐藏此链接", item.hidden === true, (value) => { item.hidden = value; }),
+          field("网站名称", item.name ?? "", (value) => { item.name = value; }),
+          field("网站地址", item.url ?? "", (value) => { item.url = value; }),
+          markdownField("网站简介", item.description ?? "", (value) => { item.description = value; })
+        );
+        const actions = document.createElement("div");
+        actions.className = "filter-row";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "button secondary";
+        remove.textContent = "删除链接";
+        remove.addEventListener("click", () => {
+          if (!confirm("删除这个链接？")) return;
+          linksState.links = linksState.links.filter((entry) => entry !== item);
+          renderLinksAdmin();
+        });
+        actions.append(remove);
+        wrap.append(form, actions);
+        linksAdminList.append(wrap);
+      }
+      mountMarkdownEditors(document.querySelector("#links-admin-panel"));
+    }
+
+    async function saveLinksState(message = "已保存并发布") {
+      linksAdminStatus.textContent = "保存中...";
+      const data = await api("/links", {
+        method: "POST",
+        body: JSON.stringify({ data: linksState }),
+      });
+      linksState = data.data;
+      linksAdminStatus.textContent = message;
+      renderLinksAdmin();
+    }
+
+    function renderParticipateAdmin() {
+      if (!participateState) return;
+      participateAdminEditor.innerHTML = "";
+      participateAdminEditor.append(
+        field("标题", participateState.title ?? "参与贡献", (value) => { participateState.title = value; }),
+        markdownField("正文（支持 Markdown）", participateState.content ?? "", (value) => { participateState.content = value; }, { height: 360 })
+      );
+      mountMarkdownEditors(participateAdminEditor);
+    }
+
+    async function saveParticipateState(message = "已保存并发布") {
+      participateAdminStatus.textContent = "保存中...";
+      const data = await api("/participate", {
+        method: "POST",
+        body: JSON.stringify({ data: participateState }),
+      });
+      participateState = data.data;
+      participateAdminStatus.textContent = message;
+      renderParticipateAdmin();
+    }
+
+    function renderAboutAdmin() {
+      if (!aboutState) return;
+      aboutAdminEditor.innerHTML = "";
+      aboutAdminEditor.append(
+        field("标题", aboutState.title ?? "", (value) => { aboutState.title = value; }),
+        markdownField("正文（支持 Markdown）", aboutState.content ?? "", (value) => {
+          aboutState.content = value;
+        }, { height: 360 })
+      );
+      mountMarkdownEditors(aboutAdminEditor);
+    }
+
+    async function saveAboutState(message = "已保存并发布") {
+      aboutAdminStatus.textContent = "保存中...";
+      const data = await api("/about", {
+        method: "POST",
+        body: JSON.stringify({ data: aboutState }),
+      });
+      aboutState = data.data;
+      aboutAdminStatus.textContent = message;
+      renderAboutAdmin();
+    }
+
+    function renderHomeAdmin() {
+      if (!homeState) return;
+      homeAdminEditor.innerHTML = "";
+      homeAdminEditor.append(
+        markdownField("首页公告栏（支持 Markdown）", homeState.announcement ?? "", (value) => { homeState.announcement = value; })
+      );
+      mountMarkdownEditors(homeAdminEditor);
+    }
+
+    async function saveHomeState(message = "已保存并发布") {
+      homeAdminStatus.textContent = "保存中...";
+      const data = await api("/home", {
+        method: "POST",
+        body: JSON.stringify({ data: homeState }),
+      });
+      homeState = data.data;
+      homeAdminStatus.textContent = message;
+      renderHomeAdmin();
+    }
+
+    function renderFooterAdmin() {
+      if (!footerState) return;
+      footerAdminEditor.innerHTML = "";
+      const maintainersValue = (footerState.maintainers || [])
+        .map((item) => item.url ? `[${item.label || ""}](${item.url})` : (item.label || ""))
+        .join("\n");
+      footerAdminEditor.append(
+        checkboxField("启用全站页脚", footerState.enabled === true, (value) => { footerState.enabled = value; }),
+        checkboxField("页脚显示访问量", footerState.showVisitCount !== false, (value) => { footerState.showVisitCount = value; }),
+        checkboxField("访问量使用真实统计", footerState.useRealVisitCount !== false, (value) => { footerState.useRealVisitCount = value; }),
+        field("本站总访问量（关闭真实统计时使用）", footerState.visitCount ?? "10411114", (value) => { footerState.visitCount = value; }),
+        field("安全运行起始时间（北京时间，如 2025-07-15T16:00:00+08:00）", footerState.startedAt ?? "2022-01-01T00:00:00+08:00", (value) => { footerState.startedAt = value; }),
+        markdownField("版权文本", footerState.copyrightText ?? "© 2025 NKUStudy", (value) => { footerState.copyrightText = value; }, { height: 130 }),
+        markdownField("维护者链接（每行：[显示名](链接)，也可：显示名|链接）", maintainersValue, (value) => {
+          footerState.maintainers = value
+            .split(/\r?\n/)
+            .map((line) => {
+              const markdownLink = line.match(/^\s*\[([^\]]+)\]\(([^)]+)\)\s*$/);
+              if (markdownLink) return { label: markdownLink[1].trim(), url: markdownLink[2].trim() };
+              const [label, ...urlParts] = line.split("|");
+              return { label: (label || "").trim(), url: urlParts.join("|").trim() };
+            })
+            .filter((item) => item.label);
+        }, { height: 150 })
+      );
+      mountMarkdownEditors(footerAdminEditor);
+    }
+
+    async function saveFooterState(message = "已保存并发布") {
+      footerAdminStatus.textContent = "保存中...";
+      const data = await api("/footer", {
+        method: "POST",
+        body: JSON.stringify({ data: footerState }),
+      });
+      footerState = data.data;
+      footerAdminStatus.textContent = message;
+      renderFooterAdmin();
+    }
+
+    function renderStatsAdmin() {
+      if (!statsState) return;
+      const summary = statsState.summary || {};
+      const stats = statsState.stats || {};
+      const todayKey = beijingDate();
+      const pages = Object.entries(stats.pages || {})
+        .map(([path, item]) => ({ path, total: Number(item?.total || 0), today: Number(item?.days?.[todayKey] || 0) }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 20);
+      statsAdminSummary.innerHTML = `
+        <article class="card">
+          <h3>总访问量</h3>
+          <p class="muted">${escapeHtml(summary.total ?? 0)} 次</p>
+        </article>
+        <article class="card">
+          <h3>今日访问量</h3>
+          <p class="muted">${escapeHtml(summary.today ?? 0)} 次</p>
+        </article>
+        <article class="card">
+          <h3>短期去重记录</h3>
+          <p class="muted">${escapeHtml(Object.keys(stats.visitors || {}).length)} 个 IP 记录</p>
+        </article>
+        <article class="card">
+          <h3>更新时间</h3>
+          <p class="muted">${escapeHtml(beijingDateTime(stats.updatedAt))}</p>
+        </article>
+      `;
+      statsAdminPages.innerHTML = pages.length ? "" : `<p class="empty">暂无页面访问记录。</p>`;
+      for (const page of pages) {
+        const item = document.createElement("article");
+        item.className = "review-admin-item";
+        item.innerHTML = `
+          <strong>${escapeHtml(page.path)}</strong>
+          <p>总访问 ${escapeHtml(page.total)} 次</p>
+        `;
+        statsAdminPages.append(item);
+      }
+      const visitors = Object.values(stats.visitors || {})
+        .sort((a, b) => Number(b?.lastSeen || 0) - Number(a?.lastSeen || 0))
+        .slice(0, 30);
+      statsAdminVisitors.innerHTML = visitors.length ? "" : `<p class="empty">暂无短期去重 IP。</p>`;
+      for (const visitor of visitors) {
+        const item = document.createElement("article");
+        item.className = "review-admin-item";
+        const time = visitor?.lastSeen ? beijingDateTime(Number(visitor.lastSeen)) : "";
+        item.innerHTML = `
+          <strong>${escapeHtml(visitor?.ip || "unknown")}</strong>
+          <p>最近访问 ${escapeHtml(time)}</p>
+        `;
+        statsAdminVisitors.append(item);
+      }
+    }
+
+    function passwordField(label, configured, onInput) {
+      const wrap = field(label + (configured ? "（已配置，留空不变）" : ""), "", onInput);
+      wrap.querySelector("input").type = "password";
+      wrap.querySelector("input").autocomplete = "new-password";
+      return wrap;
+    }
+
+    function renderBackupAdmin() {
+      if (!backupState) return;
+      backupState.destinations ??= [];
+      backupSettingsEditor.innerHTML = "";
+      backupSettingsEditor.append(
+        checkboxField("启用每日自动备份", backupState.autoEnabled !== false, (value) => { backupState.autoEnabled = value; }),
+        field("每日执行时间（北京时间 HH:mm）", backupState.dailyTime ?? "03:20", (value) => { backupState.dailyTime = value; }),
+        checkboxField("每天将站点数据与配置备份到 R2", backupState.r2DataBackup !== false, (value) => { backupState.r2DataBackup = value; }),
+        field("R2 备份目录前缀", backupState.r2BackupPrefix ?? "backups/site-data", (value) => { backupState.r2BackupPrefix = value; }),
+        checkboxField("启用 WebDAV 备份", backupState.webdavEnabled === true, (value) => { backupState.webdavEnabled = value; }),
+        checkboxField("WebDAV 同步站点数据", backupState.includeSiteData !== false, (value) => { backupState.includeSiteData = value; }),
+        checkboxField("WebDAV 同步服务器配置", backupState.includeServerConfig !== false, (value) => { backupState.includeServerConfig = value; }),
+        checkboxField("WebDAV 同步课程文件", backupState.includeCourseFiles !== false, (value) => { backupState.includeCourseFiles = value; }),
+        passwordField("备份加密密码", backupState.encryptionPasswordConfigured, (value) => { backupState.encryptionPassword = value; })
+      );
+
+      webdavSettingsEditor.innerHTML = "";
+      if (!backupState.destinations.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "尚未添加 WebDAV 目标。";
+        webdavSettingsEditor.append(empty);
+      }
+      backupState.destinations.forEach((dest, index) => {
+        const card = document.createElement("div");
+        card.className = "admin-file-row";
+        card.append(
+          checkboxField("启用此目标", dest.enabled !== false, (value) => { dest.enabled = value; }),
+          field("名称", dest.name ?? "", (value) => { dest.name = value; }),
+          field("WebDAV 地址", dest.url ?? "", (value) => { dest.url = value; }),
+          field("用户名", dest.username ?? "", (value) => { dest.username = value; }),
+          passwordField("密码", dest.passwordConfigured, (value) => { dest.password = value; })
+        );
+        const actions = document.createElement("div");
+        actions.className = "filter-row";
+        const test = document.createElement("button");
+        test.className = "button secondary";
+        test.type = "button";
+        test.textContent = "测试连接";
+        test.addEventListener("click", async () => {
+          backupAdminStatus.textContent = "正在测试 " + (dest.name || "WebDAV") + "...";
+          try {
+            const result = await api("/backup-test-webdav", {
+              method: "POST",
+              body: JSON.stringify({ destination: dest }),
+            });
+            backupAdminStatus.textContent = result.message || "WebDAV 连接正常。";
+          } catch (error) {
+            backupAdminStatus.textContent = error.message;
+          }
+        });
+        const remove = document.createElement("button");
+        remove.className = "button secondary";
+        remove.type = "button";
+        remove.textContent = "删除目标";
+        remove.addEventListener("click", () => {
+          backupState.destinations.splice(index, 1);
+          renderBackupAdmin();
+        });
+        actions.append(test, remove);
+        card.append(actions);
+        webdavSettingsEditor.append(card);
+      });
+    }
+
+    async function saveBackupState(message = "已保存备份设置") {
+      backupAdminStatus.textContent = "保存中...";
+      const data = await api("/backup-settings", {
+        method: "POST",
+        body: JSON.stringify({ data: backupState }),
+      });
+      backupState = data.data;
+      backupAdminStatus.textContent = message;
+      renderBackupAdmin();
+    }
+
+    async function deleteR2Paths(course, paths) {
+      const cleanPaths = paths.filter(Boolean);
+      if (!cleanPaths.length) return;
+      await api("/delete-r2", {
+        method: "POST",
+        body: JSON.stringify({ courseId: course.id, paths: cleanPaths }),
+      });
+    }
+
+    async function deleteCourse(course) {
+      if (!confirm("删除课程「" + (course.title || "") + "」？课程记录、资源板块和 R2 中 " + (course.basePath || "") + " 下的文件都会删除。")) return;
+      publishStatus.textContent = "正在删除课程...";
+      const basePaths = Array.from(new Set([originalCourseBasePaths.get(course), course.basePath].filter(Boolean)));
+      await api("/delete-r2-course", {
+        method: "POST",
+        body: JSON.stringify({ courseId: course.id, basePaths }),
+      });
+      state.courses = state.courses.filter((item) => item !== course);
+      selectedId = state.courses[0]?.id ?? null;
+      await api("/manifest", {
+        method: "POST",
+        body: JSON.stringify({ manifest: state }),
+      });
+      captureCourseHashes();
+      renderTree();
+      renderEditor();
+      publishStatus.textContent = "课程已删除并发布";
+    }
+
+    async function moveChangedCourseDirectories() {
+      for (const course of state.courses) {
+        const oldBasePath = originalCourseBasePaths.get(course);
+        if (!oldBasePath || oldBasePath === course.basePath) continue;
+        await api("/move-r2-prefix", {
+          method: "POST",
+          body: JSON.stringify({ oldBasePath, newBasePath: course.basePath }),
+        });
+      }
+    }
+
+    function renderFileRow(course, file, files) {
+      const wrap = document.createElement("div");
+      wrap.className = "admin-file-item";
+      const row = document.createElement("div");
+      row.className = "admin-file-row compact";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "admin-file-check";
+      checkbox.checked = selectedAdminFiles.has(file);
+      checkbox.title = "选择文件";
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) selectedAdminFiles.add(file);
+        else selectedAdminFiles.delete(file);
+      });
+
+      const name = document.createElement("input");
+      name.value = file.title ?? "";
+      name.placeholder = "文件名";
+      name.addEventListener("input", () => { file.title = name.value; });
+
+      const size = document.createElement("span");
+      size.className = "pill";
+      size.textContent = String(Math.max(0, Number(file.size ?? 0))) + " B";
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "button secondary";
+      remove.textContent = "删除";
+      remove.addEventListener("click", async () => {
+        if (!confirm("删除文件「" + (file.title || "") + "」？R2 中的对象也会同步删除。")) return;
+        remove.textContent = "删除中...";
+        remove.disabled = true;
+        try {
+          await deleteR2Paths(course, [file.path]);
+        } catch (error) {
+          alert(error.message);
+          remove.textContent = "删除";
+          remove.disabled = false;
+          return;
+        }
+        const index = files.indexOf(file);
+        if (index >= 0) files.splice(index, 1);
+        renderEditor();
+      });
+
+      row.append(checkbox, name, size, remove);
+
+      const description = document.createElement("details");
+      description.className = "admin-file-description";
+      description.open = false;
+      description.innerHTML = `<summary>说明（支持 Markdown）</summary>`;
+      description.append(
+        field("资源说明", file.description ?? "", (value) => {
+          file.description = value;
+          file.updatedAt = new Date().toISOString();
+        }, true)
+      );
+
+      wrap.append(row, description);
+      return wrap;
+    }
+
+    function filesFromEntry(entry, prefix = "") {
+      return new Promise((resolve) => {
+        if (entry.isFile) {
+          entry.file((file) => {
+            Object.defineProperty(file, "relativePath", { value: String(prefix) + file.name });
+            resolve([file]);
+          });
+          return;
+        }
+
+        const reader = entry.createReader();
+        const entries = [];
+        const read = () => {
+          reader.readEntries(async (batch) => {
+            if (!batch.length) {
+              const nested = await Promise.all(entries.map((item) => filesFromEntry(item, String(prefix) + entry.name + "/")));
+              resolve(nested.flat());
+              return;
+            }
+            entries.push(...batch);
+            read();
+          });
+        };
+        read();
+      });
+    }
+
+    async function droppedFiles(event) {
+      const items = Array.from(event.dataTransfer.items ?? []);
+      if (items.length && items[0].webkitGetAsEntry) {
+        const nested = await Promise.all(items.map((item) => {
+          const entry = item.webkitGetAsEntry();
+          return entry ? filesFromEntry(entry) : [];
+        }));
+        return nested.flat();
+      }
+      return Array.from(event.dataTransfer.files ?? []).map((file) => {
+        Object.defineProperty(file, "relativePath", { value: file.webkitRelativePath || file.name });
+        return file;
+      });
+    }
+
+    async function uploadFiles(course, section, sectionIndex, files, progressBar, progressText) {
+      touchChangedCourses();
+      await api("/manifest-draft", {
+        method: "POST",
+        body: JSON.stringify({ manifest: state }),
+      });
+
+      const form = new FormData();
+      for (const file of files) {
+        form.append("files", file, file.relativePath || file.webkitRelativePath || file.name);
+      }
+
+      const data = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/admin-api/upload?courseId=" + encodeURIComponent(course.id) + "&sectionIndex=" + sectionIndex);
+        xhr.upload.addEventListener("progress", (event) => {
+          if (!event.lengthComputable) return;
+          const percent = Math.round((event.loaded / event.total) * 100);
+          progressBar.value = percent;
+          progressText.textContent = String(percent) + "%";
+        });
+        xhr.addEventListener("load", () => {
+          try {
+            const json = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status < 200 || xhr.status >= 300 || json.ok === false) {
+              reject(new Error(json.error || "上传失败"));
+            } else {
+              resolve(json);
+            }
+          } catch {
+            reject(new Error("上传响应格式错误"));
+          }
+        });
+        xhr.addEventListener("error", () => reject(new Error("上传失败")));
+        xhr.send(form);
+      });
+
+      section.files ??= [];
+      section.files.push(...data.files);
+      renderEditor();
+    }
+
+    function renderDropZone(course, section, sectionIndex) {
+      const drop = document.createElement("div");
+      drop.className = "admin-dropzone";
+      const label = document.createElement("span");
+      label.textContent = "拖拽文件或文件夹到这里上传";
+      const progress = document.createElement("progress");
+      progress.max = 100;
+      progress.value = 0;
+      progress.hidden = true;
+      const progressText = document.createElement("span");
+      progressText.className = "muted";
+      progressText.hidden = true;
+      drop.append(label, progress, progressText);
+
+      drop.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        drop.dataset.dragging = "true";
+      });
+      drop.addEventListener("dragleave", () => {
+        drop.dataset.dragging = "false";
+      });
+      drop.addEventListener("drop", async (event) => {
+        event.preventDefault();
+        drop.dataset.dragging = "false";
+        label.textContent = "上传中...";
+        progress.value = 0;
+        progress.hidden = false;
+        progressText.hidden = false;
+        progressText.textContent = "0%";
+        try {
+          const files = await droppedFiles(event);
+          await uploadFiles(course, section, sectionIndex, files, progress, progressText);
+        } catch (error) {
+          label.textContent = error.message;
+          progress.hidden = true;
+          progressText.hidden = true;
+        }
+      });
+
+      return drop;
+    }
+
+    function renderEditor() {
+      const course = selectedCourse();
+      if (!course) {
+        editorTitle.textContent = "选择课程";
+        editorEl.innerHTML = '<p class="empty">从左侧选择一门课程开始编辑。</p>';
+        return;
+      }
+
+      editorTitle.textContent = course.title || "未命名课程";
+      editorEl.innerHTML = "";
+
+      const form = document.createElement("div");
+      form.className = "admin-form";
+      let basePathInput;
+      const updateBasePathField = () => {
+        syncCourseBasePath(course);
+        if (basePathInput) basePathInput.value = course.basePath;
+      };
+      const termField = field("学期", course.term, (value) => {
+        course.term = value;
+        updateBasePathField();
+        renderTree();
+      });
+      const groupField = field("分类", course.group, (value) => {
+        course.group = value;
+        updateBasePathField();
+        renderTree();
+      });
+      const titleField = field("课程名称", course.title, (value) => {
+        course.title = value;
+        course.id = value || course.id;
+        updateBasePathField();
+        selectedId = course.id;
+        editorTitle.textContent = value || "未命名课程";
+        renderTree();
+      });
+      const titleInput = titleField.querySelector("input");
+      const titleInputRow = document.createElement("div");
+      titleInputRow.className = "admin-field-action-row";
+      const openCourseButton = document.createElement("button");
+      openCourseButton.type = "button";
+      openCourseButton.className = "button secondary";
+      openCourseButton.textContent = "前往该页面";
+      openCourseButton.addEventListener("click", () => {
+        const id = String(course.id || course.title || "").trim();
+        if (!id) return;
+        window.open(`/courses/${encodeURIComponent(id)}/`, "_blank", "noopener");
+      });
+      if (titleInput) {
+        titleInput.replaceWith(titleInputRow);
+        titleInputRow.append(titleInput, openCourseButton);
+      }
+      const basePathField = field("资源目录 basePath", course.basePath, (value, input) => {
+        course.basePath = value;
+        basePathInput = input;
+      });
+      basePathInput = basePathField.querySelector("input");
+      form.append(
+        termField,
+        groupField,
+        titleField,
+        field("考核方式", course.assessment ?? "绩点制", (value) => { course.assessment = value || "绩点制"; }),
+        field("更新时间", course.updated, (value) => { course.updated = value; }),
+        field("贡献者，逗号分隔", (course.contributors ?? []).join(", "), (value) => {
+          course.contributors = value.split(",").map((name) => name.trim()).filter(Boolean);
+        }),
+        basePathField,
+        markdownField("简介（支持 Markdown）", course.summary, (value) => { course.summary = value; }),
+        field("标签，逗号分隔", (course.tags ?? []).join(", "), (value) => {
+          course.tags = value.split(",").map((tag) => tag.trim()).filter(Boolean);
+        }),
+        field("本课程额外隐藏标签，逗号分隔", (course.hiddenMetaTags ?? []).join(", "), (value) => {
+          course.hiddenMetaTags = value.split(",").map((tag) => tag.trim()).filter(Boolean);
+        })
+      );
+
+      const courseActions = document.createElement("div");
+      courseActions.className = "filter-row";
+      const deleteCourseButton = document.createElement("button");
+      deleteCourseButton.type = "button";
+      deleteCourseButton.className = "button secondary";
+      deleteCourseButton.textContent = "删除课程";
+      deleteCourseButton.addEventListener("click", async () => {
+        deleteCourseButton.disabled = true;
+        try {
+          await deleteCourse(course);
+        } catch (error) {
+          alert(error.message);
+          publishStatus.textContent = error.message;
+          deleteCourseButton.disabled = false;
+        }
+      });
+      courseActions.append(deleteCourseButton);
+      form.append(courseActions);
+
+      const sections = document.createElement("div");
+      sections.className = "section-stack";
+      sections.style.marginTop = "18px";
+
+      course.sections.forEach((section, sectionIndex) => {
+        const details = document.createElement("details");
+        details.className = "resource-section";
+        details.open = true;
+        const sectionFiles = groupedSectionFiles(section);
+        details.innerHTML = "<summary>" + escapeHtml(section.title || "未命名板块") + ' <span class="muted">(' + sectionFiles.visible.length + ")</span></summary>";
+
+        const body = document.createElement("div");
+        body.className = "admin-section-body";
+        const sectionActions = document.createElement("div");
+        sectionActions.className = "filter-row";
+        const moveUp = document.createElement("button");
+        moveUp.type = "button";
+        moveUp.className = "button secondary";
+        moveUp.textContent = "上移";
+        moveUp.disabled = sectionIndex === 0;
+        moveUp.addEventListener("click", () => {
+          if (sectionIndex <= 0) return;
+          const list = course.sections;
+          [list[sectionIndex - 1], list[sectionIndex]] = [list[sectionIndex], list[sectionIndex - 1]];
+          renderEditor();
+        });
+        const moveDown = document.createElement("button");
+        moveDown.type = "button";
+        moveDown.className = "button secondary";
+        moveDown.textContent = "下移";
+        moveDown.disabled = sectionIndex === course.sections.length - 1;
+        moveDown.addEventListener("click", () => {
+          if (sectionIndex >= course.sections.length - 1) return;
+          const list = course.sections;
+          [list[sectionIndex + 1], list[sectionIndex]] = [list[sectionIndex], list[sectionIndex + 1]];
+          renderEditor();
+        });
+        const removeSection = document.createElement("button");
+        removeSection.type = "button";
+        removeSection.className = "button secondary";
+        removeSection.textContent = "删除板块";
+        removeSection.addEventListener("click", async () => {
+          if (!confirm("删除板块「" + (section.title || "") + "」？其中所有 R2 文件也会同步删除。")) return;
+          removeSection.textContent = "删除中...";
+          removeSection.disabled = true;
+          try {
+            await deleteR2Paths(course, (section.files ?? []).map((file) => file.path));
+          } catch (error) {
+            alert(error.message);
+            removeSection.textContent = "删除板块";
+            removeSection.disabled = false;
+            return;
+          }
+          course.sections.splice(sectionIndex, 1);
+          renderEditor();
+        });
+        const removeSelected = document.createElement("button");
+        removeSelected.type = "button";
+        removeSelected.className = "button secondary";
+        removeSelected.textContent = "删除选中文件";
+        removeSelected.addEventListener("click", async () => {
+          const selected = (section.files ?? []).filter((file) => selectedAdminFiles.has(file));
+          if (!selected.length) {
+            alert("请先勾选要删除的文件。");
+            return;
+          }
+          if (!confirm("删除选中的 " + selected.length + " 个文件？R2 中的对象也会同步删除。")) return;
+          removeSelected.textContent = "删除中...";
+          removeSelected.disabled = true;
+          try {
+            await deleteR2Paths(course, selected.map((file) => file.path));
+          } catch (error) {
+            alert(error.message);
+            removeSelected.textContent = "删除选中文件";
+            removeSelected.disabled = false;
+            return;
+          }
+          section.files = (section.files ?? []).filter((file) => !selectedAdminFiles.has(file));
+          selected.forEach((file) => selectedAdminFiles.delete(file));
+          renderEditor();
+        });
+        sectionActions.append(moveUp, moveDown, removeSelected, removeSection);
+
+        body.append(
+          field("板块名", section.title, (value) => { section.title = value; renderEditor(); }),
+          markdownField("板块说明（支持 Markdown）", section.note, (value) => { section.note = value; }, { height: 150 }),
+          sectionActions,
+          renderDropZone(course, section, sectionIndex)
+        );
+
+        const files = document.createElement("div");
+        files.className = "admin-file-list";
+        for (const group of sectionFiles.groups) {
+          const subgroup = document.createElement("details");
+          subgroup.className = "resource-subsection";
+          subgroup.open = true;
+          subgroup.innerHTML = "<summary>" + escapeHtml(group.title) + ' <span class="muted">(' + group.files.length + ")</span></summary>";
+          const subgroupBody = document.createElement("div");
+          subgroupBody.className = "admin-section-body";
+          for (const file of group.files) {
+            subgroupBody.append(renderFileRow(course, file, section.files));
+          }
+          subgroup.append(subgroupBody);
+          files.append(subgroup);
+        }
+        for (const file of sectionFiles.direct) {
+          files.append(renderFileRow(course, file, section.files));
+        }
+
+        const addFile = document.createElement("button");
+        addFile.type = "button";
+        addFile.className = "button secondary";
+        addFile.textContent = "手动新增文件";
+        addFile.addEventListener("click", () => {
+          section.files ??= [];
+          section.files.push({ title: "新文件.pdf", path: (section.title || "其他") + "/新文件.pdf", size: 0, description: "" });
+          renderEditor();
+        });
+
+        body.append(files, addFile);
+        details.append(body);
+        sections.append(details);
+      });
+
+      const addSection = document.createElement("button");
+      addSection.type = "button";
+      addSection.className = "button secondary";
+      addSection.textContent = "新增板块";
+      addSection.addEventListener("click", () => {
+        course.sections ??= [];
+        course.sections.push({ title: "新板块", note: "", files: [] });
+        renderEditor();
+      });
+
+      form.append(sections, addSection);
+      editorEl.append(form);
+      mountMarkdownEditors(editorEl);
+    }
+
+    loginForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      loginStatus.textContent = "登录中...";
+      try {
+        await api("/login", {
+          method: "POST",
+          body: JSON.stringify({ password: document.querySelector("#admin-password").value }),
+        });
+        loginStatus.textContent = "";
+        await loadManifest();
+      } catch (error) {
+        loginStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#add-course").addEventListener("click", () => {
+      const title = "新课程";
+      const course = {
+        id: title,
+        term: "大一下",
+        group: "通识必修课",
+        title,
+        summary: "",
+        contributors: [],
+        assessment: "绩点制",
+        updated: new Date().toISOString().slice(0, 10),
+        grades: [],
+        tags: [],
+        basePath: "大一下/通识必修课/新课程/",
+        sections: [
+          { title: "课程大纲", note: "", files: [] },
+          { title: "往年真题", note: "", files: [] },
+          { title: "PPT", note: "", files: [] },
+        ],
+      };
+      state.courses.unshift(course);
+      selectedId = course.id;
+      renderTree();
+      renderEditor();
+    });
+
+    document.querySelector("#publish").addEventListener("click", async () => {
+      publishStatus.textContent = "发布中...";
+      try {
+        touchChangedCourses();
+        await moveChangedCourseDirectories();
+        await api("/manifest", {
+          method: "POST",
+          body: JSON.stringify({ manifest: state }),
+        });
+        captureCourseHashes();
+        renderTree();
+        renderEditor();
+        publishStatus.textContent = "已发布";
+      } catch (error) {
+        publishStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#sync-r2").addEventListener("click", async () => {
+      const course = selectedCourse();
+      if (!course) return;
+      publishStatus.textContent = "正在从 R2 同步...";
+      try {
+        const data = await api("/sync-r2", {
+          method: "POST",
+          body: JSON.stringify({ courseId: course.id }),
+        });
+        state = data.manifest;
+        selectedId = data.course.id;
+        captureCourseHashes();
+        renderManifestSettings();
+        renderTree();
+        renderEditor();
+        publishStatus.textContent = "已按 R2 更新并发布";
+      } catch (error) {
+        publishStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#sync-r2-all").addEventListener("click", async () => {
+      if (!confirm("按 R2 的 resources/学期/分类/课程 结构重建课程树？这会更新已有课程资源列表，并新增 R2 中出现的新课程。")) return;
+      publishStatus.textContent = "正在从 R2 重建课程树...";
+      try {
+        const data = await api("/sync-r2-all", {
+          method: "POST",
+          body: "{}",
+        });
+        state = data.manifest;
+        selectedId = state.courses[0]?.id ?? null;
+        captureCourseHashes();
+        renderManifestSettings();
+        renderTree();
+        renderEditor();
+        publishStatus.textContent = "已按 R2 重建并发布";
+      } catch (error) {
+        publishStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#download-json").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "manifest.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.querySelector("#download-backup").addEventListener("click", () => {
+      window.location.href = "/admin-api/backup";
+    });
+
+    document.querySelectorAll("[data-backup-scope]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const scope = button.dataset.backupScope || "all";
+        backupAdminStatus.textContent = "正在生成备份...";
+        window.location.href = "/admin-api/backup?scope=" + encodeURIComponent(scope);
+        window.setTimeout(() => {
+          backupAdminStatus.textContent = "备份文件已开始下载。";
+        }, 600);
+      });
+    });
+
+    document.querySelector("#add-webdav-destination").addEventListener("click", () => {
+      backupState ??= { destinations: [] };
+      backupState.destinations ??= [];
+      backupState.destinations.push({
+        id: "webdav-" + Date.now().toString(36),
+        name: "WebDAV",
+        url: "",
+        username: "",
+        enabled: true,
+      });
+      renderBackupAdmin();
+    });
+
+    document.querySelector("#save-backup-settings").addEventListener("click", async () => {
+      try {
+        await saveBackupState();
+      } catch (error) {
+        backupAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-backup-settings").addEventListener("click", async () => {
+      backupAdminStatus.textContent = "加载中...";
+      try {
+        await loadBackupAdmin();
+        backupAdminStatus.textContent = "";
+      } catch (error) {
+        backupAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#run-backup-now").addEventListener("click", async () => {
+      if (!confirm("立即执行 R2/WebDAV 备份？课程文件较多时可能需要等待一段时间。")) return;
+      backupAdminStatus.textContent = "备份执行中...";
+      try {
+        const result = await api("/backup-run", { method: "POST", body: "{}" });
+        const uploaded = (result.webdav || []).reduce((sum, item) => sum + (item.uploaded || 0), 0);
+        const skipped = (result.webdav || []).reduce((sum, item) => sum + (item.skipped || 0), 0);
+        backupAdminStatus.textContent = "备份完成。WebDAV 上传 " + uploaded + " 项，跳过 " + skipped + " 项。";
+      } catch (error) {
+        backupAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-editor-settings").addEventListener("click", async () => {
+      try {
+        await saveEditorSettings();
+      } catch (error) {
+        editorSettingsAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-editor-settings").addEventListener("click", async () => {
+      editorSettingsAdminStatus.textContent = "加载中...";
+      try {
+        await loadEditorSettingsAdmin();
+        editorSettingsAdminStatus.textContent = "";
+      } catch (error) {
+        editorSettingsAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#logout").addEventListener("click", async () => {
+      await api("/logout", { method: "POST", body: "{}" });
+      window.location.reload();
+    });
+
+    document.querySelector("#logout-reviews").addEventListener("click", async () => {
+      await api("/logout", { method: "POST", body: "{}" });
+      window.location.reload();
+    });
+
+    document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const tab = button.dataset.adminTab;
+        document.querySelectorAll("[data-admin-tab]").forEach((item) => {
+          const active = item === button;
+          item.classList.toggle("secondary", !active);
+        });
+        resourceAdminPanel.hidden = tab !== "resources";
+        reviewAdminPanel.hidden = tab !== "reviews";
+        participateAdminPanel.hidden = tab !== "participate";
+        feedbackAdminPanel.hidden = tab !== "feedback";
+        linksAdminPanel.hidden = tab !== "links";
+        homeAdminPanel.hidden = tab !== "home";
+        footerAdminPanel.hidden = tab !== "footer";
+        editorSettingsAdminPanel.hidden = tab !== "editor-settings";
+        statsAdminPanel.hidden = tab !== "stats";
+        aboutAdminPanel.hidden = tab !== "about";
+        backupAdminPanel.hidden = tab !== "backup";
+        if (tab === "reviews" && !reviewState) {
+          reviewAdminStatus.textContent = "加载中...";
+          try {
+            await loadReviewsAdmin();
+            reviewAdminStatus.textContent = "";
+          } catch (error) {
+            reviewAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "feedback" && !feedbackState) {
+          feedbackAdminStatus.textContent = "加载中...";
+          try {
+            await loadFeedbackAdmin();
+            feedbackAdminStatus.textContent = "";
+          } catch (error) {
+            feedbackAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "participate" && !participateState) {
+          participateAdminStatus.textContent = "加载中...";
+          try {
+            await loadParticipateAdmin();
+            participateAdminStatus.textContent = "";
+          } catch (error) {
+            participateAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "links" && !linksState) {
+          linksAdminStatus.textContent = "加载中...";
+          try {
+            await loadLinksAdmin();
+            linksAdminStatus.textContent = "";
+          } catch (error) {
+            linksAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "about" && !aboutState) {
+          aboutAdminStatus.textContent = "加载中...";
+          try {
+            await loadAboutAdmin();
+            aboutAdminStatus.textContent = "";
+          } catch (error) {
+            aboutAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "home" && !homeState) {
+          homeAdminStatus.textContent = "加载中...";
+          try {
+            await loadHomeAdmin();
+            homeAdminStatus.textContent = "";
+          } catch (error) {
+            homeAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "footer" && !footerState) {
+          footerAdminStatus.textContent = "加载中...";
+          try {
+            await loadFooterAdmin();
+            footerAdminStatus.textContent = "";
+          } catch (error) {
+            footerAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "editor-settings" && !editorSettingsState) {
+          editorSettingsAdminStatus.textContent = "加载中...";
+          try {
+            await loadEditorSettingsAdmin();
+            editorSettingsAdminStatus.textContent = "";
+          } catch (error) {
+            editorSettingsAdminStatus.textContent = error.message;
+          }
+        } else if (tab === "editor-settings") {
+          renderEditorSettingsAdmin();
+        }
+        if (tab === "stats" && !statsState) {
+          statsAdminStatus.textContent = "加载中...";
+          try {
+            await loadStatsAdmin();
+            statsAdminStatus.textContent = "";
+          } catch (error) {
+            statsAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "backup" && !backupState) {
+          backupAdminStatus.textContent = "加载中...";
+          try {
+            await loadBackupAdmin();
+            backupAdminStatus.textContent = "";
+          } catch (error) {
+            backupAdminStatus.textContent = error.message;
+          }
+        }
+      });
+    });
+
+    document.querySelector("#reload-reviews").addEventListener("click", async () => {
+      reviewAdminStatus.textContent = "加载中...";
+      try {
+        await loadReviewsAdmin();
+        reviewAdminStatus.textContent = "已重新加载";
+      } catch (error) {
+        reviewAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-reviews").addEventListener("click", async () => {
+      reviewAdminStatus.textContent = "保存中...";
+      try {
+        const data = await api("/reviews", {
+          method: "POST",
+          body: JSON.stringify({ data: reviewState }),
+        });
+        reviewState = data.data;
+        renderReviewAdmin();
+        reviewAdminStatus.textContent = "已保存";
+      } catch (error) {
+        reviewAdminStatus.textContent = error.message;
+      }
+    });
+
+    reviewAdminSearch.addEventListener("input", () => {
+      reviewAdminPage = 1;
+      renderReviewAdmin();
+    });
+    reviewStatusFilter.addEventListener("change", () => {
+      reviewAdminPage = 1;
+      renderReviewAdmin();
+    });
+    feedbackAdminSearch.addEventListener("input", () => {
+      feedbackAdminPage = 1;
+      renderFeedbackAdmin();
+    });
+
+    document.querySelector("#reload-feedback").addEventListener("click", async () => {
+      feedbackAdminStatus.textContent = "加载中...";
+      try {
+        await loadFeedbackAdmin();
+        feedbackAdminStatus.textContent = "已重新加载";
+      } catch (error) {
+        feedbackAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-feedback").addEventListener("click", async () => {
+      try {
+        await saveFeedbackState("已保存");
+      } catch (error) {
+        feedbackAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-links").addEventListener("click", async () => {
+      linksAdminStatus.textContent = "加载中...";
+      try {
+        await loadLinksAdmin();
+        linksAdminStatus.textContent = "已重新加载";
+      } catch (error) {
+        linksAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-links").addEventListener("click", async () => {
+      try {
+        await saveLinksState();
+      } catch (error) {
+        linksAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#add-link-item").addEventListener("click", () => {
+      linksState ??= { links: [] };
+      linksState.links ??= [];
+      linksState.links.push({
+        id: "link-" + Date.now().toString(36),
+        type: "mutual",
+        name: "新链接",
+        url: "https://",
+        description: "",
+        hidden: false,
+      });
+      renderLinksAdmin();
+    });
+
+    document.querySelector("#reload-participate").addEventListener("click", async () => {
+      participateAdminStatus.textContent = "加载中...";
+      try {
+        await loadParticipateAdmin();
+        participateAdminStatus.textContent = "已重新加载";
+      } catch (error) {
+        participateAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-participate").addEventListener("click", async () => {
+      try {
+        await saveParticipateState();
+      } catch (error) {
+        participateAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-about").addEventListener("click", async () => {
+      aboutAdminStatus.textContent = "加载中...";
+      try {
+        await loadAboutAdmin();
+        aboutAdminStatus.textContent = "已重新加载";
+      } catch (error) {
+        aboutAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-about").addEventListener("click", async () => {
+      try {
+        await saveAboutState();
+      } catch (error) {
+        aboutAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-home").addEventListener("click", async () => {
+      homeAdminStatus.textContent = "加载中...";
+      try {
+        await loadHomeAdmin();
+        homeAdminStatus.textContent = "已重新加载";
+      } catch (error) {
+        homeAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-home").addEventListener("click", async () => {
+      try {
+        await saveHomeState();
+      } catch (error) {
+        homeAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-footer").addEventListener("click", async () => {
+      footerAdminStatus.textContent = "加载中...";
+      try {
+        await loadFooterAdmin();
+        footerAdminStatus.textContent = "已重新加载";
+      } catch (error) {
+        footerAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-footer").addEventListener("click", async () => {
+      try {
+        await saveFooterState();
+      } catch (error) {
+        footerAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-stats").addEventListener("click", async () => {
+      statsAdminStatus.textContent = "加载中...";
+      try {
+        await loadStatsAdmin();
+        statsAdminStatus.textContent = "已重新加载";
+      } catch (error) {
+        statsAdminStatus.textContent = error.message;
+      }
+    });
+
+    searchEl.addEventListener("input", renderTree);
+    collapseTreeButton.addEventListener("click", () => {
+      const collapsed = workbench.dataset.collapsed === "true";
+      workbench.dataset.collapsed = collapsed ? "false" : "true";
+      collapseTreeButton.textContent = collapsed ? "‹" : "›";
+      collapseTreeButton.title = collapsed ? "收拢左侧" : "展开左侧";
+      localStorage.setItem("nkustudy-admin-tree-collapsed", String(!collapsed));
+    });
+
+    resizer.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      resizer.setPointerCapture(event.pointerId);
+      const move = (moveEvent) => {
+        const left = workbench.getBoundingClientRect().left;
+        setTreeWidth(moveEvent.clientX - left);
+      };
+      const up = () => {
+        resizer.removeEventListener("pointermove", move);
+        resizer.removeEventListener("pointerup", up);
+      };
+      resizer.addEventListener("pointermove", move);
+      resizer.addEventListener("pointerup", up);
+    });
+    restoreWorkbench();
+    checkSession();
+  </script>
+</Layout>
