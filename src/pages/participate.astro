@@ -1,7 +1,8 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import participate from "../data/participate.json";
+import { readBuildData } from "../lib/runtime-data";
 import { markdownToHtml } from "../lib/markdown";
+const participate = readBuildData("participate.json");
 ---
 
 <Layout title="参与" eyebrow="Contribute">

@@ -1,0 +1,79 @@
+import { createHash } from "node:crypto";
+import { PublicApiError } from "./public-api-errors.mjs";
+
+function responseBody(data) {
+  return JSON.stringify({ code: 0, data });
+}
+
+function writeJson(req, res, statusCode, body, { cache = false } = {}) {
+  if (res.writableEnded || res.destroyed) return;
+  const headers = { "content-type": "application/json; charset=utf-8", "x-content-type-options": "nosniff" };
+  if (cache && statusCode === 200 && req.method === "GET") {
+    const etag = `\"${createHash("sha256").update(body).digest("base64url").slice(0, 24)}\"`;
+    headers.etag = etag;
+    headers["cache-control"] = "public, max-age=60, stale-while-revalidate=300";
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
+  } else {
+    headers["cache-control"] = "no-store";
+  }
+  res.writeHead(statusCode, headers);
+  res.end(body);
+}
+
+function decodePathPart(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new PublicApiError(400, "请求路径无效。", "INVALID_PATH");
+  }
+}
+
+export function createPublicApiHandler({ service, readBody, clientIp } = {}) {
+  if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
+  return async function handlePublicApi(req, res, url) {
+    if (url.pathname !== "/api/v1" && !url.pathname.startsWith("/api/v1/")) return false;
+    try {
+      let data;
+      if (req.method === "GET" && url.pathname === "/api/v1/health") data = service.health();
+      else if (req.method === "GET" && url.pathname === "/api/v1/home") data = service.home();
+      else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);
+      else {
+        let match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)$/);
+        if (req.method === "GET" && match) data = service.course(decodePathPart(match[1]));
+        else {
+          match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)\/resources$/);
+          if (req.method === "GET" && match) data = service.resources(decodePathPart(match[1]));
+          else if (req.method === "GET" && url.pathname === "/api/v1/review-groups") data = service.reviewGroups();
+          else {
+            match = url.pathname.match(/^\/api\/v1\/review-groups\/([^/]+)$/);
+            if (req.method === "GET" && match) data = service.reviewGroup(decodePathPart(match[1]));
+            else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
+              const ip = clientIp(req);
+              service.assertReviewAttempt(ip);
+              let body;
+              try {
+                body = await readBody(req);
+              } catch {
+                throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+              }
+              data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"] });
+            } else {
+              throw new PublicApiError(404, "接口不存在。", "NOT_FOUND");
+            }
+          }
+        }
+      }
+      writeJson(req, res, 200, responseBody(data), { cache: req.method === "GET" && url.pathname !== "/api/v1/health" });
+    } catch (error) {
+      const statusCode = error instanceof PublicApiError ? error.statusCode : 500;
+      const code = error instanceof PublicApiError ? error.code : "INTERNAL_ERROR";
+      const message = error instanceof PublicApiError ? error.message : "服务器暂时无法处理请求。";
+      writeJson(req, res, statusCode, JSON.stringify({ code, message }));
+    }
+    return true;
+  };
+}

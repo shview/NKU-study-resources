@@ -1,10 +1,11 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { courses, countFiles, coursePath, formatBytes, manifest, totalSize } from "../lib/resources";
-import home from "../data/home.json";
+import { readBuildData } from "../lib/runtime-data";
 import { markdownToHtml } from "../lib/markdown";
 
 const fileCount = courses.reduce((sum, course) => sum + countFiles(course), 0);
+const home = readBuildData("home.json");
 const size = courses.reduce((sum, course) => sum + totalSize(course), 0);
 const latest = [...courses].sort((a, b) => b.updated.localeCompare(a.updated));
 const blockedTag = "无固定年级";

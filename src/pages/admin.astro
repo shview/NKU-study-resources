@@ -349,10 +349,14 @@ import "vditor/dist/index.css";
     import Vditor from "vditor";
 
     let state = null;
+    let manifestRevision = "";
     let selectedId = null;
     let originalCourseHashes = new Map();
     let originalCourseBasePaths = new WeakMap();
+    let originalCourseUids = new Set();
+    const contentRevisions = new Map();
     let reviewState = null;
+    let reviewRevision = "";
     let feedbackState = null;
     let aboutState = null;
     let homeState = null;
@@ -502,7 +506,12 @@ import "vditor/dist/index.css";
       });
       const data = await response.json();
       if (!response.ok || data.ok === false) {
-        throw new Error(data.error || data.errors?.join("\n") || "请求失败");
+        const error = Object.assign(new Error(data.error || data.errors?.join("\n") || "请求失败"), {
+          status: response.status,
+          currentRevision: data.currentRevision,
+        });
+        if (response.status === 409) error.message += "\n服务器内容已变化，本次没有覆盖。请重新加载后再编辑。";
+        throw error;
       }
       return data;
     }
@@ -578,6 +587,27 @@ import "vditor/dist/index.css";
       originalCourseHashes = new Map(state.courses.map((course) => [course.id, courseHash(course)]));
       originalCourseBasePaths = new WeakMap();
       state.courses.forEach((course) => originalCourseBasePaths.set(course, course.basePath));
+      originalCourseUids = new Set(state.courses.map((course) => course.uid).filter(Boolean));
+    }
+
+    function manifestWriteBody(extra = {}) {
+      return manifestWriteBodyFor(state, extra);
+    }
+
+    function manifestWriteBodyFor(manifest, extra = {}) {
+      const currentUids = new Set(manifest.courses.map((course) => course.uid).filter(Boolean));
+      return {
+        manifest,
+        expectedRevision: manifestRevision,
+        deletedCourseUids: [...originalCourseUids].filter((uid) => !currentUids.has(uid)),
+        ...extra,
+      };
+    }
+
+    function acceptManifest(data) {
+      state = data.manifest;
+      manifestRevision = data.revision;
+      captureCourseHashes();
     }
 
     function touchChangedCourses() {
@@ -614,6 +644,7 @@ import "vditor/dist/index.css";
       }
       const data = await api("/manifest");
       state = data.manifest;
+      manifestRevision = data.revision;
       captureCourseHashes();
       selectedId = state.courses[0]?.id ?? null;
       loginPanel.hidden = true;
@@ -626,42 +657,49 @@ import "vditor/dist/index.css";
     async function loadReviewsAdmin() {
       const data = await api("/reviews");
       reviewState = data.data;
+      reviewRevision = data.revision;
       renderReviewAdmin();
     }
 
     async function loadFeedbackAdmin() {
       const data = await api("/feedback");
       feedbackState = data.data;
+      contentRevisions.set("feedback", data.revision);
       renderFeedbackAdmin();
     }
 
     async function loadParticipateAdmin() {
       const data = await api("/participate");
       participateState = data.data;
+      contentRevisions.set("participate", data.revision);
       renderParticipateAdmin();
     }
 
     async function loadLinksAdmin() {
       const data = await api("/links");
       linksState = data.data;
+      contentRevisions.set("links", data.revision);
       renderLinksAdmin();
     }
 
     async function loadAboutAdmin() {
       const data = await api("/about");
       aboutState = data.data;
+      contentRevisions.set("about", data.revision);
       renderAboutAdmin();
     }
 
     async function loadHomeAdmin() {
       const data = await api("/home");
       homeState = data.data;
+      contentRevisions.set("home", data.revision);
       renderHomeAdmin();
     }
 
     async function loadFooterAdmin() {
       const data = await api("/footer");
       footerState = data.data;
+      contentRevisions.set("footer", data.revision);
       renderFooterAdmin();
     }
 
@@ -1038,9 +1076,10 @@ import "vditor/dist/index.css";
       reviewAdminStatus.textContent = "保存中...";
       const data = await api("/reviews", {
         method: "POST",
-        body: JSON.stringify({ data: reviewState }),
+        body: JSON.stringify({ data: reviewState, expectedRevision: reviewRevision }),
       });
       reviewState = data.data;
+      reviewRevision = data.revision;
       reviewAdminStatus.textContent = message;
       renderReviewAdmin();
     }
@@ -1198,9 +1237,10 @@ import "vditor/dist/index.css";
       feedbackAdminStatus.textContent = "保存中...";
       const data = await api("/feedback", {
         method: "POST",
-        body: JSON.stringify({ data: feedbackState }),
+        body: JSON.stringify({ data: feedbackState, expectedRevision: contentRevisions.get("feedback") }),
       });
       feedbackState = data.data;
+      contentRevisions.set("feedback", data.revision);
       feedbackAdminStatus.textContent = message;
       renderFeedbackAdmin();
     }
@@ -1419,9 +1459,10 @@ import "vditor/dist/index.css";
       linksAdminStatus.textContent = "保存中...";
       const data = await api("/links", {
         method: "POST",
-        body: JSON.stringify({ data: linksState }),
+        body: JSON.stringify({ data: linksState, expectedRevision: contentRevisions.get("links") }),
       });
       linksState = data.data;
+      contentRevisions.set("links", data.revision);
       linksAdminStatus.textContent = message;
       renderLinksAdmin();
     }
@@ -1440,9 +1481,10 @@ import "vditor/dist/index.css";
       participateAdminStatus.textContent = "保存中...";
       const data = await api("/participate", {
         method: "POST",
-        body: JSON.stringify({ data: participateState }),
+        body: JSON.stringify({ data: participateState, expectedRevision: contentRevisions.get("participate") }),
       });
       participateState = data.data;
+      contentRevisions.set("participate", data.revision);
       participateAdminStatus.textContent = message;
       renderParticipateAdmin();
     }
@@ -1463,9 +1505,10 @@ import "vditor/dist/index.css";
       aboutAdminStatus.textContent = "保存中...";
       const data = await api("/about", {
         method: "POST",
-        body: JSON.stringify({ data: aboutState }),
+        body: JSON.stringify({ data: aboutState, expectedRevision: contentRevisions.get("about") }),
       });
       aboutState = data.data;
+      contentRevisions.set("about", data.revision);
       aboutAdminStatus.textContent = message;
       renderAboutAdmin();
     }
@@ -1483,9 +1526,10 @@ import "vditor/dist/index.css";
       homeAdminStatus.textContent = "保存中...";
       const data = await api("/home", {
         method: "POST",
-        body: JSON.stringify({ data: homeState }),
+        body: JSON.stringify({ data: homeState, expectedRevision: contentRevisions.get("home") }),
       });
       homeState = data.data;
+      contentRevisions.set("home", data.revision);
       homeAdminStatus.textContent = message;
       renderHomeAdmin();
     }
@@ -1522,9 +1566,10 @@ import "vditor/dist/index.css";
       footerAdminStatus.textContent = "保存中...";
       const data = await api("/footer", {
         method: "POST",
-        body: JSON.stringify({ data: footerState }),
+        body: JSON.stringify({ data: footerState, expectedRevision: contentRevisions.get("footer") }),
       });
       footerState = data.data;
+      contentRevisions.set("footer", data.revision);
       footerAdminStatus.textContent = message;
       renderFooterAdmin();
     }
@@ -1668,41 +1713,48 @@ import "vditor/dist/index.css";
     async function deleteR2Paths(course, paths) {
       const cleanPaths = paths.filter(Boolean);
       if (!cleanPaths.length) return;
-      await api("/delete-r2", {
+      const candidate = structuredClone(state);
+      const target = candidate.courses.find((item) => item.uid === course.uid);
+      const deleting = new Set(cleanPaths);
+      for (const section of target?.sections || []) {
+        section.files = (section.files || []).filter((file) => !deleting.has(file.path));
+      }
+      const data = await api("/r2-publish", {
         method: "POST",
-        body: JSON.stringify({ courseId: course.id, paths: cleanPaths }),
+        body: JSON.stringify(manifestWriteBodyFor(candidate, {
+          fileDeletes: [{ courseUid: course.uid, paths: cleanPaths }],
+          moves: changedCourseDirectories(),
+        })),
       });
+      acceptManifest(data);
     }
 
     async function deleteCourse(course) {
       if (!confirm("删除课程「" + (course.title || "") + "」？课程记录、资源板块和 R2 中 " + (course.basePath || "") + " 下的文件都会删除。")) return;
       publishStatus.textContent = "正在删除课程...";
-      const basePaths = Array.from(new Set([originalCourseBasePaths.get(course), course.basePath].filter(Boolean)));
-      await api("/delete-r2-course", {
+      const candidate = structuredClone(state);
+      candidate.courses = candidate.courses.filter((item) => item.uid !== course.uid);
+      const data = await api("/r2-publish", {
         method: "POST",
-        body: JSON.stringify({ courseId: course.id, basePaths }),
+        body: JSON.stringify(manifestWriteBodyFor(candidate, {
+          moves: changedCourseDirectories().filter((move) => move.courseUid !== course.uid),
+        })),
       });
-      state.courses = state.courses.filter((item) => item !== course);
+      acceptManifest(data);
       selectedId = state.courses[0]?.id ?? null;
-      await api("/manifest", {
-        method: "POST",
-        body: JSON.stringify({ manifest: state }),
-      });
-      captureCourseHashes();
       renderTree();
       renderEditor();
       publishStatus.textContent = "课程已删除并发布";
     }
 
-    async function moveChangedCourseDirectories() {
+    function changedCourseDirectories() {
+      const moves = [];
       for (const course of state.courses) {
         const oldBasePath = originalCourseBasePaths.get(course);
         if (!oldBasePath || oldBasePath === course.basePath) continue;
-        await api("/move-r2-prefix", {
-          method: "POST",
-          body: JSON.stringify({ oldBasePath, newBasePath: course.basePath }),
-        });
+        moves.push({ courseUid: course.uid, oldBasePath, newBasePath: course.basePath });
       }
+      return moves;
     }
 
     function renderFileRow(course, file, files) {
@@ -1811,10 +1863,14 @@ import "vditor/dist/index.css";
 
     async function uploadFiles(course, section, sectionIndex, files, progressBar, progressText) {
       touchChangedCourses();
-      await api("/manifest-draft", {
+      const draft = await api("/manifest-draft", {
         method: "POST",
-        body: JSON.stringify({ manifest: state }),
+        body: JSON.stringify(manifestWriteBody()),
       });
+      acceptManifest(draft);
+      course = state.courses.find((item) => item.id === course.id) || course;
+      section = course.sections?.[sectionIndex];
+      if (!section) throw new Error("课程板块在保存草稿后发生变化，请重新选择后上传。");
 
       const form = new FormData();
       for (const file of files) {
@@ -2172,12 +2228,12 @@ import "vditor/dist/index.css";
       publishStatus.textContent = "发布中...";
       try {
         touchChangedCourses();
-        await moveChangedCourseDirectories();
-        await api("/manifest", {
+        const moves = changedCourseDirectories();
+        const data = await api(moves.length ? "/r2-publish" : "/manifest", {
           method: "POST",
-          body: JSON.stringify({ manifest: state }),
+          body: JSON.stringify(manifestWriteBody({ moves })),
         });
-        captureCourseHashes();
+        acceptManifest(data);
         renderTree();
         renderEditor();
         publishStatus.textContent = "已发布";
@@ -2193,11 +2249,10 @@ import "vditor/dist/index.css";
       try {
         const data = await api("/sync-r2", {
           method: "POST",
-          body: JSON.stringify({ courseId: course.id }),
+          body: JSON.stringify({ courseId: course.id, expectedRevision: manifestRevision }),
         });
-        state = data.manifest;
+        acceptManifest(data);
         selectedId = data.course.id;
-        captureCourseHashes();
         renderManifestSettings();
         renderTree();
         renderEditor();
@@ -2213,11 +2268,10 @@ import "vditor/dist/index.css";
       try {
         const data = await api("/sync-r2-all", {
           method: "POST",
-          body: "{}",
+          body: JSON.stringify({ expectedRevision: manifestRevision }),
         });
-        state = data.manifest;
+        acceptManifest(data);
         selectedId = state.courses[0]?.id ?? null;
-        captureCourseHashes();
         renderManifestSettings();
         renderTree();
         renderEditor();
@@ -2452,9 +2506,10 @@ import "vditor/dist/index.css";
       try {
         const data = await api("/reviews", {
           method: "POST",
-          body: JSON.stringify({ data: reviewState }),
+          body: JSON.stringify({ data: reviewState, expectedRevision: reviewRevision }),
         });
         reviewState = data.data;
+        reviewRevision = data.revision;
         renderReviewAdmin();
         reviewAdminStatus.textContent = "已保存";
       } catch (error) {

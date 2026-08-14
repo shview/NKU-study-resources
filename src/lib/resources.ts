@@ -1,4 +1,4 @@
-import manifestData from "../data/manifest.json";
+import { readBuildData } from "./runtime-data";
 
 export type ResourceFile = {
   title: string;
@@ -15,6 +15,7 @@ export type ResourceSection = {
 };
 
 export type Course = {
+  uid: string;
   id: string;
   term: string;
   group: string;
@@ -40,7 +41,7 @@ type Manifest = {
   courses: Course[];
 };
 
-export const manifest = manifestData as Manifest;
+export const manifest = readBuildData<Manifest>("manifest.json");
 export const courses = manifest.courses;
 
 export const repositoryUrl = `https://github.com/${manifest.repository}`;

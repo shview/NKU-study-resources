@@ -1,8 +1,9 @@
 ﻿---
 import Layout from "../layouts/Layout.astro";
-import feedbackData from "../data/feedback.json";
+import { readBuildData } from "../lib/runtime-data";
 import { markdownToHtml } from "../lib/markdown";
 import "vditor/dist/index.css";
+const feedbackData = readBuildData("feedback.json");
 ---
 
 <Layout title="反馈" eyebrow="Feedback">

@@ -6,4 +6,14 @@ Production content, reviews, feedback, visit records, credentials, backups, gene
 
 This source baseline replaces the repository's former resource-archive purpose. Importing it does not authorize a production deployment.
 
-See `docs/DEPLOYMENT.md` before deploying. Never copy a local `src/data` directory over production data.
+See `docs/DEPLOYMENT.md` before deploying. Never copy a local `src/data` directory over production data. The public contract and explicit field whitelist are documented in `docs/public-api.md`.
+
+Runtime JSON paths are controlled by `DATA_DIR`; mutable rate-limit state is stored with `better-sqlite3`. Course `uid` values are stable database/API identifiers while the existing `id` remains the website route key. See `docs/data-schema.md` before migrating content.
+
+For isolated validation:
+
+```powershell
+npm ci
+npm test
+npm run build:fixtures
+```

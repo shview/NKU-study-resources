@@ -1,9 +1,10 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { openListUrl, repositoryUrl } from "../lib/resources";
-import about from "../data/about.json";
+import { readBuildData } from "../lib/runtime-data";
 import { markdownToHtml } from "../lib/markdown";
 
+const about = readBuildData("about.json");
 const aboutContent = about.content ?? "";
 ---
 

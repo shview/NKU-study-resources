@@ -1,0 +1,222 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import net from "node:net";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+const projectRoot = path.resolve(import.meta.dirname, "..");
+const fixtureDir = path.join(projectRoot, "src", "data", "fixtures");
+
+async function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close((error) => error ? reject(error) : resolve(port));
+    });
+  });
+}
+
+async function waitForServer(child) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("admin server did not start")), 10_000);
+    let output = "";
+    const onData = (chunk) => {
+      output += chunk.toString();
+      if (output.includes("NKUStudy admin API listening")) {
+        clearTimeout(timeout);
+        resolve();
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      reject(new Error(`admin server exited early (${code}): ${output}`));
+    });
+  });
+}
+
+test("legacy public write routes start with isolated DATA_DIR and persist submissions", async (t) => {
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "nkustudy-admin-integration-"));
+  for (const name of ["about.json", "feedback.json", "footer.json", "home.json", "links.json", "manifest.json", "participate.json", "reviews.json"]) {
+    await fs.copyFile(path.join(fixtureDir, name), path.join(dataDir, name));
+  }
+  const port = await freePort();
+  const childEnv = {
+    ...process.env,
+    DATA_DIR: dataDir,
+    STATE_DB_PATH: path.join(dataDir, "state.sqlite"),
+    ADMIN_SECRET_FILE: path.join(dataDir, "admin-secret"),
+    BACKUP_SECRET_FILE: path.join(dataDir, "backup-secrets.json"),
+    ADMIN_PASSWORD: "isolated-test-password",
+    ADMIN_HOST: "127.0.0.1",
+    ADMIN_PORT: String(port),
+  };
+  let child = spawn(process.execPath, [path.join(projectRoot, "server", "admin-server.mjs")], {
+    cwd: projectRoot,
+    env: childEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(async () => {
+    if (child.exitCode === null) {
+      child.kill("SIGTERM");
+      await new Promise((resolve) => child.once("exit", resolve));
+    }
+    await fs.rm(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  });
+  await waitForServer(child);
+
+  const login = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+  });
+  assert.equal(login.status, 200);
+  const cookie = login.headers.get("set-cookie").split(";", 1)[0];
+  const manifestResponse = await fetch(`http://127.0.0.1:${port}/admin-api/manifest`, { headers: { cookie } });
+  const tabA = await manifestResponse.json();
+  const tabB = structuredClone(tabA);
+  const saveA = await fetch(`http://127.0.0.1:${port}/admin-api/manifest-draft`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ manifest: { ...tabA.manifest, testMarker: "tab-a" }, expectedRevision: tabA.revision, deletedCourseUids: [] }),
+  });
+  assert.equal(saveA.status, 200);
+  const savedA = await saveA.json();
+  const staleB = await fetch(`http://127.0.0.1:${port}/admin-api/manifest-draft`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ manifest: { ...tabB.manifest, testMarker: "tab-b" }, expectedRevision: tabB.revision, deletedCourseUids: [] }),
+  });
+  assert.equal(staleB.status, 409);
+  assert.equal((await staleB.json()).currentRevision, savedA.revision);
+  const staleSync = await fetch(`http://127.0.0.1:${port}/admin-api/sync-r2-all`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ expectedRevision: tabB.revision }),
+  });
+  assert.equal(staleSync.status, 409, "stale R2 sync must fail CAS before touching R2");
+
+  const reviewsLoaded = await (await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, { headers: { cookie } })).json();
+  const feedbackLoaded = await (await fetch(`http://127.0.0.1:${port}/admin-api/feedback`, { headers: { cookie } })).json();
+
+  const reviewResponse = await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      courseTitle: "Fixture course",
+      teacher: "Fixture teacher",
+      rating: 5,
+      content: "Synthetic review content long enough for validation.",
+    }),
+  });
+  assert.equal(reviewResponse.status, 200);
+  assert.equal((await reviewResponse.json()).pending, true);
+
+  const feedbackResponse = await fetch(`http://127.0.0.1:${port}/feedback-api/submit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title: "Fixture feedback", content: "Synthetic feedback content." }),
+  });
+  assert.equal(feedbackResponse.status, 200);
+  assert.equal((await feedbackResponse.json()).ok, true);
+  const staleReviews = await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ data: reviewsLoaded.data, expectedRevision: reviewsLoaded.revision }),
+  });
+  assert.equal(staleReviews.status, 409, "public review submission must make a loaded admin revision stale");
+  const staleFeedback = await fetch(`http://127.0.0.1:${port}/admin-api/feedback`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ data: feedbackLoaded.data, expectedRevision: feedbackLoaded.revision }),
+  });
+  assert.equal(staleFeedback.status, 409, "public feedback submission must make a loaded admin revision stale");
+  const health = await fetch(`http://127.0.0.1:${port}/api/v1/health`);
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { code: 0, data: { status: "ok" } });
+  const courses = await (await fetch(`http://127.0.0.1:${port}/api/v1/courses?page=1&page_size=20&group=${encodeURIComponent("示例分类")}`)).json();
+  assert.equal(courses.code, 0);
+  assert.equal(courses.data.items[0].id, "11111111-1111-4111-8111-111111111111");
+  assert.equal(Object.hasOwn(courses.data.items[0], "basePath"), false);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/admin-api/manifest`)).status, 404);
+
+  const publicReviewResponse = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      course_id: "11111111-1111-4111-8111-111111111111",
+      teacher: "Fixture mini-program teacher",
+      rating: 4,
+      tags: ["Fixture tag"],
+      body: "Synthetic mini-program review content long enough for validation.",
+      anonymous: true,
+    }),
+  });
+  assert.equal(publicReviewResponse.status, 200);
+  assert.deepEqual(await publicReviewResponse.json(), { code: 0, data: { submitted: true, pending: true } });
+
+  const invalidAttempts = [];
+  for (let index = 0; index < 30; index += 1) {
+    invalidAttempts.push(await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }));
+  }
+  assert.equal(invalidAttempts.at(-1).status, 429, "invalid bodies must consume the persistent attempt limit");
+
+  for (let index = 0; index < 50; index += 1) {
+    const response = await fetch(`http://127.0.0.1:${port}/visit-api/hit`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "user-agent": `attacker-${index}` },
+      body: JSON.stringify({ path: `/random-${index}` }),
+    });
+    assert.equal(response.status, 200);
+  }
+
+  const badLogins = [];
+  for (let index = 0; index < 5; index += 1) {
+    badLogins.push(await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password: "wrong" }),
+    }));
+  }
+  assert.equal(badLogins.at(-1).status, 429, "login attempts are counted before password verification");
+
+  child.kill("SIGTERM");
+  await new Promise((resolve) => child.once("exit", resolve));
+  child = spawn(process.execPath, [path.join(projectRoot, "server", "admin-server.mjs")], {
+    cwd: projectRoot,
+    env: childEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  await waitForServer(child);
+  const persistedLoginLimit = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+  });
+  assert.equal(persistedLoginLimit.status, 429, "login limit must survive a server restart");
+  const persistedAttempt = await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(persistedAttempt.status, 429, "attempt limit must survive a server restart");
+
+  const reviews = JSON.parse(await fs.readFile(path.join(dataDir, "reviews.json"), "utf8"));
+  const feedback = JSON.parse(await fs.readFile(path.join(dataDir, "feedback.json"), "utf8"));
+  const visits = JSON.parse(await fs.readFile(path.join(dataDir, "visit-stats.json"), "utf8"));
+  assert.equal(reviews.reviews.length, 2);
+  assert.equal(feedback.items.length, 1);
+  assert.equal(typeof reviews.reviews[0].ipHash, "string");
+  assert.equal(JSON.stringify(reviews).includes("127.0.0.1"), false);
+  assert.equal(JSON.stringify(feedback).includes("127.0.0.1"), false);
+  assert.deepEqual(Object.keys(visits.pages), ["/__unknown__"]);
+});

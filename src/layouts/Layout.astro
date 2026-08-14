@@ -1,6 +1,6 @@
 ---
 import "../styles/global.css";
-import footerConfig from "../data/footer.json";
+import { readBuildData } from "../lib/runtime-data";
 import { markdownToHtml } from "../lib/markdown";
 
 type Props = {
@@ -9,6 +9,7 @@ type Props = {
 };
 
 const { title = "NKUStudy", eyebrow } = Astro.props;
+const footerConfig = readBuildData("footer.json");
 const nav = [
   { href: "/", label: "首页", icon: "home" },
   { href: "/courses/", label: "课程", icon: "book" },

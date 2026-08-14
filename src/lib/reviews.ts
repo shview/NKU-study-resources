@@ -1,4 +1,4 @@
-import reviewData from "../data/reviews.json";
+import { readBuildData } from "./runtime-data";
 
 export type Review = {
   id: string;
@@ -24,7 +24,7 @@ export type ReviewGroup = {
   counts: Record<number, number>;
 };
 
-export const reviews = (reviewData as ReviewStore).reviews ?? [];
+export const reviews = readBuildData<ReviewStore>("reviews.json").reviews ?? [];
 
 export function reviewKey(review: Pick<Review, "courseTitle" | "teacher">) {
   return `${review.courseTitle}-${review.teacher}`;

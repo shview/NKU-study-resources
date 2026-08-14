@@ -52,6 +52,9 @@ src/data/**
 **/*.bak.*
 **/backup/
 **/backups/
+**/.manifest-backups/
+**/.publish-journal/
+**/.publish-snapshots/
 **/archive/
 **/archives/
 **/*.tar

@@ -1,8 +1,9 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import links from "../data/links.json";
+import { readBuildData } from "../lib/runtime-data";
 import { markdownToHtml } from "../lib/markdown";
 
+const links = readBuildData("links.json");
 const mutualLinks = (links.links ?? []).filter((item) => item.type !== "recommended" && item.hidden !== true);
 const recommendedLinks = (links.links ?? []).filter((item) => item.type === "recommended" && item.hidden !== true);
 const plainText = (value) => String(value ?? "")

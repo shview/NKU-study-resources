@@ -4,5 +4,26 @@
   "repository": "example/nkustudy-fixture",
   "resourceRoot": "https://example.invalid/resources/",
   "hiddenMetaTags": [],
-  "courses": []
+  "courses": [
+    {
+      "uid": "11111111-1111-4111-8111-111111111111",
+      "id": "示例课程",
+      "term": "示例学期",
+      "group": "示例分类",
+      "title": "示例课程",
+      "summary": "仅用于构建验证的合成课程。",
+      "contributors": [],
+      "assessment": "示例考核",
+      "updated": "2000-01-01",
+      "grades": [],
+      "tags": ["示例"],
+      "basePath": "fixtures/example-course/",
+      "sections": [
+        {
+          "title": "示例资料",
+          "files": []
+        }
+      ]
+    }
+  ]
 }

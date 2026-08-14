@@ -2,19 +2,20 @@ import {
   constants,
   copyFileSync,
   existsSync,
-  mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
 } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { validateManifest } from "../server/manifest-schema.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dataDir = path.join(root, "src", "data");
-const fixtureDir = path.join(dataDir, "fixtures");
+const fixtureDir = path.join(root, "src", "data", "fixtures");
 const outputDir = path.join(root, "dist-fixture");
 const fixtureFiles = [
   "about.json",
@@ -26,8 +27,7 @@ const fixtureFiles = [
   "participate.json",
   "reviews.json",
 ];
-const stagedFiles = fixtureFiles.map((name) => path.join(dataDir, name));
-const createdFiles = new Set();
+const stagedDataDir = mkdtempSync(path.join(os.tmpdir(), "nkustudy-fixtures-"));
 const signalExitCodes = new Map([
   ["SIGHUP", 129],
   ["SIGINT", 130],
@@ -45,11 +45,6 @@ const unexpectedFixtures = readdirSync(fixtureDir).filter(
 );
 if (unexpectedFixtures.length) {
   throw new Error(`Unreviewed fixture JSON is not allowed: ${unexpectedFixtures.join(", ")}`);
-}
-
-const collisions = stagedFiles.filter(existsSync);
-if (collisions.length) {
-  throw new Error(`Refusing to overwrite runtime data: ${collisions.map((file) => path.basename(file)).join(", ")}`);
 }
 
 const require = createRequire(import.meta.url);
@@ -77,7 +72,7 @@ let cleaned = false;
 function cleanupStagedFixtures() {
   if (cleaned) return;
   cleaned = true;
-  for (const file of createdFiles) rmSync(file, { force: true });
+  rmSync(stagedDataDir, { recursive: true, force: true });
 }
 
 process.once("exit", cleanupStagedFixtures);
@@ -168,7 +163,7 @@ function runAstroBuild() {
     const testSignal = getTestSignal();
     const child = spawn(command, args, {
       cwd: root,
-      env: { ...process.env, NODE_ENV: "test", NKUSTUDY_FIXTURE_BUILD: "1" },
+      env: { ...process.env, DATA_DIR: stagedDataDir, NODE_ENV: "test", NKUSTUDY_FIXTURE_BUILD: "1" },
       stdio: "inherit",
     });
     activeChild = child;
@@ -187,15 +182,16 @@ function runAstroBuild() {
   });
 }
 
-mkdirSync(dataDir, { recursive: true });
 rmSync(outputDir, { recursive: true, force: true });
 
 try {
   for (const name of fixtureFiles) {
-    const destination = path.join(dataDir, name);
+    const destination = path.join(stagedDataDir, name);
     copyFileSync(path.join(fixtureDir, name), destination, constants.COPYFILE_EXCL);
-    createdFiles.add(destination);
   }
+
+  const manifestErrors = validateManifest(JSON.parse(readFileSync(path.join(stagedDataDir, "manifest.json"), "utf8")));
+  if (manifestErrors.length) throw new Error(`Fixture manifest is invalid:\n${manifestErrors.join("\n")}`);
 
   const result = await runAstroBuild();
   if (receivedSignal) {

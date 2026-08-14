@@ -4,32 +4,52 @@ import { spawn } from "node:child_process";
 import { PassThrough } from "node:stream";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import Busboy from "busboy";
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { AtomicJsonStore } from "./atomic-json-store.mjs";
+import { clientIp, hashActor, trustedProxyRules } from "./client-identity.mjs";
+import { ContentPublishJournal, ContentPublishService } from "./content-publish-service.mjs";
+import { manifestRevision, ManifestConflictError, ManifestService } from "./manifest-service.mjs";
+import { validateManifest } from "./manifest-schema.mjs";
+import { PersistentRateLimiter } from "./persistent-rate-limiter.mjs";
+import { createPublicApiHandler } from "./public-api-router.mjs";
+import { PublicApiService } from "./public-api-service.mjs";
+import { readJsonBody } from "./read-json-body.mjs";
+import { mergeCourseR2Discovery, mergeR2Discoveries } from "./r2-sync-merge.mjs";
+import { assertR2CleanupSafety, planR2ManifestMutation, planR2ObjectCopies, strictR2BasePath, strictR2Path } from "./r2-mutation-plan.mjs";
+import { publishAfterR2Prepare, R2MutationQueue, runExclusiveR2Mutation, runSerializedR2Mutation } from "./r2-transaction.mjs";
+import { ReviewSubmissionService } from "./review-submission-service.mjs";
+import { preflightProductionRuntime, projectRoot, runtimeDataPathMap } from "./runtime-config.mjs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, "..");
-const manifestPath = path.join(root, "src", "data", "manifest.json");
-const reviewsPath = path.join(root, "src", "data", "reviews.json");
-const feedbackPath = path.join(root, "src", "data", "feedback.json");
-const aboutPath = path.join(root, "src", "data", "about.json");
-const homePath = path.join(root, "src", "data", "home.json");
-const participatePath = path.join(root, "src", "data", "participate.json");
-const linksPath = path.join(root, "src", "data", "links.json");
-const footerPath = path.join(root, "src", "data", "footer.json");
-const editorSettingsPath = path.join(root, "src", "data", "editor-settings.json");
-const visitStatsPath = path.join(root, "src", "data", "visit-stats.json");
-const backupSettingsPath = path.join(root, "src", "data", "backup-settings.json");
-const backupSecretPath = process.env.BACKUP_SECRET_FILE || path.join(root, ".backup-secrets.json");
+const root = projectRoot;
+const runtime = preflightProductionRuntime();
+trustedProxyRules(process.env);
+const dataDir = runtime.dataDir;
+const runtimeDataPaths = runtimeDataPathMap();
+const jsonStore = new AtomicJsonStore({ allowedRoot: dataDir });
+const {
+  manifest: manifestPath,
+  reviews: reviewsPath,
+  feedback: feedbackPath,
+  about: aboutPath,
+  home: homePath,
+  participate: participatePath,
+  links: linksPath,
+  footer: footerPath,
+  editorSettings: editorSettingsPath,
+  visitStats: visitStatsPath,
+  backupSettings: backupSettingsPath,
+} = runtimeDataPaths;
+const backupSecretPath = path.resolve(process.env.BACKUP_SECRET_FILE || path.join(dataDir, "backup-secrets.json"));
+const backupSecretStore = new AtomicJsonStore({ allowedRoot: path.dirname(backupSecretPath) });
 const distDir = path.join(root, "dist");
-const publicDir = process.env.PUBLIC_DIR || "/var/www/nkustudy";
+const publicDir = runtime.publicDir;
 const host = process.env.ADMIN_HOST || "127.0.0.1";
 const port = Number(process.env.ADMIN_PORT || 8787);
 const password = process.env.ADMIN_PASSWORD;
-const secretPath = process.env.ADMIN_SECRET_FILE || path.join(root, ".admin-secret");
+const secretPath = runtime.adminSecretPath;
 const r2Bucket = process.env.R2_BUCKET;
-const r2Prefix = normalizeKey(process.env.R2_PREFIX || "resources");
+const r2Prefix = strictR2Path(process.env.R2_PREFIX || "resources", "R2_PREFIX");
 const r2Client = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
   ? new S3Client({
       region: "auto",
@@ -41,14 +61,16 @@ const r2Client = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && pr
       },
     })
   : null;
-const reviewRate = new Map();
-const feedbackRate = new Map();
-const loginFailures = new Map();
-const loginLockThreshold = 5;
-const loginLockMs = 5 * 60 * 1000;
 const visitDedupMs = 30 * 60 * 1000;
+const visitVisitorCap = 5_000;
+const visitHistoryDays = 400;
 let backupRunning = false;
 let lastAutoBackupDate = "";
+let backupSettingsQueue = Promise.resolve();
+let manifestService;
+let contentPublishService;
+const r2MutationQueue = new R2MutationQueue();
+const activeChildren = new Set();
 
 if (!password) {
   console.error("ADMIN_PASSWORD is required.");
@@ -59,11 +81,34 @@ let secret;
 if (fs.existsSync(secretPath)) {
   secret = fs.readFileSync(secretPath, "utf8").trim();
 } else {
+  if (process.env.NODE_ENV === "production") throw new Error("ADMIN_SECRET_FILE must already exist in production.");
   secret = randomBytes(32).toString("hex");
+  fs.mkdirSync(path.dirname(secretPath), { recursive: true, mode: 0o700 });
   fs.writeFileSync(secretPath, secret, { mode: 0o600 });
 }
+if (secret.length < 32) throw new Error("ADMIN_SECRET_FILE must contain at least 32 characters.");
+const rateLimiter = new PersistentRateLimiter({ dbPath: runtime.stateDbPath });
+const reviewSubmissionService = new ReviewSubmissionService({
+  store: jsonStore,
+  reviewsPath,
+  readReviews,
+  consumeAttempt: (ip) => consumeLayeredAttempt("review-attempt", ip, { perIp: 30, global: 1_000 }),
+  consumeSubmission: checkReviewRate,
+  actorHash: ipHash,
+  nowIso,
+  today,
+});
+const publicApiService = new PublicApiService({
+  readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
+  readReviews,
+  readHome,
+  reviewSubmissionService,
+  publicResourceOrigin: process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top",
+});
+const handlePublicApi = createPublicApiHandler({ service: publicApiService, readBody: readJsonBody, clientIp });
 
 function json(res, status, data) {
+  if (res.writableEnded || res.destroyed) return;
   const body = JSON.stringify(data);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -113,21 +158,18 @@ function defaultEditorSettings() {
 
 function readBackupSecrets() {
   if (!fs.existsSync(backupSecretPath)) return { webdav: {}, encryptionPassword: "" };
-  const data = JSON.parse(fs.readFileSync(backupSecretPath, "utf8"));
+  const data = backupSecretStore.readSync(backupSecretPath);
   data.webdav = data.webdav || {};
   return data;
 }
 
-function writeBackupSecrets(data) {
-  fs.writeFileSync(backupSecretPath, `${JSON.stringify(data, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  try {
-    fs.chmodSync(backupSecretPath, 0o600);
-  } catch {}
+async function writeBackupSecrets(data) {
+  await backupSecretStore.write(backupSecretPath, data, { mode: 0o600 });
 }
 
 function readBackupSettings() {
   const defaults = defaultBackupSettings();
-  const data = readJsonFile(backupSettingsPath, defaults);
+  const data = readJsonFile(backupSettingsPath);
   return {
     ...defaults,
     ...data,
@@ -152,7 +194,7 @@ function publicBackupSettings() {
   };
 }
 
-function writeBackupSettings(input) {
+async function writeBackupSettingsUnlocked(input) {
   const current = readBackupSettings();
   const secrets = readBackupSecrets();
   const next = {
@@ -180,9 +222,15 @@ function writeBackupSettings(input) {
     secrets.encryptionPassword = input.encryptionPassword;
   }
   if (input.clearEncryptionPassword) secrets.encryptionPassword = "";
-  writeBackupSecrets(secrets);
-  fs.writeFileSync(backupSettingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeBackupSecrets(secrets);
+  await jsonStore.write(backupSettingsPath, next);
   return publicBackupSettings();
+}
+
+function writeBackupSettings(input) {
+  const operation = backupSettingsQueue.catch(() => {}).then(() => writeBackupSettingsUnlocked(input));
+  backupSettingsQueue = operation;
+  return operation;
 }
 
 function normalizeToolbar(toolbar, defaults) {
@@ -240,17 +288,17 @@ function normalizeEditorSettings(data) {
 }
 
 function readEditorSettings() {
-  return normalizeEditorSettings(readJsonFile(editorSettingsPath, defaultEditorSettings()));
+  return normalizeEditorSettings(readJsonFile(editorSettingsPath));
 }
 
 function publicEditorSettings() {
   return readEditorSettings();
 }
 
-function writeEditorSettings(data) {
+async function writeEditorSettings(data) {
   const next = normalizeEditorSettings(data || {});
-  fs.writeFileSync(editorSettingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-  return publicEditorSettings();
+  await jsonStore.write(editorSettingsPath, next);
+  return next;
 }
 
 function encryptText(plainText, passphrase) {
@@ -292,7 +340,7 @@ function backupData(scope = "all") {
     createdAt,
     config: safeConfig,
   };
-  const manifest = () => cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8")));
+  const manifest = () => cleanManifestResources(jsonStore.readSync(manifestPath));
   const pages = () => ({
     about: readAbout(),
     home: readHome(),
@@ -314,7 +362,7 @@ function backupData(scope = "all") {
 
 function serverConfigBackup() {
   const secrets = readBackupSecrets();
-  const envText = readFileIfExists("/etc/nkustudy-admin.env");
+  const envText = readFileIfExists("/etc/nkustudy/admin.env");
   const config = {
     createdAt: nowIso(),
     files: [
@@ -326,12 +374,12 @@ function serverConfigBackup() {
   };
   if (envText && secrets.encryptionPassword) {
     config.encryptedSecrets = {
-      path: "/etc/nkustudy-admin.env",
+      path: "/etc/nkustudy/admin.env",
       payload: encryptText(envText, secrets.encryptionPassword),
     };
   } else if (envText) {
     config.encryptedSecrets = {
-      path: "/etc/nkustudy-admin.env",
+      path: "/etc/nkustudy/admin.env",
       missing: true,
       note: "Encryption password is not configured, so sensitive env content was not included.",
     };
@@ -536,13 +584,13 @@ function currentShanghaiTime() {
 
 function startBackupScheduler() {
   setInterval(async () => {
-    const settings = readBackupSettings();
-    if (!settings.autoEnabled) return;
-    const now = currentShanghaiTime();
-    if (now.date === lastAutoBackupDate) return;
-    if (now.time < settings.dailyTime) return;
-    lastAutoBackupDate = now.date;
     try {
+      const settings = readBackupSettings();
+      if (!settings.autoEnabled) return;
+      const now = currentShanghaiTime();
+      if (now.date === lastAutoBackupDate) return;
+      if (now.time < settings.dailyTime) return;
+      lastAutoBackupDate = now.date;
       await runBackupJob({ manual: false });
     } catch (error) {
       console.error(`Scheduled backup failed: ${error.message}`);
@@ -550,26 +598,7 @@ function startBackupScheduler() {
   }, 60 * 1000);
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 2_000_000) {
-        reject(new Error("Request body is too large."));
-        req.destroy();
-      }
-    });
-    req.on("end", () => {
-      try {
-        resolve(body ? JSON.parse(body) : {});
-      } catch {
-        reject(new Error("Invalid JSON request body."));
-      }
-    });
-    req.on("error", reject);
-  });
-}
+const readBody = readJsonBody;
 
 function sign(value) {
   return createHmac("sha256", secret).update(value).digest("hex");
@@ -602,32 +631,6 @@ function requireAuth(req, res) {
   if (validToken(cookie(req, "nkustudy_admin"))) return true;
   json(res, 401, { ok: false, error: "Unauthorized" });
   return false;
-}
-
-function validateManifest(manifest) {
-  const errors = [];
-  if (!manifest || typeof manifest !== "object") errors.push("manifest must be an object.");
-  if (!manifest.resourceRoot) errors.push("resourceRoot is required.");
-  if (!Array.isArray(manifest.courses)) errors.push("courses must be an array.");
-  const ids = new Set();
-  for (const [index, course] of (manifest.courses || []).entries()) {
-    const label = course.title || `course #${index + 1}`;
-    for (const key of ["id", "term", "group", "title", "updated", "basePath"]) {
-      if (!course[key]) errors.push(`${label}: missing ${key}.`);
-    }
-    if (ids.has(course.id)) errors.push(`${label}: duplicate id ${course.id}.`);
-    ids.add(course.id);
-    if (!Array.isArray(course.sections)) errors.push(`${label}: sections must be an array.`);
-    for (const section of course.sections || []) {
-      if (!section.title) errors.push(`${label}: section missing title.`);
-      if (!Array.isArray(section.files)) errors.push(`${label}/${section.title}: files must be an array.`);
-      for (const file of section.files || []) {
-        if (!file.title) errors.push(`${label}/${section.title}: file missing title.`);
-        if (!file.path) errors.push(`${label}/${section.title}/${file.title || "file"}: file missing path.`);
-      }
-    }
-  }
-  return errors;
 }
 
 function normalizeKey(value) {
@@ -666,32 +669,24 @@ function courseSnapshot(course) {
   return JSON.stringify(copy);
 }
 
-function preserveUnchangedCourseDates(nextManifest) {
-  if (!fs.existsSync(manifestPath)) return;
-  let currentManifest;
-  try {
-    currentManifest = cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8")));
-  } catch {
-    return;
-  }
+function preserveUnchangedCourseDates(nextManifest, currentManifest) {
+  if (!currentManifest) return nextManifest;
+  const currentByUid = new Map((currentManifest.courses || []).filter((course) => course.uid).map((course) => [course.uid, course]));
   const currentById = new Map((currentManifest.courses || []).map((course) => [course.id, course]));
-  const currentByBasePath = new Map((currentManifest.courses || []).map((course) => [normalizeKey(course.basePath || ""), course]));
+  const currentByBasePath = new Map((currentManifest.courses || []).map((course) => [strictR2BasePath(course.basePath), course]));
   for (const course of nextManifest.courses || []) {
-    const previous = currentById.get(course.id) || currentByBasePath.get(normalizeKey(course.basePath || ""));
+    const previous = currentByUid.get(course.uid) || currentById.get(course.id) || currentByBasePath.get(strictR2BasePath(course.basePath));
     if (!previous) {
       course.updated = course.updated || today();
       continue;
     }
     course.updated = courseSnapshot(previous) === courseSnapshot(course) ? previous.updated : today();
   }
+  return nextManifest;
 }
 
-function readJsonFile(filePath, fallback) {
-  if (!fs.existsSync(filePath)) {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, `${JSON.stringify(fallback, null, 2)}\n`, "utf8");
-  }
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+function readJsonFile(filePath) {
+  return jsonStore.readSync(filePath);
 }
 
 function defaultVisitStats() {
@@ -705,26 +700,27 @@ function defaultVisitStats() {
   };
 }
 
-function readVisitStats() {
-  const stats = readJsonFile(visitStatsPath, defaultVisitStats());
+function normalizeVisitStats(stats) {
   stats.total = Number(stats.total || 0);
   stats.days = stats.days && typeof stats.days === "object" ? stats.days : {};
   stats.pages = stats.pages && typeof stats.pages === "object" ? stats.pages : {};
   stats.visitors = stats.visitors && typeof stats.visitors === "object" ? stats.visitors : {};
+  for (const visitor of Object.values(stats.visitors)) {
+    if (visitor?.ip && !visitor.actorHash) visitor.actorHash = ipHash(visitor.ip);
+    if (visitor && typeof visitor === "object") delete visitor.ip;
+  }
   return stats;
 }
 
-function writeVisitStats(stats) {
-  stats.updatedAt = nowIso();
-  fs.writeFileSync(visitStatsPath, `${JSON.stringify(stats, null, 2)}\n`, "utf8");
+function readVisitStats() {
+  return normalizeVisitStats(readJsonFile(visitStatsPath));
 }
 
-function publicVisitStats() {
-  const stats = readVisitStats();
-  const today = localDay();
+function publicVisitStats(stats = readVisitStats()) {
+  const day = localDay();
   return {
     total: stats.total,
-    today: Number(stats.days[today] || 0),
+    today: Number(stats.days[day] || 0),
     updatedAt: stats.updatedAt || "",
   };
 }
@@ -746,41 +742,57 @@ function cleanVisitPath(value) {
     pathname = "/";
   }
   if (pathname.startsWith("/admin") || pathname.startsWith("/admin-api") || pathname.startsWith("/visit-api")) return "";
-  return cleanText(pathname, 300) || "/";
+  pathname = pathname.replace(/\/+$/, "") || "/";
+  const fixed = new Set(["/", "/about", "/feedback", "/friends", "/participate", "/reviews", "/courses"]);
+  if (fixed.has(pathname)) return pathname;
+  if (/^\/courses\/[^/]+$/.test(pathname)) return "/courses/:id";
+  if (pathname === "/reviews/detail") return pathname;
+  return "/__unknown__";
 }
 
-function recordVisit(req, pagePath) {
+async function recordVisit(req, pagePath) {
   const pathname = cleanVisitPath(pagePath);
   const summary = publicVisitStats();
   if (!pathname) return { counted: false, ...summary };
-
-  const stats = readVisitStats();
   const key = visitKey(req);
-  const ip = clientIp(req);
   const now = Date.now();
-  const previous = stats.visitors[key]?.lastSeen || 0;
-  const cutoff = now - 24 * 60 * 60 * 1000;
-  for (const [visitorKey, visitor] of Object.entries(stats.visitors)) {
-    if (Number(visitor?.lastSeen || 0) < cutoff) delete stats.visitors[visitorKey];
-  }
-  stats.visitors[key] = { ip, userAgentHash: userAgentHash(req), lastSeen: now };
-  if (now - Number(previous || 0) < visitDedupMs) {
-    writeVisitStats(stats);
-    return { counted: false, ...publicVisitStats() };
-  }
-
-  const day = localDay();
-  stats.total += 1;
-  stats.days[day] = Number(stats.days[day] || 0) + 1;
-  stats.pages[pathname] ??= { total: 0, days: {} };
-  stats.pages[pathname].total = Number(stats.pages[pathname].total || 0) + 1;
-  stats.pages[pathname].days[day] = Number(stats.pages[pathname].days[day] || 0) + 1;
-  writeVisitStats(stats);
-  return { counted: true, ...publicVisitStats() };
+  let counted = false;
+  const stats = await jsonStore.update(visitStatsPath, (current) => {
+    normalizeVisitStats(current);
+    const previous = current.visitors[key]?.lastSeen || 0;
+    const cutoff = now - 24 * 60 * 60 * 1000;
+    for (const [visitorKey, visitor] of Object.entries(current.visitors)) {
+      if (Number(visitor?.lastSeen || 0) < cutoff) delete current.visitors[visitorKey];
+    }
+    current.visitors[key] = { actorHash: ipHash(clientIp(req)), userAgentHash: userAgentHash(req), lastSeen: now };
+    const visitorEntries = Object.entries(current.visitors);
+    if (visitorEntries.length > visitVisitorCap) {
+      visitorEntries.sort((a, b) => Number(a[1]?.lastSeen || 0) - Number(b[1]?.lastSeen || 0));
+      for (const [visitorKey] of visitorEntries.slice(0, visitorEntries.length - visitVisitorCap)) delete current.visitors[visitorKey];
+    }
+    if (now - Number(previous || 0) >= visitDedupMs) {
+      counted = true;
+      const day = localDay();
+      current.total += 1;
+      current.days[day] = Number(current.days[day] || 0) + 1;
+      current.pages[pathname] ??= { total: 0, days: {} };
+      current.pages[pathname].total = Number(current.pages[pathname].total || 0) + 1;
+      current.pages[pathname].days[day] = Number(current.pages[pathname].days[day] || 0) + 1;
+    }
+    const retainedDays = Object.keys(current.days).sort().slice(-visitHistoryDays);
+    current.days = Object.fromEntries(retainedDays.map((day) => [day, current.days[day]]));
+    for (const page of Object.values(current.pages)) {
+      const pageDays = Object.keys(page.days || {}).sort().slice(-visitHistoryDays);
+      page.days = Object.fromEntries(pageDays.map((day) => [day, page.days[day]]));
+    }
+    current.updatedAt = nowIso();
+    return current;
+  });
+  return { counted, ...publicVisitStats(stats) };
 }
 
-function readReviews() {
-  const defaults = {
+function defaultReviews() {
+  return {
     version: 1,
     updated: today(),
     rules: {
@@ -795,14 +807,22 @@ function readReviews() {
     },
     reviews: [],
   };
-  const data = readJsonFile(reviewsPath, defaults);
+}
+
+function normalizeReviewData(data) {
+  const defaults = defaultReviews();
+  data = structuredClone(data || {});
   data.rules = { ...defaults.rules, ...(data.rules || {}) };
   data.reviews = Array.isArray(data.reviews) ? data.reviews : [];
   return data;
 }
 
-function readFeedback() {
-  const defaults = {
+function readReviews() {
+  return normalizeReviewData(readJsonFile(reviewsPath));
+}
+
+function defaultFeedback() {
+  return {
     version: 1,
     updated: today(),
     title: "问题与建议",
@@ -816,7 +836,11 @@ function readFeedback() {
     },
     items: [],
   };
-  const data = readJsonFile(feedbackPath, defaults);
+}
+
+function readFeedback() {
+  const defaults = defaultFeedback();
+  const data = readJsonFile(feedbackPath);
   data.title = cleanText(data.title, 120) || defaults.title;
   data.announcement = cleanText(data.announcement, 4000);
   data.rules = { ...defaults.rules, ...(data.rules || {}) };
@@ -824,9 +848,8 @@ function readFeedback() {
   return data;
 }
 
-function writeFeedback(data) {
-  const defaults = readFeedback().rules;
-  const next = {
+function normalizeFeedbackData(data, defaults = defaultFeedback().rules) {
+  return {
     version: Number(data.version || 1),
     updated: today(),
     title: cleanText(data.title, 120) || "问题与建议",
@@ -840,7 +863,6 @@ function writeFeedback(data) {
     },
     items: Array.isArray(data.items) ? data.items : [],
   };
-  fs.writeFileSync(feedbackPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }
 
 function readAbout() {
@@ -848,35 +870,30 @@ function readAbout() {
     title: "NKUStudy",
     content: "NKUStudy 是一个面向课程资料整理、课程导航和老师评价的轻量站点。\n\n资源索引在构建时读取，下载由 R2 分发，OpenList 作为补充网盘入口。",
   };
-  const data = readJsonFile(aboutPath, defaults);
+  const data = readJsonFile(aboutPath);
   return {
     title: cleanText(data.title, 120) || defaults.title,
     content: cleanText(data.content, 6000) || defaults.content,
   };
 }
 
-function writeAbout(data) {
+function normalizeAbout(data) {
   const content = cleanText(data.content, 6000);
-  const next = {
+  return {
     title: cleanText(data.title, 120) || "NKUStudy",
     content,
   };
-  fs.writeFileSync(aboutPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }
 
 function readParticipate() {
-  return readJsonFile(participatePath, {
-    title: "参与贡献",
-    content: "## 如何参与\n\n如果你希望补充课程资料，可以通过反馈页说明课程、资料类型和联系方式。\n\n- 文件名尽量包含年份、用途或版本\n- 不上传含个人隐私、账号信息或明显侵权的内容\n- 管理员整理后会同步到课程资源树",
-  });
+  return readJsonFile(participatePath);
 }
 
-function writeParticipate(data) {
-  const next = {
+function normalizeParticipate(data) {
+  return {
     title: cleanText(data.title, 120) || "参与贡献",
     content: cleanText(data.content, 8000),
   };
-  fs.writeFileSync(participatePath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }
 
 function normalizeLinks(data) {
@@ -917,25 +934,17 @@ function normalizeLinks(data) {
 }
 
 function readLinks() {
-  return normalizeLinks(readJsonFile(linksPath, {}));
-}
-
-function writeLinks(data) {
-  const next = normalizeLinks(data || {});
-  fs.writeFileSync(linksPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  return normalizeLinks(readJsonFile(linksPath));
 }
 
 function readHome() {
-  return readJsonFile(homePath, {
-    announcement: "南开课程资料导航，整合课程信息、复习资料、往年试题与网盘入口。",
-  });
+  return readJsonFile(homePath);
 }
 
-function writeHome(data) {
-  const next = {
+function normalizeHome(data) {
+  return {
     announcement: cleanText(data.announcement, 2000) || "南开课程资料导航，整合课程信息、复习资料、往年试题与网盘入口。",
   };
-  fs.writeFileSync(homePath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }
 
 function defaultFooter() {
@@ -977,76 +986,42 @@ function normalizeFooter(data) {
 }
 
 function readFooter() {
-  return normalizeFooter(readJsonFile(footerPath, defaultFooter()));
-}
-
-function writeFooter(data) {
-  const next = normalizeFooter(data || {});
-  fs.writeFileSync(footerPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-}
-
-function writeReviews(data) {
-  data.updated = today();
-  fs.writeFileSync(reviewsPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-}
-
-function clientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded) return forwarded.split(",")[0].trim();
-  return req.socket.remoteAddress || "unknown";
+  return normalizeFooter(readJsonFile(footerPath));
 }
 
 function ipHash(ip) {
-  return createHmac("sha256", secret).update(ip).digest("hex").slice(0, 24);
+  return hashActor(ip, secret, 24);
 }
 
-function checkRate(rateStore, ip, rules, defaults) {
-  const now = Date.now();
+function checkRate(scope, ip, rules, defaults) {
   const hour = 60 * 60 * 1000;
   const day = 24 * hour;
-  const key = ipHash(ip);
-  const entries = (rateStore.get(key) || []).filter((time) => now - time < day);
-  const hourly = entries.filter((time) => now - time < hour).length;
-  if (hourly >= Number(rules.hourlyLimit || defaults.hourlyLimit)) return false;
-  if (entries.length >= Number(rules.dailyLimit || defaults.dailyLimit)) return false;
-  entries.push(now);
-  rateStore.set(key, entries);
-  return true;
+  return rateLimiter.consume({
+    scope,
+    actorHash: hashActor(ip, secret),
+    limits: [
+      { windowMs: hour, max: Number(rules.hourlyLimit || defaults.hourlyLimit) },
+      { windowMs: day, max: Number(rules.dailyLimit || defaults.dailyLimit) },
+    ],
+  }).allowed;
+}
+
+function consumeLayeredAttempt(scope, ip, { perIp, global, windowMs = 60_000 }) {
+  return rateLimiter.consumeLayered({
+    scope,
+    actorHash: hashActor(ip, secret),
+    globalActorHash: hashActor(`global:${scope}`, secret),
+    actorLimits: [{ windowMs, max: perIp }],
+    globalLimits: [{ windowMs, max: global }],
+  }).allowed;
 }
 
 function checkReviewRate(ip, rules) {
-  return checkRate(reviewRate, ip, rules, { hourlyLimit: 3, dailyLimit: 10 });
+  return checkRate("review-submit", ip, rules, { hourlyLimit: 3, dailyLimit: 10 });
 }
 
 function checkFeedbackRate(ip, rules) {
-  return checkRate(feedbackRate, ip, rules, { hourlyLimit: 3, dailyLimit: 15 });
-}
-
-function loginLockedMs(ip) {
-  const state = loginFailures.get(ipHash(ip));
-  if (!state?.lockedUntil) return 0;
-  const remaining = state.lockedUntil - Date.now();
-  if (remaining <= 0) {
-    loginFailures.delete(ipHash(ip));
-    return 0;
-  }
-  return remaining;
-}
-
-function recordLoginFailure(ip) {
-  const key = ipHash(ip);
-  const state = loginFailures.get(key) || { count: 0, lockedUntil: 0 };
-  state.count += 1;
-  if (state.count >= loginLockThreshold) {
-    state.count = 0;
-    state.lockedUntil = Date.now() + loginLockMs;
-  }
-  loginFailures.set(key, state);
-  return loginLockedMs(ip);
-}
-
-function clearLoginFailures(ip) {
-  loginFailures.delete(ipHash(ip));
+  return checkRate("feedback-submit", ip, rules, { hourlyLimit: 3, dailyLimit: 15 });
 }
 
 function cleanText(value, max = 2000) {
@@ -1078,21 +1053,12 @@ function visibleFeedback() {
   };
 }
 
-function updateFeedbackStore(next) {
-  const data = readFeedback();
-  if ("title" in next) data.title = next.title;
-  if ("announcement" in next) data.announcement = next.announcement;
-  if (Array.isArray(next.items)) data.items = next.items;
-  if (next.rules) data.rules = next.rules;
-  writeFeedback(data);
-  return data;
-}
-
 function isOpenListPlaceholder(filePath) {
   return path.posix.basename(normalizeKey(filePath)).toLowerCase() === ".openlist";
 }
 
 function cleanManifestResources(manifest) {
+  if (!manifest || typeof manifest !== "object") return manifest;
   for (const course of manifest.courses || []) {
     for (const section of course.sections || []) {
       section.files = (section.files || []).filter((file) => !isOpenListPlaceholder(file.path || file.title || ""));
@@ -1110,6 +1076,12 @@ function approvedReviews() {
 }
 
 async function handleFeedbackSubmit(req, res) {
+  const ip = clientIp(req);
+  if (!consumeLayeredAttempt("feedback-attempt", ip, { perIp: 30, global: 1_000 })) {
+    json(res, 429, { ok: false, error: "请求太频繁，请稍后再试。" });
+    req.resume();
+    return;
+  }
   const data = readFeedback();
   const rules = data.rules || {};
   if (!rules.submissionOpen) {
@@ -1132,93 +1104,77 @@ async function handleFeedbackSubmit(req, res) {
     return;
   }
 
-  const ip = clientIp(req);
   if (!checkFeedbackRate(ip, rules)) {
     json(res, 429, { ok: false, error: "提交太频繁，请稍后再试。" });
     return;
   }
 
-  data.items.unshift({
-    id: `feedback-${Date.now()}-${randomBytes(4).toString("hex")}`,
-    title,
-    content,
-    type,
-    contact,
-    status: "open",
-    hidden: false,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-    ipHash: ipHash(ip),
-    userAgent: cleanText(req.headers["user-agent"], 240),
+  await jsonStore.update(feedbackPath, (current) => {
+    current.items = Array.isArray(current.items) ? current.items : [];
+    current.items.unshift({
+      id: `feedback-${Date.now()}-${randomBytes(4).toString("hex")}`,
+      title,
+      content,
+      type,
+      contact,
+      status: "open",
+      hidden: false,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      ipHash: ipHash(ip),
+      userAgent: cleanText(req.headers["user-agent"], 240),
+    });
+    current.updated = today();
+    return current;
   });
-  writeFeedback(data);
   json(res, 200, { ok: true });
 }
 
 async function handleReviewSubmit(req, res) {
-  const data = readReviews();
-  const rules = data.rules || {};
-  if (!rules.submissionOpen) {
-    json(res, 403, { ok: false, error: "评价提交暂未开放。" });
-    return;
-  }
-
-  const body = await readBody(req);
-  if (body.website) {
-    json(res, 200, { ok: true, pending: true });
-    return;
-  }
-
-  const courseTitle = cleanText(body.courseTitle, 120);
-  const teacher = cleanText(body.teacher, 80);
-  const content = cleanText(body.content, 2000);
-  const rating = Math.max(1, Math.min(5, Number(body.rating || 0)));
-
-  if (!courseTitle || !teacher || !rating || content.length < Number(rules.minLength || 12)) {
-    json(res, 400, { ok: false, error: "请填写课程、老师、评分，并补充更完整的评价内容。" });
-    return;
-  }
-
   const ip = clientIp(req);
-  if (!checkReviewRate(ip, rules)) {
-    json(res, 429, { ok: false, error: "提交太频繁，请稍后再试。" });
-    return;
-  }
-
-  const review = {
-    id: `review-${Date.now()}-${randomBytes(4).toString("hex")}`,
-    courseTitle,
-    teacher,
-    rating,
-    content,
-    status: rules.moderationRequired ? "pending" : "approved",
-    hidden: false,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-    ipHash: ipHash(ip),
-    userAgent: cleanText(req.headers["user-agent"], 240),
-  };
-  data.reviews.unshift(review);
-  writeReviews(data);
-  json(res, 200, { ok: true, pending: review.status === "pending" });
+  reviewSubmissionService.assertAttempt(ip);
+  const result = await reviewSubmissionService.submit(await readBody(req), { clientIp: ip, userAgent: req.headers["user-agent"] });
+  json(res, 200, { ok: true, pending: result.pending });
 }
 
-function updateReviewStore(next) {
+async function readReviewStore() {
   const data = readReviews();
-  if (next.rules) data.rules = { ...(data.rules || {}), ...next.rules };
-  if (Array.isArray(next.reviews)) data.reviews = next.reviews;
-  writeReviews(data);
-  return data;
+  return { data, revision: manifestRevision(data) };
 }
 
-function uploadFileToR2({ course, section, filename, stream, mimeType }) {
+async function updateReviewStore(next, expectedRevision) {
+  let revision;
+  const data = await jsonStore.update(reviewsPath, (persisted) => {
+    const current = normalizeReviewData(persisted);
+    const currentRevision = manifestRevision(current);
+    if (!expectedRevision) {
+      const error = new Error("expectedRevision is required; reload reviews before saving.");
+      error.statusCode = 400;
+      throw error;
+    }
+    if (expectedRevision !== currentRevision) {
+      throw new ManifestConflictError("Reviews changed after they were loaded; no changes were written. Refresh and retry.", currentRevision);
+    }
+    if (next.rules) current.rules = { ...(current.rules || {}), ...next.rules };
+    if (Array.isArray(next.reviews)) current.reviews = next.reviews;
+    current.updated = today();
+    revision = manifestRevision(current);
+    return current;
+  }, { mode: 0o600 });
+  return { data, revision };
+}
+
+async function uploadFileToR2({ course, section, filename, stream, mimeType, abortSignal }) {
   if (!r2Client || !r2Bucket) {
     return Promise.reject(new Error("R2 upload is not configured on the server."));
   }
 
-  const relativeName = normalizeKey(filename);
-  const manifestPath = section.title === "其他" ? relativeName : normalizeKey(`${section.title}/${relativeName}`);
-  const key = objectKey(r2Prefix, course.basePath, manifestPath);
+  const relativeName = strictR2Path(filename, "Upload filename");
+  const basePath = strictR2BasePath(course.basePath, `Course ${course.uid || course.id} basePath`);
+  const manifestPath = section.title === "其他"
+    ? relativeName
+    : strictR2Path(`${strictR2Path(section.title, "Upload section")}/${relativeName}`, "Uploaded manifest path");
+  const key = `${r2Prefix}/${basePath}${manifestPath}`;
   const counter = new PassThrough();
   let size = 0;
 
@@ -1227,20 +1183,20 @@ function uploadFileToR2({ course, section, filename, stream, mimeType }) {
   });
   stream.pipe(counter);
 
-  const upload = r2Client.send(new PutObjectCommand({
+  await r2Client.send(new PutObjectCommand({
     Bucket: r2Bucket,
     Key: key,
     Body: counter,
     ContentType: mimeType || "application/octet-stream",
     ContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(path.posix.basename(relativeName))}`,
-  }));
+  }), { abortSignal });
 
-  return upload.then(() => ({
+  return {
     title: path.posix.basename(relativeName),
     path: manifestPath,
     size,
     description: "",
-  }));
+  };
 }
 
 async function listR2Objects(prefix) {
@@ -1258,22 +1214,34 @@ async function listR2Objects(prefix) {
   return objects;
 }
 
-async function syncCourseFromR2(courseId) {
+async function syncCourseFromR2(courseId, expectedRevision) {
+  if (!expectedRevision) {
+    const error = new Error("expectedRevision is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const { manifest: snapshot, revision } = await manifestService.readWithRevision();
+  if (revision !== expectedRevision) {
+    const error = new Error("Manifest changed before R2 sync began; no changes were written.");
+    error.statusCode = 409;
+    error.currentRevision = revision;
+    throw error;
+  }
   if (!r2Client || !r2Bucket) {
     throw new Error("R2 upload is not configured on the server.");
   }
-
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  const course = manifest.courses.find((item) => item.id === courseId);
+  const course = snapshot.courses.find((item) => item.id === courseId);
   if (!course) throw new Error("Course was not found.");
+  const courseUid = course.uid;
+  const expectedBasePath = strictR2BasePath(course.basePath, `Course ${courseUid} basePath`);
 
-  const basePrefix = objectKey(r2Prefix, course.basePath);
+  const basePrefix = `${r2Prefix}/${expectedBasePath.slice(0, -1)}`;
   const objects = await listR2Objects(`${basePrefix}/`);
   const existingSections = new Map((course.sections ?? []).map((section) => [section.title, section]));
   const sections = new Map();
 
   for (const object of objects) {
-    const relativePath = normalizeKey(object.Key.slice(basePrefix.length + 1));
+    const relativePath = strictR2Path(object.Key.slice(basePrefix.length + 1), `R2 object under ${basePrefix}`);
     if (!relativePath) continue;
     if (isOpenListPlaceholder(relativePath)) continue;
     const parts = relativePath.split("/");
@@ -1302,18 +1270,27 @@ async function syncCourseFromR2(courseId) {
     return 3;
   };
 
-  course.sections = Array.from(sections.values()).sort((a, b) => {
+  const nextSections = Array.from(sections.values()).sort((a, b) => {
     const rank = orderRank(a.title) - orderRank(b.title);
     return rank || a.title.localeCompare(b.title, "zh-CN");
   });
-  course.updated = today();
-
-  const result = await publish(manifest);
-  if (!result.ok) {
-    throw new Error(result.errors?.join("\n") || "Publish failed.");
-  }
-
-  return { manifest, course };
+  let syncReport;
+  const result = await manifestService.mutate((latest) => {
+    const latestCourse = latest.courses.find((item) => item.uid === courseUid) || latest.courses.find((item) => item.id === courseId);
+    if (!latestCourse) throw new Error("Course was deleted while R2 was being listed.");
+    if (strictR2BasePath(latestCourse.basePath, `Course ${courseUid} basePath`) !== expectedBasePath) {
+      const error = new Error("Course path changed while R2 was being listed; retry the sync.");
+      error.statusCode = 409;
+      throw error;
+    }
+    const merged = mergeCourseR2Discovery(latestCourse, { sections: nextSections });
+    latestCourse.sections = merged.course.sections;
+    latestCourse.updated = today();
+    syncReport = merged.report;
+    return latest;
+  }, { expectedRevision });
+  const persistedCourse = result.manifest.courses.find((item) => item.uid === courseUid);
+  return { manifest: result.manifest, revision: result.revision, course: persistedCourse, report: syncReport };
 }
 
 function sectionOrderRank(title = "") {
@@ -1354,7 +1331,7 @@ function coursePartsFromR2Path(parts) {
       group: parts[1],
       title: parts[2],
       rest: parts.slice(3),
-      basePath: normalizeKey(`${parts[0]}/${parts[1]}/${parts[2]}/`),
+      basePath: strictR2Path(`${parts[0]}/${parts[1]}/${parts[2]}`, "Discovered course basePath"),
     };
   }
   if (parts.length >= 3 && noFixedTermGroups.has(parts[0])) {
@@ -1363,7 +1340,7 @@ function coursePartsFromR2Path(parts) {
       group: parts[0],
       title: parts[1],
       rest: parts.slice(2),
-      basePath: normalizeKey(`${parts[0]}/${parts[1]}/`),
+      basePath: strictR2Path(`${parts[0]}/${parts[1]}`, "Discovered course basePath"),
     };
   }
   if (parts.length >= 4) {
@@ -1372,190 +1349,198 @@ function coursePartsFromR2Path(parts) {
       group: parts[1],
       title: parts[2],
       rest: parts.slice(3),
-      basePath: normalizeKey(`${parts[0]}/${parts[1]}/${parts[2]}/`),
+      basePath: strictR2Path(`${parts[0]}/${parts[1]}/${parts[2]}`, "Discovered course basePath"),
     };
   }
   return null;
 }
 
-async function syncAllCoursesFromR2() {
+async function syncAllCoursesFromR2(expectedRevision) {
+  if (!expectedRevision) {
+    const error = new Error("expectedRevision is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const { manifest: snapshot, revision } = await manifestService.readWithRevision();
+  if (revision !== expectedRevision) {
+    const error = new Error("Manifest changed before R2 sync began; no changes were written.");
+    error.statusCode = 409;
+    error.currentRevision = revision;
+    throw error;
+  }
   if (!r2Client || !r2Bucket) {
     throw new Error("R2 upload is not configured on the server.");
   }
-
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   const objects = await listR2Objects(`${r2Prefix}/`);
-  const courseMap = new Map();
-  const existingByBasePath = new Map(manifest.courses.map((course) => [normalizeKey(course.basePath), course]));
-  const usedIds = new Set();
-
+  const discovered = new Map();
+  const unmatched = [];
+  const conflicts = [];
+  const usedIds = new Set(snapshot.courses.map((course) => course.id));
   for (const object of objects) {
     if (!object.Key || object.Key.endsWith("/")) continue;
-    const relative = normalizeKey(object.Key.slice(r2Prefix.length + 1));
-    const parts = relative.split("/");
-    const parsed = coursePartsFromR2Path(parts);
-    if (!parsed) continue;
-    const { term, group, title, rest } = parsed;
-    const basePath = parsed.basePath;
-    const isPlaceholder = isOpenListPlaceholder(relative);
-    const key = basePath;
-    if (!courseMap.has(key)) {
-      const existing = existingByBasePath.get(basePath);
-      let course = existing ? structuredClone(existing) : null;
-      if (course?.id) {
-        if (usedIds.has(course.id)) {
-          course.id = uniqueCourseId(title, term, group, basePath, usedIds);
-        } else {
-          usedIds.add(course.id);
-        }
-      }
-      courseMap.set(key, {
-        course: course || {
-          id: uniqueCourseId(title, term, group, basePath, usedIds),
-          term,
-          group,
-          title,
-          summary: "待补充课程简介。",
-          contributors: [],
-          assessment: "绩点制",
-          updated: today(),
-          grades: [],
-          tags: group === "通识选修课" ? ["通识选修课"] : [],
-          basePath: `${basePath}/`,
-          sections: [],
-        },
-        sections: new Map(),
-      });
+    let relative;
+    try {
+      relative = strictR2Path(object.Key.slice(r2Prefix.length + 1), "R2 discovery key");
+    } catch {
+      unmatched.push(object.Key);
+      continue;
     }
-    const entry = courseMap.get(key);
-    entry.course.term = term;
-    entry.course.group = group;
-    entry.course.title = title;
-    entry.course.assessment ||= "绩点制";
-    entry.course.tags = (entry.course.tags || []).filter((tag) => tag !== "无固定年级");
-    if (isPlaceholder) continue;
+    const parsed = coursePartsFromR2Path(relative.split("/"));
+    if (!parsed) {
+      unmatched.push(relative);
+      continue;
+    }
+    const { term, group, title, rest, basePath } = parsed;
+    const entry = discovered.get(basePath) || { term, group, title, basePath, sections: new Map() };
+    if (entry.term !== term || entry.group !== group || entry.title !== title) {
+      conflicts.push({ basePath, key: relative, reason: "inconsistent course metadata" });
+      continue;
+    }
+    discovered.set(basePath, entry);
+    if (isOpenListPlaceholder(relative)) continue;
     const sectionTitle = rest.length > 1 ? rest[0] : "其他";
     const filePath = rest.join("/");
     if (!filePath) continue;
-    const section = entry.sections.get(sectionTitle) || {
-      title: sectionTitle,
-      note: entry.course.sections?.find((item) => item.title === sectionTitle)?.note || "",
-      files: [],
-    };
-    section.files.push({
-      title: path.posix.basename(filePath),
-      path: filePath,
-      size: object.Size ?? 0,
-      description: "",
-    });
+    const section = entry.sections.get(sectionTitle) || { title: sectionTitle, note: "", files: [] };
+    section.files.push({ title: path.posix.basename(filePath), path: filePath, size: object.Size ?? 0, description: "" });
     entry.sections.set(sectionTitle, section);
   }
 
-  const rebuiltCourses = [];
-  for (const [basePath, entry] of courseMap) {
-    entry.course.sections = Array.from(entry.sections.values()).sort((a, b) => {
+  const existingByBasePath = new Map(snapshot.courses.map((course) => [strictR2BasePath(course.basePath).slice(0, -1), course]));
+  const discoveries = Array.from(discovered, ([basePath, entry]) => {
+    const existing = existingByBasePath.get(basePath);
+    const sections = Array.from(entry.sections.values()).sort((a, b) => {
       const rank = sectionOrderRank(a.title) - sectionOrderRank(b.title);
       return rank || a.title.localeCompare(b.title, "zh-CN");
-    });
-    entry.course.updated = today();
-    entry.course.basePath = `${basePath}/`;
-    rebuiltCourses.push(entry.course);
+    }).map((section) => ({
+      ...section,
+      note: existing?.sections?.find((item) => item.title === section.title)?.note || section.note,
+    }));
+    return { ...entry, basePath, sections };
+  });
+  const merged = mergeR2Discoveries(snapshot, discoveries, {
+    conflicts,
+    createId: (entry) => uniqueCourseId(entry.title, entry.term, entry.group, entry.basePath, usedIds),
+    date: today(),
+  });
+  const result = await manifestService.publish(merged.manifest, { expectedRevision, deletedCourseUids: [] });
+  return {
+    manifest: result.manifest,
+    revision: result.revision,
+    report: { ...merged.report, unmatched: [...unmatched, ...merged.report.unmatched], conflicts },
+  };
+}
+
+async function saveManifestDraft(manifest, options) {
+  try {
+    return await manifestService.draft(manifest, options);
+  } catch (error) {
+    return { ok: false, statusCode: Number(error.statusCode) || 400, errors: error.validationErrors || [error.message], currentRevision: error.currentRevision };
   }
-  manifest.courses = rebuiltCourses;
-
-  const result = await publish(manifest);
-  if (!result.ok) throw new Error(result.errors?.join("\n") || "Publish failed.");
-  return manifest;
 }
 
-function saveManifestDraft(manifest) {
-  cleanManifestResources(manifest);
-  const errors = validateManifest(manifest);
-  if (errors.length) return { ok: false, errors };
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  return { ok: true };
-}
-
-async function deleteR2Files(courseId, paths) {
+async function deleteExactR2Keys(keys) {
   if (!r2Client || !r2Bucket) {
     throw new Error("R2 upload is not configured on the server.");
   }
-
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  const course = manifest.courses.find((item) => item.id === courseId);
-  if (!course) throw new Error("Course was not found.");
-
-  const objects = paths
-    .map((filePath) => objectKey(r2Prefix, course.basePath, filePath))
-    .filter(Boolean)
-    .map((Key) => ({ Key }));
-
+  const objects = [...new Set((keys || []).filter((key) => typeof key === "string" && key.length > 0))].map((Key) => ({ Key }));
   if (!objects.length) return;
-
   for (let index = 0; index < objects.length; index += 1000) {
-    await r2Client.send(new DeleteObjectsCommand({
+    const result = await r2Client.send(new DeleteObjectsCommand({
       Bucket: r2Bucket,
       Delete: {
         Objects: objects.slice(index, index + 1000),
         Quiet: true,
       },
     }));
+    if (result.Errors?.length) throw new Error(`R2 cleanup failed for ${result.Errors.length} object(s).`);
   }
 }
 
-async function deleteR2Prefix(prefix) {
+async function safeR2ManifestPublish({ manifest, expectedRevision, deletedCourseUids, moves = [], fileDeletes = [] } = {}) {
   if (!r2Client || !r2Bucket) {
     throw new Error("R2 upload is not configured on the server.");
   }
-
-  const normalized = `${normalizeKey(prefix)}/`;
-  const objects = (await listR2Objects(normalized)).map((object) => ({ Key: object.Key }));
-  if (!objects.length) return 0;
-
-  for (let index = 0; index < objects.length; index += 1000) {
-    await r2Client.send(new DeleteObjectsCommand({
-      Bucket: r2Bucket,
-      Delete: {
-        Objects: objects.slice(index, index + 1000),
-        Quiet: true,
-      },
-    }));
+  if (!expectedRevision) {
+    const error = new Error("expectedRevision is required.");
+    error.statusCode = 400;
+    throw error;
   }
+  return runSerializedR2Mutation({
+    queue: r2MutationQueue,
+    expectedRevision,
+    readCurrent: () => manifestService.readWithRevision(),
+    mutate: async (current) => {
+      const plan = planR2ManifestMutation(current.manifest, manifest, { moves, fileDeletes, deletedCourseUids, r2Prefix });
+      const cleanupKeys = new Set();
+      const plannedTargets = new Set();
+      const preparedMoves = [];
+      let copied = 0;
+      let extraSourceObjects = 0;
+      const unmovedSourceKeys = [];
 
-  return objects.length;
+      for (const move of plan.moves) {
+        const oldPrefix = `${move.sourcePrefix}/`;
+        const newPrefix = `${move.targetPrefix}/`;
+        const [sourceObjects, targetObjects] = await Promise.all([listR2Objects(oldPrefix), listR2Objects(newPrefix)]);
+        const planned = planR2ObjectCopies(move, sourceObjects, targetObjects, { reservedTargets: plannedTargets });
+        for (const key of planned.cleanupKeys) cleanupKeys.add(key);
+        extraSourceObjects += planned.extraSourceKeys.length;
+        unmovedSourceKeys.push(...planned.unmovedSourceKeys);
+        preparedMoves.push({ oldPrefix, newPrefix, copies: planned.copies, requiredObjects: move.requiredObjects });
+      }
+      for (const key of plan.fileDeleteKeys) cleanupKeys.add(key);
+      for (const prefix of plan.deletedCoursePrefixes) {
+        for (const object of await listR2Objects(`${prefix}/`)) cleanupKeys.add(object.Key);
+      }
+      const exactCleanupKeys = assertR2CleanupSafety(
+        [...cleanupKeys],
+        [...plannedTargets],
+        plan.moves.map((move) => move.targetPrefix),
+      );
+
+      for (const prepared of preparedMoves) {
+        for (const { source, targetKey } of prepared.copies) {
+          await r2Client.send(new CopyObjectCommand({
+            Bucket: r2Bucket,
+            CopySource: `${r2Bucket}/${encodeURIComponent(source.Key).replaceAll("%2F", "/")}`,
+            Key: targetKey,
+          }));
+          copied += 1;
+        }
+        const copiedByKey = new Map((await listR2Objects(prepared.newPrefix)).map((object) => [object.Key, Number(object.Size || 0)]));
+        for (const { source, targetKey } of prepared.copies) {
+          if (!copiedByKey.has(targetKey) || copiedByKey.get(targetKey) !== Number(source.Size || 0)) {
+            throw new Error(`R2 copy verification failed for ${targetKey}; the manifest was not changed.`);
+          }
+        }
+        const sourceByKey = new Map(prepared.copies.map(({ source }) => [source.Key, Number(source.Size || 0)]));
+        for (const required of prepared.requiredObjects || []) {
+          if (!sourceByKey.has(required.sourceKey)
+            || !copiedByKey.has(required.targetKey)
+            || copiedByKey.get(required.targetKey) !== sourceByKey.get(required.sourceKey)) {
+            throw new Error(`R2 declared-resource verification failed for ${required.targetKey}; the manifest was not changed.`);
+          }
+        }
+      }
+
+      const transaction = await publishAfterR2Prepare({
+        prepare: async () => ({ cleanupKeys: exactCleanupKeys, copied }),
+        publish: async () => manifestService.publish(manifest, { expectedRevision, deletedCourseUids, allowBasePathChanges: true }),
+        cleanup: async (prepared) => deleteExactR2Keys(prepared.cleanupKeys),
+      });
+      return {
+        ...transaction,
+        copied,
+        extraSourceObjects,
+        unmovedSourceKeys,
+        deleted: transaction.cleanupWarnings.length ? 0 : exactCleanupKeys.length,
+      };
+    },
+  });
 }
 
-async function deleteR2Course(courseId) {
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  const course = manifest.courses.find((item) => item.id === courseId);
-  if (!course) throw new Error("Course was not found.");
-  return deleteR2Prefix(objectKey(r2Prefix, course.basePath));
-}
-
-async function moveR2Prefix(oldBasePath, newBasePath) {
-  if (!r2Client || !r2Bucket) {
-    throw new Error("R2 upload is not configured on the server.");
-  }
-
-  const oldPrefix = `${objectKey(r2Prefix, oldBasePath)}/`;
-  const newPrefix = `${objectKey(r2Prefix, newBasePath)}/`;
-  if (oldPrefix === newPrefix) return { copied: 0, deleted: 0 };
-
-  const objects = await listR2Objects(oldPrefix);
-  for (const object of objects) {
-    const targetKey = `${newPrefix}${object.Key.slice(oldPrefix.length)}`;
-    await r2Client.send(new CopyObjectCommand({
-      Bucket: r2Bucket,
-      CopySource: `${r2Bucket}/${encodeURIComponent(object.Key).replaceAll("%2F", "/")}`,
-      Key: targetKey,
-    }));
-  }
-
-  const deleted = objects.length ? await deleteR2Prefix(oldBasePath) : 0;
-  return { copied: objects.length, deleted };
-}
-
-function handleUpload(req, res, url) {
+async function handleUpload(req, res, url) {
   if (!r2Client || !r2Bucket) {
     json(res, 400, { ok: false, error: "R2 upload is not configured on the server." });
     req.resume();
@@ -1564,7 +1549,7 @@ function handleUpload(req, res, url) {
 
   const courseId = url.searchParams.get("courseId");
   const sectionIndex = Number(url.searchParams.get("sectionIndex"));
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const manifest = await manifestService.read();
   const course = manifest.courses.find((item) => item.id === courseId);
   const section = course?.sections?.[sectionIndex];
 
@@ -1574,79 +1559,221 @@ function handleUpload(req, res, url) {
     return;
   }
 
-  const busboy = Busboy({ headers: req.headers });
-  const uploads = [];
+  return new Promise((resolve) => {
+    const abortController = new AbortController();
+    const busboy = Busboy({
+      headers: req.headers,
+      limits: { files: 20, parts: 20, fileSize: 100 * 1024 * 1024 },
+    });
+    const uploads = [];
+    let responded = false;
+    let limitError = "";
+    const respond = (status, body) => {
+      if (responded) return;
+      responded = true;
+      if (status >= 400) abortController.abort();
+      json(res, status, body);
+      resolve();
+    };
 
-  busboy.on("file", (_name, file, info) => {
-    const filename = info.filename || "unnamed-file";
-    uploads.push(uploadFileToR2({
-      course,
-      section,
-      filename,
-      stream: file,
-      mimeType: info.mimeType,
-    }));
+    busboy.on("file", (_name, file, info) => {
+      const filename = info.filename || "unnamed-file";
+      file.once("limit", () => {
+        limitError = `File ${filename} exceeds the 100 MiB upload limit.`;
+        file.resume();
+        abortController.abort();
+      });
+      uploads.push(uploadFileToR2({
+        course,
+        section,
+        filename,
+        stream: file,
+        mimeType: info.mimeType,
+        abortSignal: abortController.signal,
+      }));
+    });
+
+    busboy.once("filesLimit", () => { limitError = "At most 20 files may be uploaded per request."; abortController.abort(); });
+    busboy.once("partsLimit", () => { limitError = "Multipart request has too many parts."; abortController.abort(); });
+    busboy.on("error", (error) => respond(500, { ok: false, error: error.message }));
+    busboy.on("finish", async () => {
+      try {
+        const files = await Promise.allSettled(uploads);
+        if (limitError) throw Object.assign(new Error(limitError), { statusCode: 413 });
+        const failed = files.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
+        respond(200, { ok: true, files: files.map((result) => result.value) });
+      } catch (error) {
+        respond(Number(error.statusCode) || 500, { ok: false, error: error.message });
+      }
+    });
+
+    req.once("aborted", () => {
+      abortController.abort();
+      if (!responded) {
+        responded = true;
+        resolve();
+      }
+    });
+    req.pipe(busboy);
   });
-
-  busboy.on("error", (error) => {
-    json(res, 500, { ok: false, error: error.message });
-  });
-
-  busboy.on("finish", async () => {
-    try {
-      const files = await Promise.all(uploads);
-      json(res, 200, { ok: true, files });
-    } catch (error) {
-      json(res, 500, { ok: false, error: error.message });
-    }
-  });
-
-  req.pipe(busboy);
 }
 
-function run(command, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: root,
-      shell: process.platform === "win32",
-      env: { ...process.env, CI: "true" },
-    });
-    let output = "";
-    child.stdout.on("data", (data) => { output += data.toString(); });
-    child.stderr.on("data", (data) => { output += data.toString(); });
-    child.on("close", (code) => {
-      if (code === 0) resolve(output);
-      else reject(new Error(output || `${command} exited with code ${code}`));
-    });
-  });
-}
-
-async function publish(manifest) {
-  cleanManifestResources(manifest);
-  preserveUnchangedCourseDates(manifest);
-  const errors = validateManifest(manifest);
-  if (errors.length) return { ok: false, errors };
-
-  const backup = `${manifestPath}.bak.${Date.now()}`;
-  fs.copyFileSync(manifestPath, backup);
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-
+function terminateChildTree(child, signal = "SIGTERM") {
+  if (!child || child.exitCode !== null) return;
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+    return;
+  }
   try {
-    await run("npm", ["run", "check:content"]);
-    await run("npm", ["run", "build"]);
-    fs.rmSync(publicDir, { recursive: true, force: true });
-    fs.mkdirSync(publicDir, { recursive: true });
-    fs.cpSync(distDir, publicDir, { recursive: true });
-    return { ok: true };
-  } catch (error) {
-    fs.copyFileSync(backup, manifestPath);
-    return { ok: false, errors: [error.message] };
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
   }
 }
+
+function run(command, args, { timeoutMs = 180_000, maxOutputBytes = 256 * 1024 } = {}) {
+  return new Promise((resolve, reject) => {
+    const executable = process.platform === "win32" && command === "npm" ? "npm.cmd" : command;
+    const child = spawn(executable, args, {
+      cwd: root,
+      shell: false,
+      detached: process.platform !== "win32",
+      windowsHide: true,
+      env: { ...process.env, CI: "true" },
+    });
+    activeChildren.add(child);
+    let output = "";
+    let truncated = false;
+    const append = (data) => {
+      if (output.length >= maxOutputBytes) {
+        truncated = true;
+        return;
+      }
+      output += data.toString().slice(0, maxOutputBytes - output.length);
+    };
+    child.stdout.on("data", append);
+    child.stderr.on("data", append);
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      terminateChildTree(child);
+      setTimeout(() => terminateChildTree(child, "SIGKILL"), 2_000).unref();
+      reject(new Error(`${command} timed out after ${timeoutMs}ms${output ? `:\n${output}` : "."}`));
+    }, timeoutMs);
+    timeout.unref();
+    child.on("error", (error) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        activeChildren.delete(child);
+        reject(error);
+      }
+    });
+    child.on("close", (code) => {
+      activeChildren.delete(child);
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      const suffix = truncated ? "\n[output truncated]" : "";
+      if (code === 0) resolve(`${output}${suffix}`);
+      else reject(new Error(`${output}${suffix}` || `${command} exited with code ${code}`));
+    });
+  });
+}
+
+async function buildAndDeploy() {
+  await run("npm", ["run", "check:content"]);
+  await run("npm", ["run", "build"]);
+  const releaseRoot = path.resolve(process.env.PUBLIC_RELEASES_DIR || path.join(path.dirname(publicDir), ".nkustudy-releases"));
+  fs.mkdirSync(releaseRoot, { recursive: true, mode: 0o700 });
+  const releaseDir = path.join(releaseRoot, `release-${Date.now()}-${randomBytes(4).toString("hex")}`);
+  fs.cpSync(distDir, releaseDir, { recursive: true, errorOnExist: true });
+  const tempLink = path.join(path.dirname(publicDir), `.${path.basename(publicDir)}.next-${process.pid}-${Date.now()}`);
+  try {
+    if (process.env.NODE_ENV === "production" && fs.existsSync(publicDir) && !fs.lstatSync(publicDir).isSymbolicLink()) {
+      throw new Error(`PUBLIC_DIR must be a symlink before atomic production publishing: ${publicDir}`);
+    }
+    fs.symlinkSync(releaseDir, tempLink, process.platform === "win32" ? "junction" : "dir");
+    fs.renameSync(tempLink, publicDir);
+    return { activeTarget: path.resolve(fs.realpathSync(publicDir)) };
+  } catch (error) {
+    fs.rmSync(tempLink, { force: true });
+    fs.rmSync(releaseDir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function readDeploymentProof() {
+  if (!fs.existsSync(publicDir)) return null;
+  return { activeTarget: path.resolve(fs.realpathSync(publicDir)) };
+}
+
+async function publish(manifest, options) {
+  try {
+    return await manifestService.publish(manifest, options);
+  } catch (error) {
+    return { ok: false, statusCode: Number(error.statusCode) || 400, errors: error.validationErrors || [error.message], rolledBack: Boolean(error.publishRolledBack), currentRevision: error.currentRevision };
+  }
+}
+
+const publishJournal = new ContentPublishJournal({ store: jsonStore, dataDir, readDeploymentProof });
+manifestService = new ManifestService({
+  store: jsonStore,
+  manifestPath,
+  sanitize: cleanManifestResources,
+  prepare: (next, current) => preserveUnchangedCourseDates(next, current),
+  buildAndDeploy,
+  journal: publishJournal,
+});
+contentPublishService = new ContentPublishService({ store: jsonStore, mutationQueue: manifestService, buildAndDeploy, dataDir, journal: publishJournal });
+
+async function readPublishedContent(filePath, normalize) {
+  return contentPublishService.read(filePath, normalize);
+}
+
+async function publishContent(filePath, data, expectedRevision, normalize) {
+  try {
+    return await contentPublishService.publish(filePath, data, { expectedRevision, normalize });
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: Number(error.statusCode) || 400,
+      errors: error.validationErrors || [error.message],
+      rolledBack: Boolean(error.publishRolledBack),
+      currentRevision: error.currentRevision,
+    };
+  }
+}
+
+async function initializeRuntimeData() {
+  const initializable = new Map([
+    [reviewsPath, defaultReviews],
+    [feedbackPath, defaultFeedback],
+    [visitStatsPath, defaultVisitStats],
+    [editorSettingsPath, defaultEditorSettings],
+    [backupSettingsPath, defaultBackupSettings],
+  ]);
+  for (const [filePath, factory] of initializable) {
+    await jsonStore.read(filePath, { initialize: factory });
+  }
+
+  for (const filePath of [manifestPath, aboutPath, homePath, participatePath, linksPath, footerPath]) {
+    await jsonStore.read(filePath);
+  }
+  const manifestErrors = validateManifest(jsonStore.readSync(manifestPath));
+  if (manifestErrors.length) throw new Error(`Runtime manifest validation failed:\n${manifestErrors.join("\n")}`);
+}
+
+await manifestService.recoverStartup();
+await contentPublishService.recoverStartup();
+await initializeRuntimeData();
 
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
+    if (await handlePublicApi(req, res, url)) return;
     if (url.pathname.startsWith("/review-api/")) {
       if (req.method === "GET" && url.pathname === "/review-api/reviews") {
         json(res, 200, { ok: true, reviews: approvedReviews(), rules: readReviews().rules });
@@ -1679,8 +1806,13 @@ const server = createServer(async (req, res) => {
         return;
       }
       if (req.method === "POST" && url.pathname === "/visit-api/hit") {
+        if (!consumeLayeredAttempt("visit-attempt", clientIp(req), { perIp: 120, global: 600 })) {
+          json(res, 429, { ok: false, error: "请求太频繁，请稍后再试。" });
+          req.resume();
+          return;
+        }
         const body = await readBody(req);
-        json(res, 200, { ok: true, stats: recordVisit(req, body.path || req.headers.referer || "/") });
+        json(res, 200, { ok: true, stats: await recordVisit(req, body.path || req.headers.referer || "/") });
         return;
       }
       json(res, 404, { ok: false, error: "Not found" });
@@ -1698,19 +1830,17 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/login") {
-      const body = await readBody(req);
       const ip = clientIp(req);
-      const remaining = loginLockedMs(ip);
-      if (remaining > 0) {
-        json(res, 429, { ok: false, error: `密码错误次数过多，请 ${Math.ceil(remaining / 1000)} 秒后再试。` });
+      if (!consumeLayeredAttempt("admin-login-attempt", ip, { perIp: 5, global: 60, windowMs: 5 * 60 * 1000 })) {
+        json(res, 429, { ok: false, error: "登录尝试过多，请 5 分钟后再试。" });
+        req.resume();
         return;
       }
+      const body = await readBody(req);
       if (body.password !== password) {
-        const locked = recordLoginFailure(ip);
-        json(res, locked > 0 ? 429 : 403, { ok: false, error: locked > 0 ? "密码错误次数过多，请 5 分钟后再试。" : "Password is incorrect." });
+        json(res, 403, { ok: false, error: "Password is incorrect." });
         return;
       }
-      clearLoginFailures(ip);
       const token = makeToken();
       res.setHeader("set-cookie", `nkustudy_admin=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800`);
       json(res, 200, { ok: true });
@@ -1726,47 +1856,34 @@ const server = createServer(async (req, res) => {
     if (!requireAuth(req, res)) return;
 
     if (req.method === "POST" && url.pathname === "/admin-api/upload") {
-      handleUpload(req, res, url);
+      await runExclusiveR2Mutation({ queue: r2MutationQueue, mutate: () => handleUpload(req, res, url) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/sync-r2") {
       const body = await readBody(req);
-      const result = await syncCourseFromR2(body.courseId);
-      json(res, 200, { ok: true, manifest: result.manifest, course: result.course });
+      const result = await syncCourseFromR2(body.courseId, body.expectedRevision);
+      json(res, 200, { ok: true, manifest: result.manifest, revision: result.revision, course: result.course });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/sync-r2-all") {
-      const manifest = await syncAllCoursesFromR2();
-      json(res, 200, { ok: true, manifest });
-      return;
-    }
-
-    if (req.method === "POST" && url.pathname === "/admin-api/delete-r2") {
       const body = await readBody(req);
-      await deleteR2Files(body.courseId, body.paths || []);
-      json(res, 200, { ok: true });
-      return;
-    }
-
-    if (req.method === "POST" && url.pathname === "/admin-api/delete-r2-course") {
-      const body = await readBody(req);
-      let deleted = 0;
-      const basePaths = Array.isArray(body.basePaths) ? body.basePaths.filter(Boolean) : [];
-      if (basePaths.length) {
-        for (const basePath of basePaths) deleted += await deleteR2Prefix(objectKey(r2Prefix, basePath));
-      } else {
-        deleted = await deleteR2Course(body.courseId);
-      }
-      json(res, 200, { ok: true, deleted });
-      return;
-    }
-
-    if (req.method === "POST" && url.pathname === "/admin-api/move-r2-prefix") {
-      const body = await readBody(req);
-      const result = await moveR2Prefix(body.oldBasePath, body.newBasePath);
+      const result = await syncAllCoursesFromR2(body.expectedRevision);
       json(res, 200, { ok: true, ...result });
+      return;
+    }
+
+    if (req.method === "POST" && ["/admin-api/delete-r2", "/admin-api/delete-r2-course", "/admin-api/move-r2-prefix"].includes(url.pathname)) {
+      json(res, 410, { ok: false, error: "Unsafe legacy R2 mutation route is disabled; use /admin-api/r2-publish with manifest CAS." });
+      req.resume();
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/r2-publish") {
+      const body = await readBody(req);
+      const result = await safeR2ManifestPublish(body);
+      json(res, 200, result);
       return;
     }
 
@@ -1788,7 +1905,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/admin-api/backup-settings") {
       const body = await readBody(req);
-      json(res, 200, { ok: true, data: writeBackupSettings(body.data || {}) });
+      json(res, 200, { ok: true, data: await writeBackupSettings(body.data || {}) });
       return;
     }
 
@@ -1799,7 +1916,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/admin-api/editor-settings") {
       const body = await readBody(req);
-      json(res, 200, { ok: true, data: writeEditorSettings(body.data || {}) });
+      json(res, 200, { ok: true, data: await writeEditorSettings(body.data || {}) });
       return;
     }
 
@@ -1822,97 +1939,85 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/home") {
-      json(res, 200, { ok: true, data: readHome() });
+      json(res, 200, { ok: true, ...await readPublishedContent(homePath, normalizeHome) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/home") {
       const body = await readBody(req);
-      writeHome(body.data || {});
-      const manifest = cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8")));
-      const result = await publish(manifest);
-      json(res, result.ok ? 200 : 400, result.ok ? { ok: true, data: readHome() } : result);
+      const result = await publishContent(homePath, body.data || {}, body.expectedRevision, normalizeHome);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/footer") {
-      json(res, 200, { ok: true, data: readFooter() });
+      json(res, 200, { ok: true, ...await readPublishedContent(footerPath, normalizeFooter) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/footer") {
       const body = await readBody(req);
-      writeFooter(body.data || {});
-      const manifest = cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8")));
-      const result = await publish(manifest);
-      json(res, result.ok ? 200 : 400, result.ok ? { ok: true, data: readFooter() } : result);
+      const result = await publishContent(footerPath, body.data || {}, body.expectedRevision, normalizeFooter);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/about") {
-      json(res, 200, { ok: true, data: readAbout() });
+      json(res, 200, { ok: true, ...await readPublishedContent(aboutPath, normalizeAbout) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/about") {
       const body = await readBody(req);
-      writeAbout(body.data || {});
-      const manifest = cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8")));
-      const result = await publish(manifest);
-      json(res, result.ok ? 200 : 400, result.ok ? { ok: true, data: readAbout() } : result);
+      const result = await publishContent(aboutPath, body.data || {}, body.expectedRevision, normalizeAbout);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/participate") {
-      json(res, 200, { ok: true, data: readParticipate() });
+      json(res, 200, { ok: true, ...await readPublishedContent(participatePath, normalizeParticipate) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/participate") {
       const body = await readBody(req);
-      writeParticipate(body.data || {});
-      const manifest = cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8")));
-      const result = await publish(manifest);
-      json(res, result.ok ? 200 : 400, result.ok ? { ok: true, data: readParticipate() } : result);
+      const result = await publishContent(participatePath, body.data || {}, body.expectedRevision, normalizeParticipate);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/links") {
-      json(res, 200, { ok: true, data: readLinks() });
+      json(res, 200, { ok: true, ...await readPublishedContent(linksPath, normalizeLinks) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/links") {
       const body = await readBody(req);
-      writeLinks(body.data || {});
-      const manifest = cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8")));
-      const result = await publish(manifest);
-      json(res, result.ok ? 200 : 400, result.ok ? { ok: true, data: readLinks() } : result);
+      const result = await publishContent(linksPath, body.data || {}, body.expectedRevision, normalizeLinks);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/feedback") {
-      json(res, 200, { ok: true, data: readFeedback() });
+      json(res, 200, { ok: true, ...await readPublishedContent(feedbackPath, normalizeFeedbackData) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/feedback") {
       const body = await readBody(req);
-      const data = updateFeedbackStore(body.data || {});
-      const manifest = cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8")));
-      const result = await publish(manifest);
-      json(res, result.ok ? 200 : 400, result.ok ? { ok: true, data } : result);
+      const result = await publishContent(feedbackPath, body.data || {}, body.expectedRevision, normalizeFeedbackData);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/reviews") {
-      json(res, 200, { ok: true, data: readReviews() });
+      json(res, 200, { ok: true, ...await readReviewStore() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/reviews") {
       const body = await readBody(req);
-      json(res, 200, { ok: true, data: updateReviewStore(body.data || {}) });
+      json(res, 200, { ok: true, ...await updateReviewStore(body.data || {}, body.expectedRevision) });
       return;
     }
 
@@ -1922,27 +2027,27 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/manifest") {
-      json(res, 200, { ok: true, manifest: cleanManifestResources(JSON.parse(fs.readFileSync(manifestPath, "utf8"))) });
+      json(res, 200, { ok: true, ...await manifestService.readWithRevision() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/manifest") {
       const body = await readBody(req);
-      const result = await publish(body.manifest);
-      json(res, result.ok ? 200 : 400, result);
+      const result = await publish(body.manifest, { expectedRevision: body.expectedRevision, deletedCourseUids: body.deletedCourseUids });
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/manifest-draft") {
       const body = await readBody(req);
-      const result = saveManifestDraft(body.manifest);
-      json(res, result.ok ? 200 : 400, result);
+      const result = await saveManifestDraft(body.manifest, { expectedRevision: body.expectedRevision, deletedCourseUids: body.deletedCourseUids });
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
 
     json(res, 404, { ok: false, error: "Not found" });
   } catch (error) {
-    json(res, 500, { ok: false, error: error.message });
+    json(res, Number(error.statusCode) || 500, { ok: false, error: error.message, currentRevision: error.currentRevision });
   }
 });
 
@@ -1950,3 +2055,22 @@ server.listen(port, host, () => {
   console.log(`NKUStudy admin API listening on http://${host}:${port}`);
   startBackupScheduler();
 });
+
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  for (const child of activeChildren) terminateChildTree(child);
+  server.close(() => {
+    try {
+      rateLimiter.close();
+      process.exit(0);
+    } catch (error) {
+      console.error(`Shutdown after ${signal} failed: ${error.message}`);
+      process.exit(1);
+    }
+  });
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.once("SIGINT", () => shutdown("SIGINT"));

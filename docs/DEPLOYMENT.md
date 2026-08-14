@@ -1,37 +1,63 @@
 # Deployment safety
 
-## Current status: production release is blocked
+This repository is a source candidate, not authorization to deploy. Production data and secrets remain outside every release. Website administration is the only content-management surface; future `/api/v1` routes are public/user-facing only.
 
-This repository is a reviewed **source-code baseline**, not a deployable production bundle. The current server still resolves runtime JSON from `src/data` and the existing publisher replaces the live web root non-atomically. Do not release from this repository until both follow-up changes are implemented and verified:
+## Production fail-closed contract
 
-1. every runtime reader/writer uses an explicit `DATA_DIR` whose production value is `/var/lib/nkustudy`;
-2. the site publisher builds a candidate release and switches the web root atomically, with a tested rollback.
+Set all of these explicitly to absolute paths outside the release tree:
 
-Until that gate is removed, `npm run build` may be used only against an authorized copy of production data in an isolated release candidate. It must not be treated as a deploy command.
+```ini
+NODE_ENV=production
+DATA_DIR=/var/lib/nkustudy/json
+STATE_DB_PATH=/var/lib/nkustudy/miniprogram.sqlite
+ADMIN_SECRET_FILE=/var/lib/nkustudy/admin-secret
+TRUSTED_PROXIES=127.0.0.1/32,::1/128
+PUBLIC_RESOURCE_ORIGIN=https://resources.nkustudy.top
+PUBLIC_DIR=/var/www/nkustudy-current
+PUBLIC_RELEASES_DIR=/var/www/nkustudy-releases
+```
 
-## Repository boundary
+Before startup, create `/var/lib/nkustudy` and `${DATA_DIR}` as mode `0700`, create `${DATA_DIR}/.nkustudy-data-root` containing exactly `NKUSTUDY_RUNTIME_DATA_V1`, and install all core JSON files. Use `STATE_DB_PATH=/var/lib/nkustudy/miniprogram.sqlite` and `ADMIN_SECRET_FILE=/var/lib/nkustudy/admin-secret`; all data, database and secret files are mode `0600`. `ADMIN_SECRET_FILE` must already exist and contain at least 32 random characters. Production startup validates the sentinel, core JSON, paths, symlinks, permissions, secret and trusted proxy configuration before SQLite or mutable JSON is created.
 
-- Commit source code, tests, documentation, and deliberately sanitized fixtures only.
-- Keep production JSON, credentials, logs, backups, generated output, SQLite files, and uploaded resources outside Git.
-- Never commit server passwords, WeChat AppSecret values, R2 credentials, backup endpoints, or live configuration files.
-- The mini program API is public/user-facing. Website administration remains the only content-management surface; `/api/v1` must not expose `/admin-api` capabilities.
+`PUBLIC_DIR` must be a symlink on production. Publishing builds a fresh versioned directory and switches that symlink with a same-filesystem rename; it never deletes the live tree in place. Keep the prior release target for rollback.
 
-## Fixture builds are disposable
+## systemd example
 
-`npm run build:fixtures` stages only the reviewed files in `src/data/fixtures`, refuses to run if any destination JSON already exists, and writes to `dist-fixture`. This command is for clean-clone validation. **A fixture build must never be copied to a server or published as the website.**
+```ini
+[Service]
+User=nkustudy
+Group=nkustudy
+WorkingDirectory=/opt/nkustudy/current
+EnvironmentFile=/etc/nkustudy/admin.env
+ExecStart=/usr/bin/node /opt/nkustudy/current/server/admin-server.mjs
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/nkustudy /var/www/nkustudy-releases /var/www
+```
 
-Production builds must use a read-only snapshot of the controlled `/var/lib/nkustudy` data. They must never fall back to fixtures when a production file is missing. The future `DATA_DIR` implementation must fail closed when required files are absent.
+Only one server process may write a `DATA_DIR`; the in-process queues are not a distributed lock.
 
-## Required release design (after the blockers are implemented)
+## Runtime-data migration maintenance window
 
-1. Create and verify a root-only backup of `/var/lib/nkustudy`, service configuration, and the active release pointer.
-2. Check out the intended commit into a new immutable candidate directory such as `/opt/nkustudy/releases/<release-id>`.
-3. Attach or copy a read-only production-data snapshot from `/var/lib/nkustudy`; do not synchronize a local `src/data` directory to the server.
-4. Install dependencies and build inside the candidate. Run unit tests, content validation, API smoke tests, and the legacy website/API regression suite there.
-5. Publish static output into a new versioned web directory. Do not delete or overwrite `/var/www/nkustudy` in place.
-6. Stop writes briefly if required, switch the service release pointer and web-root symlink (or same-filesystem renamed directory) atomically, then restart/reload.
-7. Verify the website, review, feedback, visit, admin, and public `/api/v1` routes. Confirm production-data checksums and record the release ID.
+1. Make a verified root-only backup.
+2. Stop the service and freeze website administration.
+3. Run the plan-only `npm run migrate:runtime-data` command from `docs/data-schema.md` and save its JSON report.
+4. Stop if course, review, or resource counts fall, if the unmatched-review list is unexpectedly large, or if any manual-fix item exists. Report the impact before proceeding; do not hide it with compatibility code.
+5. Apply only with the plan SHA, a new root-only backup directory, and exact reviewed confirmation counts. The command refuses to overwrite an existing target.
+6. Point `DATA_DIR` at the migrated target, then run tests/content validation/build and start one service process.
 
-## Rollback design
+Before exposing the mini program, proxy only `/api/v1/*` to `127.0.0.1:8787`; do not map `/admin-api/*` beneath that prefix. Verify the exact public route list in `docs/public-api.md`, and configure the WeChat request/download legal domains listed there.
 
-Keep the previous application release, previous static web directory, and previous pointer targets. On a failed health check, atomically restore both pointers, restart/reload, and re-run the legacy route checks. Runtime data is not rolled back automatically: restore it only from a verified backup after separately confirming a data-corruption incident.
+## Release gate
+
+Run `npm ci`, `npm test`, `npm run check`, `npm run check:fixtures`, `npm run build:fixtures`, then run the production-data checks with an explicit path: `DATA_DIR=/var/lib/nkustudy/json npm run check:content`, `DATA_DIR=/var/lib/nkustudy/json npm run check`, and `DATA_DIR=/var/lib/nkustudy/json npm run build`. Record the existing Astro diagnostic baseline, but reject every newly introduced diagnostic. Run `npm run smoke:public-api`, then continue with the legacy website/API regression suite. Dependency audit is an online deployment gate and must be run in the connected release environment. A fixture build is disposable and must never be copied to the server.
+
+Switch both application and static release pointers only after backups and candidate checks pass. On failure, restore the previous pointers and restart. Runtime data is restored only after separately proving data corruption; normal code rollback must not roll data backward.
+
+## Manifest publish recovery
+
+Before every manifest draft or publish, the server writes and fsyncs a mode-0600 snapshot under `${DATA_DIR}/.manifest-backups/`. The newest 20 snapshots are retained. Every manifest and static-content replacement also records a mode-0600 snapshot and durable journal under `${DATA_DIR}/.publish-snapshots/` and `${DATA_DIR}/.publish-journal/`; both directories are mode `0700`. A handled build failure restores the prior JSON in the same per-file queue and removes its journal. Startup recovery runs before the HTTP listener is created and safely removes a journal only when the JSON is still at its previous revision, or when a durably published journal matches its recorded next revision. An ambiguous crash after JSON replacement fails startup closed with `PUBLISH_RECOVERY_REQUIRED`; reconcile the named JSON against its snapshot and active `/var/www/nkustudy-current` release before removing the journal. Do not delete these artifacts blindly.
+
+All administrator full-manifest, R2 synchronization and static-content writes use revision CAS. HTTP 409 means nothing was overwritten: reload, inspect the other edit, then retry. Legacy R2 delete/move endpoints intentionally return 410. A dedicated in-process R2 queue serializes revision read, planning, collision checks, copy/verification, manifest CAS publish, and exact cleanup recording. Raw object keys remain opaque during deletion; no normalizer is allowed in cleanup. The safe route copies and verifies exact destination keys, publishes the CAS-protected manifest, and only then deletes the exact authorized old keys. Cleanup prefixes/keys that equal, contain, or sit beneath a copy target are rejected before copying. Cleanup failures leave harmless unreferenced objects for later removal.
