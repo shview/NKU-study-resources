@@ -42,6 +42,7 @@ async function waitForServer(child) {
 
 test("legacy public write routes start with isolated DATA_DIR and persist submissions", async (t) => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "nkustudy-admin-integration-"));
+  const publicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "nkustudy-admin-public-"));
   for (const name of ["about.json", "feedback.json", "footer.json", "home.json", "links.json", "manifest.json", "participate.json", "reviews.json"]) {
     await fs.copyFile(path.join(fixtureDir, name), path.join(dataDir, name));
   }
@@ -52,10 +53,14 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     STATE_DB_PATH: path.join(dataDir, "state.sqlite"),
     ADMIN_SECRET_FILE: path.join(dataDir, "admin-secret"),
     BACKUP_SECRET_FILE: path.join(dataDir, "backup-secrets.json"),
+    PUBLIC_DIR: path.join(publicRoot, "current"),
+    PUBLIC_RELEASES_DIR: path.join(publicRoot, "releases"),
     ADMIN_PASSWORD: "isolated-test-password",
     ADMIN_HOST: "127.0.0.1",
     ADMIN_PORT: String(port),
   };
+  assert.equal(path.relative(projectRoot, childEnv.PUBLIC_DIR).startsWith(".."), true, "tests must not publish inside a read-only source candidate");
+  assert.notEqual(childEnv.PUBLIC_DIR, path.join(projectRoot, ".runtime-public", "current"));
   let child = spawn(process.execPath, [path.join(projectRoot, "server", "admin-server.mjs")], {
     cwd: projectRoot,
     env: childEnv,
@@ -67,6 +72,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
       await new Promise((resolve) => child.once("exit", resolve));
     }
     await fs.rm(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    await fs.rm(publicRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
   await waitForServer(child);
 
