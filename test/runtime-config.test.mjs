@@ -5,7 +5,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { projectRoot, resolveAdminSecretPath, resolveDataDir, resolveDataPath, resolvePublicDir, resolveStateDbPath } from "../server/runtime-config.mjs";
+import { projectRoot, resolveAdminSecretPath, resolveDataDir, resolveDataPath, resolvePublicDir, resolvePublicReleasesDir, resolveStateDbPath } from "../server/runtime-config.mjs";
 
 test("DATA_DIR and STATE_DB_PATH resolve runtime paths", () => {
   const dataDir = path.resolve("runtime-data-test");
@@ -24,6 +24,9 @@ test("production runtime paths are explicit, absolute, and outside releases", ()
   assert.throws(() => resolveAdminSecretPath({ NODE_ENV: "production", ADMIN_SECRET_FILE: path.join(projectRoot, "secret") }), /outside the release tree/);
   assert.throws(() => resolvePublicDir({ NODE_ENV: "production" }), /explicitly configured/);
   assert.throws(() => resolvePublicDir({ NODE_ENV: "production", PUBLIC_DIR: "relative" }), /absolute path/);
+  assert.throws(() => resolvePublicReleasesDir({ NODE_ENV: "production" }), /explicitly configured/);
+  const publicReleasesDir = path.join(os.tmpdir(), "nkustudy-runtime-public", "releases");
+  assert.equal(resolvePublicReleasesDir({ NODE_ENV: "production", PUBLIC_RELEASES_DIR: publicReleasesDir }), publicReleasesDir);
 });
 
 test("production preflight fails before creating SQLite or mutable files", async (t) => {
@@ -49,6 +52,7 @@ test("production preflight fails before creating SQLite or mutable files", async
       STATE_DB_PATH: dbPath,
       ADMIN_SECRET_FILE: secretPath,
       PUBLIC_DIR: path.join(root, "nkustudy-current"),
+      PUBLIC_RELEASES_DIR: path.join(root, "releases"),
       TRUSTED_PROXIES: "127.0.0.1/32,::1/128",
       ADMIN_PASSWORD: "test-only-password",
     },

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import test from "node:test";
 
 const source = await fs.readFile(new URL("../server/admin-server.mjs", import.meta.url), "utf8");
+const adminUiSource = await fs.readFile(new URL("../src/pages/admin.astro", import.meta.url), "utf8");
 
 test("admin server uses shared runtime paths and no direct runtime JSON writes", () => {
   assert.match(source, /runtimeDataPaths/);
@@ -36,4 +37,16 @@ test("legacy destructive R2 routes are disabled and safe route remains admin-onl
 test("public v1 routing remains separate from mini-program administration", () => {
   assert.match(source, /createPublicApiHandler/);
   assert.doesNotMatch(source, /miniprogram.*admin|admin.*miniprogram/i);
+});
+
+test("static publish warnings remain in management responses and are visible in the admin UI", () => {
+  assert.match(source, /return result;\s*}\s*\n\s*function readDeploymentProof/);
+  assert.match(source, /Static publish durability warning/);
+  assert.match(adminUiSource, /import \{ statusWithWarnings \} from "\.\.\/lib\/admin-response-warnings\.js"/);
+  assert.match(adminUiSource, /publishStatus\.textContent = statusWithWarnings\("已发布", data\)/);
+  assert.match(adminUiSource, /已按 R2 重建并发布", data/);
+  assert.match(adminUiSource, /课程已删除并发布", data/);
+  assert.match(adminUiSource, /文件已删除并发布", data/);
+  assert.match(adminUiSource, /板块已删除并发布", data/);
+  assert.match(adminUiSource, /选中文件已删除并发布", data/);
 });

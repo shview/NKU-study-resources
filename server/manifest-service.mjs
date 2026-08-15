@@ -147,7 +147,8 @@ export class ManifestService {
         throw error;
       }
       const manifest = this.sanitize(await this.store.read(this.manifestPath));
-      return { ok: true, manifest, revision: manifestRevision(manifest), backup: backupPath ? path.basename(backupPath) : undefined };
+      const warnings = Array.isArray(deploymentProof?.warnings) ? deploymentProof.warnings.filter((warning) => typeof warning === "string") : [];
+      return { ok: true, manifest, revision: manifestRevision(manifest), backup: backupPath ? path.basename(backupPath) : undefined, ...(warnings.length ? { warnings } : {}) };
     });
   }
 

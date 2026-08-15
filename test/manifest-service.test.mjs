@@ -48,6 +48,14 @@ test("UID survives title/id rename and basePath changes require explicit R2 auth
   assert.equal(published.manifest.courses[0].basePath, "new/path/");
 });
 
+test("manifest publish exposes deployment warnings to the management caller", async (t) => {
+  const proof = { activeTarget: "/releases/release-after", warnings: ["directory fsync unavailable"] };
+  const { service } = await fixture(t, { buildAndDeploy: async () => proof });
+  const loaded = await service.readWithRevision();
+  const saved = await service.publish({ ...loaded.manifest, marker: "published" }, { expectedRevision: loaded.revision, deletedCourseUids: [] });
+  assert.deepEqual(saved.warnings, proof.warnings);
+});
+
 test("existing courses require UID while replacement and client-supplied new UID are rejected", async (t) => {
   const { service } = await fixture(t);
   const withoutUid = manifest([{ ...course(), uid: undefined }]);

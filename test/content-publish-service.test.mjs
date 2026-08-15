@@ -30,6 +30,36 @@ test("content publish uses CAS and returns the new revision", async (t) => {
   assert.deepEqual((await service.read(contentPath)).data, { announcement: "A" });
 });
 
+test("content publish exposes deployment warnings while journal stores only durable proof", async (t) => {
+  const proof = { activeTarget: "/releases/release-after", warnings: ["directory fsync unavailable"] };
+  const { service, store, contentPath } = await fixture(t, async () => proof);
+  service.journal.complete = async () => {};
+  const loaded = await service.read(contentPath);
+  const saved = await service.publish(contentPath, { announcement: "after" }, { expectedRevision: loaded.revision });
+  assert.deepEqual(saved.warnings, proof.warnings);
+  assert.deepEqual(await store.read(contentPath), { announcement: "after" });
+  const journals = await fs.readdir(service.journal.journalDir);
+  const journal = await store.read(path.join(service.journal.journalDir, journals[0]));
+  assert.deepEqual(journal.deploymentProof, { activeTarget: proof.activeTarget });
+});
+
+test("content journal never hides directory fsync permission failures", async (t) => {
+  for (const code of ["EACCES", "EPERM"]) {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), `nkustudy-content-fsync-${code.toLowerCase()}-`));
+    t.after(() => fs.rm(directory, { recursive: true, force: true }));
+    const store = new AtomicJsonStore({ allowedRoot: directory });
+    const filePath = path.join(directory, "home.json");
+    const previous = { announcement: "before" };
+    const next = { announcement: "after" };
+    await store.write(filePath, previous);
+    const denied = Object.assign(new Error(`${code} denied`), { code });
+    const journal = new ContentPublishJournal({ store, dataDir: directory, syncDirectoryFn: async () => { throw denied; } });
+    const record = await journal.prepare(filePath, previous, next);
+    await assert.rejects(journal.complete(record), (error) => error === denied);
+    await fs.access(record.journalPath);
+  }
+});
+
 test("content build failure atomically restores prior JSON", async (t) => {
   const { service, store, contentPath } = await fixture(t, async () => { throw new Error("synthetic build failure"); });
   const loaded = await service.read(contentPath);

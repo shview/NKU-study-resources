@@ -2,27 +2,17 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { manifestRevision, ManifestConflictError } from "./content-revision.mjs";
-
-async function syncDirectory(directory) {
-  let handle;
-  try {
-    handle = await fs.open(directory, "r");
-    await handle.sync();
-  } catch (error) {
-    if (!new Set(["EACCES", "EBADF", "EINVAL", "ENOTSUP", "EPERM"]).has(error.code)) throw error;
-  } finally {
-    await handle?.close().catch(() => {});
-  }
-}
+import { syncDirectory } from "./static-release-publisher.mjs";
 
 export class ContentPublishJournal {
-  constructor({ store, dataDir, readDeploymentProof } = {}) {
+  constructor({ store, dataDir, readDeploymentProof, syncDirectoryFn = syncDirectory } = {}) {
     if (!store || !dataDir) throw new Error("ContentPublishJournal requires store and dataDir.");
     this.store = store;
     this.dataDir = path.resolve(dataDir);
     this.journalDir = path.join(this.dataDir, ".publish-journal");
     this.snapshotDir = path.join(this.dataDir, ".publish-snapshots");
     this.readDeploymentProof = readDeploymentProof;
+    this.syncDirectory = syncDirectoryFn;
   }
 
   async prepare(filePath, previous, next, { requiresDeployment = true } = {}) {
@@ -50,10 +40,13 @@ export class ContentPublishJournal {
   }
 
   async markPublished(record, deploymentProof) {
+    const durableProof = deploymentProof && typeof deploymentProof.activeTarget === "string"
+      ? { activeTarget: deploymentProof.activeTarget }
+      : deploymentProof || null;
     const entry = await this.store.update(record.journalPath, (current) => ({
       ...current,
       status: "published",
-      deploymentProof: deploymentProof || null,
+      deploymentProof: durableProof,
       publishedAt: new Date().toISOString(),
     }), { mode: 0o600 });
     return { ...record, ...entry };
@@ -61,8 +54,8 @@ export class ContentPublishJournal {
 
   async complete(record) {
     await fs.rm(record.snapshotPath, { force: true });
-    await syncDirectory(this.snapshotDir);
-    await syncDirectory(this.journalDir);
+    await this.syncDirectory(this.snapshotDir);
+    await this.syncDirectory(this.journalDir);
     // The journal is deliberately the final fallible operation. Once it is
     // removed, publication is complete and no later error may claim ambiguity.
     await fs.rm(record.journalPath, { force: true });
@@ -170,7 +163,8 @@ export class ContentPublishService {
         });
         journalRecord = await this.journal.markPublished(journalRecord, deploymentProof);
         await this.journal.complete(journalRecord);
-        return { ok: true, data, revision: nextRevision };
+        const warnings = Array.isArray(deploymentProof?.warnings) ? deploymentProof.warnings.filter((warning) => typeof warning === "string") : [];
+        return { ok: true, data, revision: nextRevision, ...(warnings.length ? { warnings } : {}) };
       } catch (error) {
         if (error.atomicJsonRolledBack) {
           error.publishRolledBack = true;

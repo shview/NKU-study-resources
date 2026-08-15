@@ -7,6 +7,7 @@ import path from "node:path";
 import Busboy from "busboy";
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { AtomicJsonStore } from "./atomic-json-store.mjs";
+import { syncCourseResponse } from "./admin-response.mjs";
 import { clientIp, hashActor, trustedProxyRules } from "./client-identity.mjs";
 import { ContentPublishJournal, ContentPublishService } from "./content-publish-service.mjs";
 import { manifestRevision, ManifestConflictError, ManifestService } from "./manifest-service.mjs";
@@ -20,6 +21,7 @@ import { assertR2CleanupSafety, planR2ManifestMutation, planR2ObjectCopies, stri
 import { publishAfterR2Prepare, R2MutationQueue, runExclusiveR2Mutation, runSerializedR2Mutation } from "./r2-transaction.mjs";
 import { ReviewSubmissionService } from "./review-submission-service.mjs";
 import { preflightProductionRuntime, projectRoot, runtimeDataPathMap } from "./runtime-config.mjs";
+import { StaticReleasePublisher } from "./static-release-publisher.mjs";
 
 const root = projectRoot;
 const runtime = preflightProductionRuntime();
@@ -44,6 +46,11 @@ const backupSecretPath = path.resolve(process.env.BACKUP_SECRET_FILE || path.joi
 const backupSecretStore = new AtomicJsonStore({ allowedRoot: path.dirname(backupSecretPath) });
 const distDir = path.join(root, "dist");
 const publicDir = runtime.publicDir;
+const staticReleasePublisher = new StaticReleasePublisher({
+  publicDir,
+  releaseRoot: runtime.publicReleasesDir,
+  distDir,
+});
 const host = process.env.ADMIN_HOST || "127.0.0.1";
 const port = Number(process.env.ADMIN_PORT || 8787);
 const password = process.env.ADMIN_PASSWORD;
@@ -1290,7 +1297,7 @@ async function syncCourseFromR2(courseId, expectedRevision) {
     return latest;
   }, { expectedRevision });
   const persistedCourse = result.manifest.courses.find((item) => item.uid === courseUid);
-  return { manifest: result.manifest, revision: result.revision, course: persistedCourse, report: syncReport };
+  return { manifest: result.manifest, revision: result.revision, course: persistedCourse, report: syncReport, ...(result.warnings ? { warnings: result.warnings } : {}) };
 }
 
 function sectionOrderRank(title = "") {
@@ -1428,6 +1435,7 @@ async function syncAllCoursesFromR2(expectedRevision) {
     manifest: result.manifest,
     revision: result.revision,
     report: { ...merged.report, unmatched: [...unmatched, ...merged.report.unmatched], conflicts },
+    ...(result.warnings ? { warnings: result.warnings } : {}),
   };
 }
 
@@ -1684,30 +1692,16 @@ function run(command, args, { timeoutMs = 180_000, maxOutputBytes = 256 * 1024 }
 }
 
 async function buildAndDeploy() {
-  await run("npm", ["run", "check:content"]);
-  await run("npm", ["run", "build"]);
-  const releaseRoot = path.resolve(process.env.PUBLIC_RELEASES_DIR || path.join(path.dirname(publicDir), ".nkustudy-releases"));
-  fs.mkdirSync(releaseRoot, { recursive: true, mode: 0o700 });
-  const releaseDir = path.join(releaseRoot, `release-${Date.now()}-${randomBytes(4).toString("hex")}`);
-  fs.cpSync(distDir, releaseDir, { recursive: true, errorOnExist: true });
-  const tempLink = path.join(path.dirname(publicDir), `.${path.basename(publicDir)}.next-${process.pid}-${Date.now()}`);
-  try {
-    if (process.env.NODE_ENV === "production" && fs.existsSync(publicDir) && !fs.lstatSync(publicDir).isSymbolicLink()) {
-      throw new Error(`PUBLIC_DIR must be a symlink before atomic production publishing: ${publicDir}`);
-    }
-    fs.symlinkSync(releaseDir, tempLink, process.platform === "win32" ? "junction" : "dir");
-    fs.renameSync(tempLink, publicDir);
-    return { activeTarget: path.resolve(fs.realpathSync(publicDir)) };
-  } catch (error) {
-    fs.rmSync(tempLink, { force: true });
-    fs.rmSync(releaseDir, { recursive: true, force: true });
-    throw error;
-  }
+  const result = await staticReleasePublisher.publish(async () => {
+    await run("npm", ["run", "check:content"]);
+    await run("npm", ["run", "build"]);
+  });
+  for (const warning of result.warnings || []) console.warn(`Static publish durability warning: ${warning}`);
+  return result;
 }
 
 function readDeploymentProof() {
-  if (!fs.existsSync(publicDir)) return null;
-  return { activeTarget: path.resolve(fs.realpathSync(publicDir)) };
+  return staticReleasePublisher.readDeploymentProof();
 }
 
 async function publish(manifest, options) {
@@ -1766,6 +1760,7 @@ async function initializeRuntimeData() {
   if (manifestErrors.length) throw new Error(`Runtime manifest validation failed:\n${manifestErrors.join("\n")}`);
 }
 
+await staticReleasePublisher.recoverStartup();
 await manifestService.recoverStartup();
 await contentPublishService.recoverStartup();
 await initializeRuntimeData();
@@ -1863,7 +1858,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/admin-api/sync-r2") {
       const body = await readBody(req);
       const result = await syncCourseFromR2(body.courseId, body.expectedRevision);
-      json(res, 200, { ok: true, manifest: result.manifest, revision: result.revision, course: result.course });
+      json(res, 200, syncCourseResponse(result));
       return;
     }
 

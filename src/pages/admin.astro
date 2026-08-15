@@ -347,6 +347,7 @@ import "vditor/dist/index.css";
 
   <script>
     import Vditor from "vditor";
+    import { statusWithWarnings } from "../lib/admin-response-warnings.js";
 
     let state = null;
     let manifestRevision = "";
@@ -1241,7 +1242,7 @@ import "vditor/dist/index.css";
       });
       feedbackState = data.data;
       contentRevisions.set("feedback", data.revision);
-      feedbackAdminStatus.textContent = message;
+      feedbackAdminStatus.textContent = statusWithWarnings(message, data);
       renderFeedbackAdmin();
     }
 
@@ -1463,7 +1464,7 @@ import "vditor/dist/index.css";
       });
       linksState = data.data;
       contentRevisions.set("links", data.revision);
-      linksAdminStatus.textContent = message;
+      linksAdminStatus.textContent = statusWithWarnings(message, data);
       renderLinksAdmin();
     }
 
@@ -1485,7 +1486,7 @@ import "vditor/dist/index.css";
       });
       participateState = data.data;
       contentRevisions.set("participate", data.revision);
-      participateAdminStatus.textContent = message;
+      participateAdminStatus.textContent = statusWithWarnings(message, data);
       renderParticipateAdmin();
     }
 
@@ -1509,7 +1510,7 @@ import "vditor/dist/index.css";
       });
       aboutState = data.data;
       contentRevisions.set("about", data.revision);
-      aboutAdminStatus.textContent = message;
+      aboutAdminStatus.textContent = statusWithWarnings(message, data);
       renderAboutAdmin();
     }
 
@@ -1530,7 +1531,7 @@ import "vditor/dist/index.css";
       });
       homeState = data.data;
       contentRevisions.set("home", data.revision);
-      homeAdminStatus.textContent = message;
+      homeAdminStatus.textContent = statusWithWarnings(message, data);
       renderHomeAdmin();
     }
 
@@ -1570,7 +1571,7 @@ import "vditor/dist/index.css";
       });
       footerState = data.data;
       contentRevisions.set("footer", data.revision);
-      footerAdminStatus.textContent = message;
+      footerAdminStatus.textContent = statusWithWarnings(message, data);
       renderFooterAdmin();
     }
 
@@ -1712,7 +1713,7 @@ import "vditor/dist/index.css";
 
     async function deleteR2Paths(course, paths) {
       const cleanPaths = paths.filter(Boolean);
-      if (!cleanPaths.length) return;
+      if (!cleanPaths.length) return {};
       const candidate = structuredClone(state);
       const target = candidate.courses.find((item) => item.uid === course.uid);
       const deleting = new Set(cleanPaths);
@@ -1727,6 +1728,7 @@ import "vditor/dist/index.css";
         })),
       });
       acceptManifest(data);
+      return data;
     }
 
     async function deleteCourse(course) {
@@ -1744,7 +1746,7 @@ import "vditor/dist/index.css";
       selectedId = state.courses[0]?.id ?? null;
       renderTree();
       renderEditor();
-      publishStatus.textContent = "课程已删除并发布";
+      publishStatus.textContent = statusWithWarnings("课程已删除并发布", data);
     }
 
     function changedCourseDirectories() {
@@ -1790,7 +1792,8 @@ import "vditor/dist/index.css";
         remove.textContent = "删除中...";
         remove.disabled = true;
         try {
-          await deleteR2Paths(course, [file.path]);
+          const data = await deleteR2Paths(course, [file.path]);
+          publishStatus.textContent = statusWithWarnings("文件已删除并发布", data);
         } catch (error) {
           alert(error.message);
           remove.textContent = "删除";
@@ -2090,7 +2093,8 @@ import "vditor/dist/index.css";
           removeSection.textContent = "删除中...";
           removeSection.disabled = true;
           try {
-            await deleteR2Paths(course, (section.files ?? []).map((file) => file.path));
+            const data = await deleteR2Paths(course, (section.files ?? []).map((file) => file.path));
+            publishStatus.textContent = statusWithWarnings("板块已删除并发布", data);
           } catch (error) {
             alert(error.message);
             removeSection.textContent = "删除板块";
@@ -2114,7 +2118,8 @@ import "vditor/dist/index.css";
           removeSelected.textContent = "删除中...";
           removeSelected.disabled = true;
           try {
-            await deleteR2Paths(course, selected.map((file) => file.path));
+            const data = await deleteR2Paths(course, selected.map((file) => file.path));
+            publishStatus.textContent = statusWithWarnings("选中文件已删除并发布", data);
           } catch (error) {
             alert(error.message);
             removeSelected.textContent = "删除选中文件";
@@ -2236,7 +2241,7 @@ import "vditor/dist/index.css";
         acceptManifest(data);
         renderTree();
         renderEditor();
-        publishStatus.textContent = "已发布";
+        publishStatus.textContent = statusWithWarnings("已发布", data);
       } catch (error) {
         publishStatus.textContent = error.message;
       }
@@ -2256,7 +2261,7 @@ import "vditor/dist/index.css";
         renderManifestSettings();
         renderTree();
         renderEditor();
-        publishStatus.textContent = "已按 R2 更新并发布";
+        publishStatus.textContent = statusWithWarnings("已按 R2 更新并发布", data);
       } catch (error) {
         publishStatus.textContent = error.message;
       }
@@ -2275,7 +2280,7 @@ import "vditor/dist/index.css";
         renderManifestSettings();
         renderTree();
         renderEditor();
-        publishStatus.textContent = "已按 R2 重建并发布";
+        publishStatus.textContent = statusWithWarnings("已按 R2 重建并发布", data);
       } catch (error) {
         publishStatus.textContent = error.message;
       }

@@ -13,6 +13,7 @@
     "admin:server": "node server/admin-server.mjs",
     "check:content": "node scripts/validate-manifest.mjs",
     "check:fixtures": "node scripts/validate-manifest.mjs --fixtures",
+    "check:api-docs": "node scripts/check-api-docs.mjs",
     "check": "astro check",
     "migrate:course-uids": "node scripts/backfill-course-uids.mjs",
     "migrate:runtime-data": "node scripts/migrate-runtime-data.mjs",

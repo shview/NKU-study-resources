@@ -3,6 +3,7 @@ dist/
 dist-fixture/
 .astro/
 coverage/
+.runtime-public/
 
 **/.env
 **/.env.*

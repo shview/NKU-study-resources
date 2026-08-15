@@ -40,7 +40,13 @@ export function resolveAdminSecretPath(env = process.env) {
 
 export function resolvePublicDir(env = process.env) {
   if (env.NODE_ENV === "production") return requiredAbsoluteOutsideRelease("PUBLIC_DIR", env.PUBLIC_DIR);
-  return path.resolve(env.PUBLIC_DIR || "/var/www/nkustudy-current");
+  return path.resolve(env.PUBLIC_DIR || path.join(projectRoot, ".runtime-public", "current"));
+}
+
+export function resolvePublicReleasesDir(env = process.env) {
+  if (env.NODE_ENV === "production") return requiredAbsoluteOutsideRelease("PUBLIC_RELEASES_DIR", env.PUBLIC_RELEASES_DIR);
+  const publicDir = resolvePublicDir(env);
+  return path.resolve(env.PUBLIC_RELEASES_DIR || path.join(path.dirname(publicDir), ".nkustudy-releases"));
 }
 
 export function runtimeDataPathMap(env = process.env) {
@@ -71,7 +77,8 @@ export function preflightProductionRuntime(env = process.env) {
   const stateDbPath = resolveStateDbPath(env);
   const adminSecretPath = resolveAdminSecretPath(env);
   const publicDir = resolvePublicDir(env);
-  if (env.NODE_ENV !== "production") return { dataDir, stateDbPath, adminSecretPath, publicDir };
+  const publicReleasesDir = resolvePublicReleasesDir(env);
+  if (env.NODE_ENV !== "production") return { dataDir, stateDbPath, adminSecretPath, publicDir, publicReleasesDir };
 
   const dataStat = fs.lstatSync(dataDir);
   if (!dataStat.isDirectory() || dataStat.isSymbolicLink()) throw new Error(`DATA_DIR must be a real directory: ${dataDir}`);
@@ -98,7 +105,7 @@ export function preflightProductionRuntime(env = process.env) {
   if (!stateParentStat.isDirectory() || stateParentStat.isSymbolicLink()) throw new Error("STATE_DB_PATH parent must be a real directory.");
   if (process.platform !== "win32" && (stateParentStat.mode & 0o077) !== 0) throw new Error("STATE_DB_PATH parent permissions must be 0700 or stricter.");
   if (fs.existsSync(stateDbPath)) assertSecureRegularFile(stateDbPath, "STATE_DB_PATH");
-  return { dataDir, stateDbPath, adminSecretPath, publicDir };
+  return { dataDir, stateDbPath, adminSecretPath, publicDir, publicReleasesDir };
 }
 
 export const runtimeDataPaths = runtimeDataPathMap();
