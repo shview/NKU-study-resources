@@ -31,6 +31,7 @@ Production enforcement completed on 2026-08-16: Caddy now applies the documented
 
 Evidence from the server:
 
+- A concrete intermittent-corruption defect existed in the imported production server: its original `readBody()` used `body += chunk` while Node supplied `Buffer` chunks. Each chunk was therefore decoded independently; a multi-byte UTF-8 character split across network chunks could become `U+FFFD` even when the browser sent correct text. This route handled review submissions and administrator JSON, so it is a strong explanation for the review, summary and course-ID damage. It cannot by itself prove the origin of every retained value, especially the resource path.
 - The runtime migration reads bytes as UTF-8 and writes JSON atomically; it does not perform an ANSI/GBK conversion.
 - The earliest retained 68-course source snapshot and the migration-precheck backup already contained nine JSON string paths with `U+FFFD`.
 - Three of those manifest paths were subsequently corrected through content edits. Six remain in the current manifest: one course ID, four course summaries (one contains multiple replacement runs), and one resource path.
@@ -38,7 +39,7 @@ Evidence from the server:
 - The repository intentionally does not version production `src/data/*.json`, and no earlier clean 68-course snapshot is available. Therefore the exact program or edit that first decoded the bytes cannot be proven from retained evidence.
 - The replacement-run shapes are consistent with legacy Chinese bytes (commonly GBK/ANSI) being decoded as UTF-8 before the earliest retained snapshot. This is an inference, not proof of the exact tool.
 
-Prevention now consists of strict fatal UTF-8 decoding, rejection of `U+FFFD` on public writes and runtime imports, plus a deterministic audit command:
+The request reader now concatenates the original bytes and performs one strict fatal UTF-8 decode; a regression test deliberately splits Chinese text across chunks. Additional prevention consists of rejection of `U+FFFD` on public writes and runtime imports, plus a deterministic audit command:
 
 ```bash
 DATA_DIR=/var/lib/nkustudy/json npm run audit:encoding
