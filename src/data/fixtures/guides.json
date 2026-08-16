@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "updated_at": "2000-01-01T00:00:00+08:00",
+  "correction_url": "https://nkustudy.top/feedback",
+  "items": [
+    {
+      "id": "fixture-add-drop",
+      "title": "示例退补选流程",
+      "summary": "仅用于接口与构建验证的合成指南。",
+      "category": "add-drop",
+      "tags": ["退补选"],
+      "updated_at": "2000-01-01T00:00:00+08:00",
+      "applicable_scope": "测试环境",
+      "steps": [
+        { "title": "第一步", "body": "这不是生产指南内容。" }
+      ],
+      "related_course_ids": ["11111111-1111-4111-8111-111111111111"],
+      "source_title": "",
+      "source_url": "",
+      "correction_url": "https://nkustudy.top/feedback"
+    }
+  ]
+}

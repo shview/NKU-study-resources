@@ -14,6 +14,9 @@ Only these public routes exist:
 
 - `GET /health`
 - `GET /home`
+- `GET /search-index`
+- `GET /guides?category=&page=1&page_size=20`
+- `GET /guides/:guideId`
 - `GET /courses?page=1&page_size=20&q=&term=&group=&tag=&assessment=`
 - `GET /courses/:courseUid`
 - `GET /courses/:courseUid/resources`
@@ -33,6 +36,8 @@ Course list/detail DTOs contain only:
 {
   "id": "immutable-course-uuid",
   "name": "课程标题",
+  "short_name": "课程简称",
+  "aliases": ["课程别名"],
   "summary": "课程摘要",
   "description": "课程摘要",
   "term": "大一下",
@@ -51,6 +56,18 @@ Course list/detail DTOs contain only:
 ```
 
 `id` is the course `uid`, never the editable title or website route id. Home returns `announcement`, `hot_courses`, and `latest_updates`, computed from the current runtime `home.json`, `manifest.json`, and approved reviews. It never reads fixture or compiled data.
+
+`short_name` and `aliases` come only from the website-managed manifest fields `shortName` and `aliases`. Empty values are `""` and `[]`; neither the server nor client guesses them.
+
+## Search index and guides
+
+`GET /search-index` is one complete, cacheable public snapshot for client-side Fuse.js. It returns `{version,generated_at,items,total}` and four item types: `course`, `teacher`, `resource`, and `guide`. All items share stable `id`, type labels, name, short name, aliases, tags, teachers, a server-constructed `search_text`, and subtitle. Resources add their course UUID and public type but no path or download URL. Guides add category and content-review timestamp.
+
+Teacher names come only from approved review groups that match a current course. The deterministic teacher ID merges identical normalized names. Because the current website has no authoritative teacher registry, same-name teachers cannot yet be distinguished and a corrected spelling changes the ID; source data must be upgraded rather than adding client heuristics if that becomes necessary.
+
+Guide content lives in optional runtime `guides.json`. Until the content owner supplies the first reviewed items, list and search results are safely empty. Allowed categories are `course-selection`, `training-program`, `add-drop`, and `exam-grade`. Every published item requires a stable slug ID, timezone-bearing `updated_at`, valid related course UUIDs, and public HTTPS source/correction URLs. Detail returns whitelisted steps and related course summaries. The correction strategy is a public HTTPS link (default `https://nkustudy.top/feedback`), not a new write endpoint.
+
+After an authorized deployment, run `npm run baseline:search -- 化学` from a connected release environment. It reads the live complete snapshot and prints the non-sensitive index version, generation time, matching course UUIDs/names, and expected count. This is the production recall baseline; fixture-only results are not production evidence.
 
 ## Reviews
 
@@ -101,8 +118,6 @@ The current client must be adjusted in its integration phase:
 
 The mini program must not call these paths or options until the named later phase implements them:
 
-- `/search-index`: replace with `GET /courses?q=...`; no separate search-index route will be added.
-- `/guides`: disable the remote guide request and keep local/static guide content until a public guide DTO is designed.
 - `/auth/wechat`, `/me`, `/me/favorites`, `/me/submissions`, and `/me/reviews`: disable sign-in and personal-data actions until the authenticated SQLite phase; browsing remains anonymous.
 - `/resources/:id/reports`: hide the report action until authenticated writes and moderation are implemented.
 - `/courses/:id/reviews`: replace with `/review-groups` and `/review-groups/:groupKey`; the old client shape will not be emulated.

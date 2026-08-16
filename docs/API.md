@@ -5,7 +5,7 @@
 - 生产站点基址：`https://nkustudy.top`
 - 小程序公共 API 基址：`https://nkustudy.top/api/v1`
 - 资源下载域名：`https://resources.nkustudy.top`
-- 当前版本统计为 **50 个 HTTP method/path 组合**：公共 v1 8 个、网站旧公开接口 7 个、管理接口 35 个。其中 3 个旧 R2 管理接口已禁用并固定返回 `410 Gone`；该数量不是固定兼容契约。
+- 当前版本统计为 **53 个 HTTP method/path 组合**：公共 v1 11 个、网站旧公开接口 7 个、管理接口 35 个。其中 3 个旧 R2 管理接口已禁用并固定返回 `410 Gone`；该数量不是固定兼容契约。
 
 ## 接口总表
 
@@ -16,6 +16,9 @@
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/health` | 公开 | 运行时数据健康检查 |
 | `GET` | `/api/v1/home` | 公开 | 小程序首页数据 |
+| `GET` | `/api/v1/search-index` | 公开 | 完整、版本化的四类搜索快照 |
+| `GET` | `/api/v1/guides` | 公开 | 指南列表、分类和分页 |
+| `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情、相关课程和纠错入口 |
 | `GET` | `/api/v1/courses` | 公开 | 搜索、筛选和分页课程 |
 | `GET` | `/api/v1/courses/:courseUid` | 公开 | 课程详情 |
 | `GET` | `/api/v1/courses/:courseUid/resources` | 公开 | 课程资源与 R2 下载地址 |
@@ -101,10 +104,12 @@
 | --- | --- | --- |
 | 400 | `INVALID_PATH` | 路径参数不是合法 URL 编码 |
 | 400 | `INVALID_PAGINATION` | `page` 或 `page_size` 不是允许范围内的正整数 |
+| 400 | `INVALID_GUIDE_CATEGORY` | 指南分类不在公开枚举中 |
 | 400 | `INVALID_JSON` | 提交正文无法读取为 JSON |
 | 400 | `INVALID_REVIEW` | 教师、1–5 分整数评分或最短正文等校验失败 |
 | 404 | `NOT_FOUND` | v1 路由或方法不存在 |
 | 404 | `COURSE_NOT_FOUND` | 课程 UID 不存在 |
+| 404 | `GUIDE_NOT_FOUND` | 指南稳定 ID 不存在 |
 | 404 | `REVIEW_GROUP_NOT_FOUND` | 评价分组不存在 |
 | 409 | `SUBMISSION_CLOSED` | 评价提交已关闭 |
 | 429 | `RATE_LIMITED` | 尝试或正式提交超过限额 |
@@ -122,6 +127,8 @@
 {
   "id": "8b0d8d1a-...",
   "name": "课程名称",
+  "short_name": "课程简称",
+  "aliases": ["课程别名"],
   "summary": "课程摘要",
   "description": "课程摘要",
   "term": "大一下",
@@ -141,7 +148,7 @@
 }
 ```
 
-`id` 是不可变课程 UUID（manifest 的 `uid`），不是可编辑的课程名称或网站路由 `id`。教师列表来自已通过评价的真实 `课程名 + 教师` 分组；没有评价时不会虚构教师安排。
+`id` 是不可变课程 UUID（manifest 的 `uid`），不是可编辑的课程名称或网站路由 `id`。`short_name` 与 `aliases` 分别只来自 manifest 的 `shortName` 和 `aliases`；空值为 `""` 和 `[]`，服务端不会猜别名。教师列表来自已通过评价的真实 `课程名 + 教师` 分组；没有评价时不会虚构教师安排。
 
 资源对象：
 
@@ -198,6 +205,53 @@ curl -sS https://nkustudy.top/api/v1/health
 curl -sS https://nkustudy.top/api/v1/home
 ```
 
+### `GET /api/v1/search-index`
+
+- 参数/正文：无；一次返回同一快照中的全部公开课程、教师、资料和指南索引项，不是分页候选集。
+- 成功 `data`：`{version,generated_at,items,total}`。`version` 是白名单索引内容的 SHA-256 摘要截断值，内容不变则稳定；`generated_at` 是该快照所依赖的最新公开内容时间，使用带时区的 ISO 8601。
+- 每项共有 `id`、`type`、`type_label`、`badge`、`name`、`short_name`、`aliases`、`tags`、`teachers`、`search_text`、`subtitle`。缺失字符串为 `""`，缺失数组为 `[]`；`type` 只可能是 `course`、`teacher`、`resource`、`guide`。
+- 教师只来自已通过且能精确匹配现有课程的评价分组；相同规范化姓名合并，稳定 ID 为姓名的确定性哈希。当前没有权威教师注册表，因此无法区分同名教师，姓名修正会改变该 ID。
+- 资料项额外返回 `course_id`、`course_name`、`resource_type`、`term_label`，不返回路径或下载地址；客户端跳转所属课程资料页。
+- 指南项额外返回 `category`、`updated_at`。课程项的简称/别名只读取网站源数据。
+
+```json
+{
+  "code": 0,
+  "data": {
+    "version": "stable-content-hash",
+    "generated_at": "2026-08-16T04:00:00.000Z",
+    "items": [{
+      "id": "course-uuid",
+      "type": "course",
+      "type_label": "课",
+      "badge": "课",
+      "name": "有机化学",
+      "short_name": "有机",
+      "aliases": ["有机化学基础"],
+      "tags": ["化学"],
+      "teachers": ["教师姓名"],
+      "search_text": "课程摘要 学期 类别 考核方式",
+      "subtitle": "专业必修课 · 大二上"
+    }],
+    "total": 1
+  }
+}
+```
+
+### `GET /api/v1/guides`
+
+查询参数：`category` 可为空或取 `course-selection`、`training-program`、`add-drop`、`exam-grade`；`page` 默认 1，`page_size` 默认 20、最大 100。未知分类返回 `400 INVALID_GUIDE_CATEGORY`。
+
+成功 `data` 为 `{items,total,page,page_size,facets,data_updated_at}`；列表项只含 `id`、`title`、`summary`、`category`、`updated_at`、`applicable_scope`、`related_course_ids`。`facets.categories` 只列当前有已发布内容的分类。
+
+### `GET /api/v1/guides/:guideId`
+
+- `guideId` 是 `guides.json` 中由内容维护者分配、发布后不随标题变化的稳定 ID。
+- 成功字段：`id`、`title`、`summary`、`category`、`updated_at`、`applicable_scope`、`steps[{title,body}]`、`related_courses[{id,name}]`、`source_title`、`source_url`、`correction_url`。
+- `related_courses[].id` 必须是现有课程 UUID；URL 只允许无账号信息的公开 HTTPS 地址。
+- 本阶段纠错采用公开链接方案，默认指向网站反馈页；没有新增小程序写接口或管理接口。
+- 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`；运行时指南数据违反白名单或引用未知课程时失败关闭并返回 `500 INTERNAL_ERROR`。
+
 ### `GET /api/v1/courses`
 
 查询参数：
@@ -206,7 +260,7 @@ curl -sS https://nkustudy.top/api/v1/home
 | --- | --- | --- |
 | `page` | `1`；1–1,000,000 的整数 | 页码 |
 | `page_size` | `20`；1–100 的整数 | 每页数量 |
-| `q` | 空；规范化后最多 200 字符 | 在名称、摘要、term、group、assessment、标签和教师中包含匹配，不区分大小写 |
+| `q` | 空；规范化后最多 200 字符 | 在名称、简称、别名、摘要、term、group、assessment、标签和教师中包含匹配，不区分大小写 |
 | `term` | 空；最多 120 字符 | 与服务器原值精确匹配 |
 | `group` | 空；最多 120 字符 | 与服务器原值精确匹配 |
 | `tag` | 空；最多 120 字符 | 必须包含该服务器标签 |
@@ -626,7 +680,7 @@ curl -sS -b admin.cookies -X POST https://nkustudy.top/admin-api/backup-run \
 - 微信登录和个人信息：`/api/v1/auth/wechat`、`/api/v1/auth/phone`、`/api/v1/auth/logout`、`/api/v1/me`；
 - 收藏：`/api/v1/favorites` 及删除收藏；
 - 投稿和举报：`/api/v1/resource-submissions`、`/api/v1/resource-submissions/mine`、`/api/v1/reports`、`/api/v1/resources/:id/reports`；
-- 旧客户端设想的 `/api/v1/resources/:id`、`/api/v1/courses/:id/reviews`、`/api/v1/search-index`、`/api/v1/guides`；
+- 旧客户端设想的 `/api/v1/resources/:id`、`/api/v1/courses/:id/reviews`；
 - `/api/v1` 下任何管理接口。
 
 浏览课程、资料和公开评价不需要登录。管理工作继续只通过网页端 `/admin-api/*`，不会暴露给小程序。

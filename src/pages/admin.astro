@@ -2013,6 +2013,10 @@ import "vditor/dist/index.css";
         termField,
         groupField,
         titleField,
+        field("课程简称", course.shortName ?? "", (value) => { course.shortName = value.trim(); }),
+        field("课程别名，逗号分隔", (course.aliases ?? []).join(", "), (value) => {
+          course.aliases = value.split(",").map((alias) => alias.trim()).filter(Boolean);
+        }),
         field("考核方式", course.assessment ?? "绩点制", (value) => { course.assessment = value || "绩点制"; }),
         field("更新时间", course.updated, (value) => { course.updated = value; }),
         field("贡献者，逗号分隔", (course.contributors ?? []).join(", "), (value) => {
@@ -2210,6 +2214,8 @@ import "vditor/dist/index.css";
         term: "大一下",
         group: "通识必修课",
         title,
+        shortName: "",
+        aliases: [],
         summary: "",
         contributors: [],
         assessment: "绩点制",

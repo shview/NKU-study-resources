@@ -7,6 +7,9 @@ function serviceFixture() {
     health: () => ({ status: "ok" }),
     home: () => ({ page: "home" }),
     courses: () => ({ items: [] }),
+    searchIndex: () => ({ version: "version", items: [], total: 0 }),
+    guides: () => ({ items: [], total: 0 }),
+    guide: (id) => ({ id }),
     course: (id) => ({ id }),
     resources: (id) => ({ course_id: id, items: [] }),
     reviewGroups: () => ({ items: [] }),
@@ -32,7 +35,7 @@ async function invoke(handler, method, pathname, headers = {}) {
 test("public router exposes exactly the documented route set and no management route", async () => {
   const handler = createPublicApiHandler({ service: serviceFixture(), readBody: async () => ({}), clientIp: () => "actor" });
   for (const route of [
-    "/api/v1/health", "/api/v1/home", "/api/v1/courses", "/api/v1/courses/course-uid",
+    "/api/v1/health", "/api/v1/home", "/api/v1/search-index", "/api/v1/guides", "/api/v1/guides/guide-id", "/api/v1/courses", "/api/v1/courses/course-uid",
     "/api/v1/courses/course-uid/resources", "/api/v1/review-groups", "/api/v1/review-groups/group-key",
   ]) {
     const response = await invoke(handler, "GET", route);

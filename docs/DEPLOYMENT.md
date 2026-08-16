@@ -13,6 +13,7 @@ STATE_DB_PATH=/var/lib/nkustudy/miniprogram.sqlite
 ADMIN_SECRET_FILE=/var/lib/nkustudy/admin-secret
 TRUSTED_PROXIES=127.0.0.1/32,::1/128
 PUBLIC_RESOURCE_ORIGIN=https://resources.nkustudy.top
+PUBLIC_GUIDE_CORRECTION_URL=https://nkustudy.top/feedback
 PUBLIC_DIR=/var/www/nkustudy-publish/current
 PUBLIC_RELEASES_DIR=/var/www/nkustudy-publish/releases
 ```

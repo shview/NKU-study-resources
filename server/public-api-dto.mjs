@@ -42,6 +42,10 @@ export function resourceId(courseUid, relativePath) {
   return createHash("sha256").update(`${courseUid}\0${relativePath}`, "utf8").digest("base64url").slice(0, 24);
 }
 
+export function teacherId(name) {
+  return createHash("sha256").update(`teacher\0${text(name, 80).normalize("NFKC")}`, "utf8").digest("base64url").slice(0, 24);
+}
+
 function extensionFor(title) {
   const extension = path.posix.extname(text(title, 500)).replace(/^\./, "").toUpperCase();
   return extension || "FILE";
@@ -176,6 +180,8 @@ export function publicCourseDto(course, reviewGroups, manifest) {
   return {
     id: course.uid,
     name: text(course.title, 120),
+    short_name: text(course.shortName, 80),
+    aliases: stringList(course.aliases, 20, 80),
     summary: text(course.summary, 2000),
     description: text(course.summary, 2000),
     term: text(course.term, 80),

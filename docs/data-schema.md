@@ -69,6 +69,10 @@ Write mode takes an exclusive lock, rechecks every source hash, creates a privat
 
 `DATA_DIR` defaults to `src/data` only for compatibility with an authorized local checkout. Production uses `DATA_DIR=/var/lib/nkustudy/json`. Core content (`manifest`, `about`, `home`, `participate`, `links`, and `footer`) fails closed when absent. Only explicitly allowlisted mutable state (`reviews`, `feedback`, `visit-stats`, `editor-settings`, and `backup-settings`) may be initialized by the server.
 
+`guides.json` is an optional public-content source until the first reviewed guide batch is delivered. Absence means an empty guide collection, not fixture data. Its top-level shape is `{version,updated_at,correction_url,items}`. Items use a stable lowercase slug `id`, one of `course-selection`/`training-program`/`add-drop`/`exam-grade`, a timezone-bearing `updated_at`, public steps, and current course UUIDs in `related_course_ids`. Invalid categories, timestamps, course references, duplicate IDs, or non-HTTPS public URLs fail the public API closed. Guide content is installed into `DATA_DIR` through the same reviewed content deployment process; no guide management route is exposed under `/api/v1`.
+
+Optional course search metadata is stored directly on each manifest course as `shortName: string` and `aliases: string[]`. The website course editor preserves and edits both fields. Empty values are explicit and no compatibility parser derives aliases from a title.
+
 JSON mutations use a per-file queue and same-directory atomic replacement. Updaters re-read inside that queue, preventing concurrent review, feedback, and visit writes from overwriting each other.
 
 ## Persistent state and privacy

@@ -1,10 +1,13 @@
+import { createHash } from "node:crypto";
 import { PublicApiError } from "./public-api-errors.mjs";
+import { GUIDE_CATEGORIES, normalizeGuideData } from "./public-guide-data.mjs";
 import {
   buildReviewGroups,
   isVisibleCourseMetaTag,
   publicCourseDto,
   publicResourceDto,
   publicReviewGroupDto,
+  teacherId,
 } from "./public-api-dto.mjs";
 
 function queryText(value, max = 120) {
@@ -25,23 +28,57 @@ function matches(value, expected) {
   return !expected || String(value ?? "").normalize("NFKC") === expected;
 }
 
+function uniqueStrings(values) {
+  return [...new Set(values.map((value) => queryText(value)).filter(Boolean))];
+}
+
+function generatedAt(values) {
+  const timestamps = values.map((value) => Date.parse(String(value || ""))).filter(Number.isFinite);
+  return timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : "";
+}
+
+function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = [], teachers = [], searchText = "", subtitle = "" }) {
+  const typeLabels = { course: "课", teacher: "师", resource: "资", guide: "指" };
+  return {
+    id,
+    type,
+    type_label: typeLabels[type],
+    badge: typeLabels[type],
+    name: queryText(name, 500),
+    short_name: queryText(shortName, 80),
+    aliases: uniqueStrings(aliases).slice(0, 20),
+    tags: uniqueStrings(tags).slice(0, 30),
+    teachers: uniqueStrings(teachers).slice(0, 50),
+    search_text: queryText(searchText, 4000),
+    subtitle: queryText(subtitle, 500),
+  };
+}
+
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top" } = {}) {
+  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "" } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
     this.readManifest = readManifest;
     this.readReviews = readReviews;
     this.readHome = readHome;
+    this.readGuides = readGuides;
     this.reviewSubmissionService = reviewSubmissionService;
     this.publicResourceOrigin = publicResourceOrigin;
+    this.guideCorrectionUrl = guideCorrectionUrl;
   }
 
   snapshot() {
     const manifest = this.readManifest();
     const reviewData = this.readReviews();
     if (!manifest || !Array.isArray(manifest.courses)) throw new Error("Runtime course data is unavailable.");
-    return { manifest, reviewData, groups: buildReviewGroups(manifest, reviewData) };
+    const groups = buildReviewGroups(manifest, reviewData);
+    const normalizedGuides = normalizeGuideData(this.readGuides(), {
+      courseIds: new Set(manifest.courses.map((course) => course.uid)),
+      fallbackCorrectionUrl: this.guideCorrectionUrl,
+    });
+    if (normalizedGuides.errors.length) throw new Error(`Runtime guide data is invalid: ${normalizedGuides.errors.join(" ")}`);
+    return { manifest, reviewData, groups, guides: normalizedGuides.data };
   }
 
   health() {
@@ -80,7 +117,7 @@ export class PublicApiService {
 
     const allDtos = manifest.courses.map((course) => publicCourseDto(course, groups, manifest));
     const filtered = allDtos.filter((course) => {
-      const haystack = [course.name, course.summary, course.term, course.group, course.assessment, ...course.tags, ...course.teachers].join("\n").normalize("NFKC").toLocaleLowerCase("zh-CN");
+      const haystack = [course.name, course.short_name, ...course.aliases, course.summary, course.term, course.group, course.assessment, ...course.tags, ...course.teachers].join("\n").normalize("NFKC").toLocaleLowerCase("zh-CN");
       return (!q || haystack.includes(q))
         && matches(course.term, term)
         && matches(course.group, group)
@@ -118,6 +155,151 @@ export class PublicApiService {
     }
     items.sort((left, right) => left.section.localeCompare(right.section, "zh-CN") || left.title.localeCompare(right.title, "zh-CN") || left.id.localeCompare(right.id));
     return { course_id: course.uid, items, total: items.length };
+  }
+
+  searchIndex() {
+    const { manifest, groups, guides } = this.snapshot();
+    const coursesById = new Map(manifest.courses.map((course) => [course.uid, course]));
+    const courseDtos = new Map(manifest.courses.map((course) => [course.uid, publicCourseDto(course, groups, manifest)]));
+    const items = [];
+
+    for (const course of manifest.courses) {
+      const dto = courseDtos.get(course.uid);
+      items.push(indexItemBase({
+        id: dto.id,
+        type: "course",
+        name: dto.name,
+        shortName: dto.short_name,
+        aliases: dto.aliases,
+        tags: dto.tags,
+        teachers: dto.teachers,
+        searchText: [dto.summary, dto.term, dto.group, dto.assessment].join(" "),
+        subtitle: [dto.group, dto.term].filter(Boolean).join(" · "),
+      }));
+    }
+
+    const teachers = new Map();
+    for (const group of groups) {
+      if (!group.course || !group.teacher) continue;
+      const key = group.teacher.normalize("NFKC");
+      if (!teachers.has(key)) teachers.set(key, { name: group.teacher, courseIds: new Set() });
+      teachers.get(key).courseIds.add(group.course.uid);
+    }
+    for (const teacher of teachers.values()) {
+      const relatedCourseIds = [...teacher.courseIds].sort();
+      const relatedNames = relatedCourseIds.map((id) => coursesById.get(id)?.title).filter(Boolean);
+      items.push({
+        ...indexItemBase({
+          id: teacherId(teacher.name),
+          type: "teacher",
+          name: teacher.name,
+          teachers: [teacher.name],
+          searchText: [teacher.name, ...relatedNames].join(" "),
+          subtitle: `相关课程 ${relatedCourseIds.length} 门`,
+        }),
+        related_course_ids: relatedCourseIds,
+      });
+    }
+
+    for (const course of manifest.courses) {
+      const courseDto = courseDtos.get(course.uid);
+      for (const section of course.sections || []) {
+        for (const file of section.files || []) {
+          if (String(file.path || "").split("/").at(-1)?.toLowerCase() === ".openlist") continue;
+          const resource = publicResourceDto({ manifest, course, section, file, configuredOrigin: this.publicResourceOrigin });
+          items.push({
+            ...indexItemBase({
+              id: resource.id,
+              type: "resource",
+              name: resource.title,
+              tags: [resource.type, ...courseDto.tags],
+              teachers: courseDto.teachers,
+              searchText: [resource.description, resource.type, resource.course_name, resource.term_label].join(" "),
+              subtitle: [resource.course_name, resource.type].filter(Boolean).join(" · "),
+            }),
+            course_id: resource.course_id,
+            course_name: resource.course_name,
+            resource_type: resource.type,
+            term_label: resource.term_label,
+          });
+        }
+      }
+    }
+
+    for (const guide of guides.items) {
+      items.push({
+        ...indexItemBase({
+          id: guide.id,
+          type: "guide",
+          name: guide.title,
+          shortName: guide.short_name,
+          aliases: guide.aliases,
+          tags: guide.tags,
+          searchText: [guide.summary, guide.category, guide.applicable_scope].join(" "),
+          subtitle: [guide.category, `${guide.updated_at.slice(0, 10)} 更新`].filter(Boolean).join(" · "),
+        }),
+        category: guide.category,
+        updated_at: guide.updated_at,
+      });
+    }
+
+    const typeOrder = { course: 0, teacher: 1, resource: 2, guide: 3 };
+    items.sort((left, right) => typeOrder[left.type] - typeOrder[right.type] || left.name.localeCompare(right.name, "zh-CN") || left.id.localeCompare(right.id));
+    const version = createHash("sha256").update(JSON.stringify(items), "utf8").digest("base64url").slice(0, 24);
+    const timestamps = [
+      manifest.updated,
+      ...manifest.courses.map((course) => course.updated),
+      guides.updated_at,
+      ...guides.items.map((guide) => guide.updated_at),
+      ...groups.flatMap((group) => group.reviews.map((review) => review.created_at)),
+    ];
+    return { version, generated_at: generatedAt(timestamps), items, total: items.length };
+  }
+
+  guides(searchParams) {
+    const { guides } = this.snapshot();
+    const page = positiveInteger(searchParams.get("page"), 1, { max: 1_000_000 });
+    const pageSize = positiveInteger(searchParams.get("page_size"), 20, { max: 100 });
+    const category = queryText(searchParams.get("category"), 40);
+    if (category && !GUIDE_CATEGORIES.includes(category)) throw new PublicApiError(400, "指南分类无效。", "INVALID_GUIDE_CATEGORY");
+    const filtered = guides.items.filter((guide) => !category || guide.category === category);
+    const offset = (page - 1) * pageSize;
+    return {
+      items: filtered.slice(offset, offset + pageSize).map((guide) => ({
+        id: guide.id,
+        title: guide.title,
+        summary: guide.summary,
+        category: guide.category,
+        updated_at: guide.updated_at,
+        applicable_scope: guide.applicable_scope,
+        related_course_ids: guide.related_course_ids,
+      })),
+      total: filtered.length,
+      page,
+      page_size: pageSize,
+      facets: { categories: GUIDE_CATEGORIES.filter((value) => guides.items.some((guide) => guide.category === value)) },
+      data_updated_at: guides.updated_at,
+    };
+  }
+
+  guide(guideId) {
+    const { manifest, guides } = this.snapshot();
+    const guide = guides.items.find((item) => item.id === guideId);
+    if (!guide) throw new PublicApiError(404, "指南不存在。", "GUIDE_NOT_FOUND");
+    const coursesById = new Map(manifest.courses.map((course) => [course.uid, course]));
+    return {
+      id: guide.id,
+      title: guide.title,
+      summary: guide.summary,
+      category: guide.category,
+      updated_at: guide.updated_at,
+      applicable_scope: guide.applicable_scope,
+      steps: guide.steps,
+      related_courses: guide.related_course_ids.map((id) => ({ id, name: queryText(coursesById.get(id)?.title, 120) })),
+      source_title: guide.source_title,
+      source_url: guide.source_url,
+      correction_url: guide.correction_url,
+    };
   }
 
   reviewGroups() {

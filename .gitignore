@@ -37,6 +37,7 @@ src/data/**
 !src/data/fixtures/about.json
 !src/data/fixtures/feedback.json
 !src/data/fixtures/footer.json
+!src/data/fixtures/guides.json
 !src/data/fixtures/home.json
 !src/data/fixtures/links.json
 !src/data/fixtures/manifest.json

@@ -85,6 +85,10 @@ export function validateManifest(manifest) {
     if (course.id && ids.has(course.id)) errors.push(`${label}: duplicate id ${course.id}.`);
     if (course.id) ids.add(course.id);
     if (!Array.isArray(course.sections)) errors.push(`${label}: sections must be an array.`);
+    if (course.shortName !== undefined && typeof course.shortName !== "string") errors.push(`${label}: shortName must be a string.`);
+    if (course.aliases !== undefined && (!Array.isArray(course.aliases) || course.aliases.some((alias) => typeof alias !== "string"))) {
+      errors.push(`${label}: aliases must be an array of strings.`);
+    }
     let canonicalBasePath;
     try {
       canonicalBasePath = strictR2BasePath(course.basePath, `${label}: basePath`);

@@ -16,6 +16,8 @@ function fixture() {
         uid: uidA,
         id: "old-route-a",
         title: "中文课程",
+        shortName: "中文",
+        aliases: ["中文课"],
         summary: "课程摘要",
         term: "大一下",
         group: "通识选修课",
@@ -60,8 +62,26 @@ function fixture() {
     readManifest: () => structuredClone(manifest),
     readReviews: () => structuredClone(reviews),
     readHome: () => ({ announcement: "服务器公告", privateField: "never expose" }),
+    readGuides: () => ({
+      version: 1,
+      updated_at: "2026-08-16T12:00:00+08:00",
+      correction_url: "https://nkustudy.top/feedback",
+      items: [{
+        id: "add-drop-guide",
+        title: "退补选流程",
+        summary: "退补选时间与操作步骤",
+        category: "add-drop",
+        tags: ["退补选"],
+        updated_at: "2026-08-16T12:00:00+08:00",
+        related_course_ids: [uidA],
+        steps: [{ title: "第一步", body: "登录选课系统。" }],
+        source_title: "公开教务说明",
+        source_url: "https://nkustudy.top/about",
+      }],
+    }),
     reviewSubmissionService,
     publicResourceOrigin: "https://resources.nkustudy.top",
+    guideCorrectionUrl: "https://nkustudy.top/feedback",
   });
   return { service, submissions };
 }
@@ -107,6 +127,39 @@ test("course search, pagination, and bounds are deterministic", () => {
   assert.throws(() => service.courses(new URLSearchParams("page=0")), /分页参数/);
   assert.throws(() => service.courses(new URLSearchParams("page_size=101")), /分页参数/);
   assert.throws(() => service.course("missing"), /课程不存在/);
+});
+
+test("complete search index exposes four whitelisted result types with a stable version", () => {
+  const { service } = fixture();
+  const first = service.searchIndex();
+  const second = service.searchIndex();
+  assert.equal(first.version, second.version);
+  assert.equal(first.generated_at, "2026-08-16T04:00:00.000Z");
+  assert.deepEqual([...new Set(first.items.map((item) => item.type))], ["course", "teacher", "resource", "guide"]);
+  const course = first.items.find((item) => item.type === "course" && item.id === uidA);
+  assert.equal(course.short_name, "中文");
+  assert.deepEqual(course.aliases, ["中文课"]);
+  const teacher = first.items.find((item) => item.type === "teacher");
+  assert.equal(teacher.name, "张老师");
+  assert.deepEqual(teacher.related_course_ids, [uidA]);
+  const resource = first.items.find((item) => item.type === "resource");
+  assert.equal(resource.course_id, uidA);
+  assert.equal(Object.hasOwn(resource, "download_url"), false);
+  const keys = collectObjectKeys(first);
+  for (const forbidden of ["basePath", "path", "source", "resourceRoot", "ipHash", "userAgent"]) assert.equal(keys.has(forbidden), false);
+});
+
+test("guide list and detail validate categories, related courses, and correction URL", () => {
+  const { service } = fixture();
+  const list = service.guides(new URLSearchParams("category=add-drop&page=1&page_size=20"));
+  assert.equal(list.total, 1);
+  assert.deepEqual(list.facets.categories, ["add-drop"]);
+  assert.equal(list.items[0].id, "add-drop-guide");
+  const detail = service.guide("add-drop-guide");
+  assert.deepEqual(detail.related_courses, [{ id: uidA, name: "中文课程" }]);
+  assert.equal(detail.correction_url, "https://nkustudy.top/feedback");
+  assert.throws(() => service.guides(new URLSearchParams("category=life")), /指南分类无效/);
+  assert.throws(() => service.guide("missing"), /指南不存在/);
 });
 
 test("review groups use website courseTitle + teacher and preserve unmatched groups", () => {

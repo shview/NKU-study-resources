@@ -40,29 +40,35 @@ export function createPublicApiHandler({ service, readBody, clientIp } = {}) {
       let data;
       if (req.method === "GET" && url.pathname === "/api/v1/health") data = service.health();
       else if (req.method === "GET" && url.pathname === "/api/v1/home") data = service.home();
+      else if (req.method === "GET" && url.pathname === "/api/v1/search-index") data = service.searchIndex();
+      else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);
       else {
-        let match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)$/);
-        if (req.method === "GET" && match) data = service.course(decodePathPart(match[1]));
+        let match = url.pathname.match(/^\/api\/v1\/guides\/([^/]+)$/);
+        if (req.method === "GET" && match) data = service.guide(decodePathPart(match[1]));
         else {
-          match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)\/resources$/);
-          if (req.method === "GET" && match) data = service.resources(decodePathPart(match[1]));
-          else if (req.method === "GET" && url.pathname === "/api/v1/review-groups") data = service.reviewGroups();
+          match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)$/);
+          if (req.method === "GET" && match) data = service.course(decodePathPart(match[1]));
           else {
-            match = url.pathname.match(/^\/api\/v1\/review-groups\/([^/]+)$/);
-            if (req.method === "GET" && match) data = service.reviewGroup(decodePathPart(match[1]));
-            else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
-              const ip = clientIp(req);
-              service.assertReviewAttempt(ip);
-              let body;
-              try {
-                body = await readBody(req);
-              } catch {
-                throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+            match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)\/resources$/);
+            if (req.method === "GET" && match) data = service.resources(decodePathPart(match[1]));
+            else if (req.method === "GET" && url.pathname === "/api/v1/review-groups") data = service.reviewGroups();
+            else {
+              match = url.pathname.match(/^\/api\/v1\/review-groups\/([^/]+)$/);
+              if (req.method === "GET" && match) data = service.reviewGroup(decodePathPart(match[1]));
+              else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
+                const ip = clientIp(req);
+                service.assertReviewAttempt(ip);
+                let body;
+                try {
+                  body = await readBody(req);
+                } catch {
+                  throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+                }
+                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"] });
+              } else {
+                throw new PublicApiError(404, "接口不存在。", "NOT_FOUND");
               }
-              data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"] });
-            } else {
-              throw new PublicApiError(404, "接口不存在。", "NOT_FOUND");
             }
           }
         }

@@ -21,6 +21,7 @@ const fixtureFiles = [
   "about.json",
   "feedback.json",
   "footer.json",
+  "guides.json",
   "home.json",
   "links.json",
   "manifest.json",

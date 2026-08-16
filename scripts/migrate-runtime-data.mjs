@@ -7,7 +7,7 @@ import { DATA_ROOT_SENTINEL, DATA_ROOT_SENTINEL_CONTENT } from "../server/runtim
 import { validateManifest } from "../server/manifest-schema.mjs";
 
 const REQUIRED_FILES = ["manifest.json", "reviews.json", "home.json", "about.json", "participate.json", "links.json", "footer.json"];
-const OPTIONAL_FILES = ["feedback.json", "visit-stats.json", "editor-settings.json", "backup-settings.json"];
+const OPTIONAL_FILES = ["guides.json", "feedback.json", "visit-stats.json", "editor-settings.json", "backup-settings.json"];
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");

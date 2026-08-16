@@ -35,6 +35,7 @@ const {
   feedback: feedbackPath,
   about: aboutPath,
   home: homePath,
+  guides: guidesPath,
   participate: participatePath,
   links: linksPath,
   footer: footerPath,
@@ -109,8 +110,10 @@ const publicApiService = new PublicApiService({
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
   readHome,
+  readGuides,
   reviewSubmissionService,
   publicResourceOrigin: process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top",
+  guideCorrectionUrl: process.env.PUBLIC_GUIDE_CORRECTION_URL || "https://nkustudy.top/feedback",
 });
 const handlePublicApi = createPublicApiHandler({ service: publicApiService, readBody: readJsonBody, clientIp });
 
@@ -351,6 +354,7 @@ function backupData(scope = "all") {
   const pages = () => ({
     about: readAbout(),
     home: readHome(),
+    guides: readGuides(),
     participate: readParticipate(),
     links: readLinks(),
     footer: readFooter(),
@@ -946,6 +950,11 @@ function readLinks() {
 
 function readHome() {
   return readJsonFile(homePath);
+}
+
+function readGuides() {
+  if (!fs.existsSync(guidesPath)) return { version: 1, updated_at: "", items: [] };
+  return readJsonFile(guidesPath);
 }
 
 function normalizeHome(data) {
