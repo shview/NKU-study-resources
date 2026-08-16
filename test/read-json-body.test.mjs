@@ -27,3 +27,10 @@ test("JSON body rejects malformed UTF-8 before JSON parsing", async () => {
   request.end(Buffer.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xc3, 0x28, 0x22, 0x7d]));
   await assert.rejects(parsed, (error) => error.statusCode === 400 && /UTF-8/.test(error.message));
 });
+
+test("public JSON bodies can reject already-decoded replacement characters", async () => {
+  const request = new PassThrough();
+  const parsed = readJsonBody(request, { rejectReplacementCharacters: true });
+  request.end(Buffer.from(JSON.stringify({ content: "damaged \uFFFD text" }), "utf8"));
+  await assert.rejects(parsed, (error) => error.statusCode === 400 && /U\+FFFD/.test(error.message));
+});

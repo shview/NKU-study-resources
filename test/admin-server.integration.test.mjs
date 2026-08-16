@@ -56,9 +56,16 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     PUBLIC_DIR: path.join(publicRoot, "current"),
     PUBLIC_RELEASES_DIR: path.join(publicRoot, "releases"),
     ADMIN_PASSWORD: "isolated-test-password",
+    ADMIN_ORIGIN: `http://127.0.0.1:${port}`,
     ADMIN_HOST: "127.0.0.1",
     ADMIN_PORT: String(port),
   };
+  const adminHeaders = (extra = {}) => ({
+    origin: childEnv.ADMIN_ORIGIN,
+    "sec-fetch-site": "same-origin",
+    "x-nkustudy-admin-request": "1",
+    ...extra,
+  });
   assert.equal(path.relative(projectRoot, childEnv.PUBLIC_DIR).startsWith(".."), true, "tests must not publish inside a read-only source candidate");
   assert.notEqual(childEnv.PUBLIC_DIR, path.join(projectRoot, ".runtime-public", "current"));
   let child = spawn(process.execPath, [path.join(projectRoot, "server", "admin-server.mjs")], {
@@ -76,9 +83,28 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   });
   await waitForServer(child);
 
+  const missingCsrfHeader = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+    method: "POST",
+    headers: { origin: childEnv.ADMIN_ORIGIN, "content-type": "application/json" },
+    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+  });
+  assert.equal(missingCsrfHeader.status, 403);
+  const crossSiteLogin = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+    method: "POST",
+    headers: { origin: "https://attacker.example", "sec-fetch-site": "cross-site", "x-nkustudy-admin-request": "1", "content-type": "application/json" },
+    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+  });
+  assert.equal(crossSiteLogin.status, 403);
+  const simpleContentType = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "text/plain" }),
+    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+  });
+  assert.equal(simpleContentType.status, 415);
+
   const login = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: adminHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
   });
   assert.equal(login.status, 200);
@@ -88,21 +114,21 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const tabB = structuredClone(tabA);
   const saveA = await fetch(`http://127.0.0.1:${port}/admin-api/manifest-draft`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
     body: JSON.stringify({ manifest: { ...tabA.manifest, testMarker: "tab-a" }, expectedRevision: tabA.revision, deletedCourseUids: [] }),
   });
   assert.equal(saveA.status, 200);
   const savedA = await saveA.json();
   const staleB = await fetch(`http://127.0.0.1:${port}/admin-api/manifest-draft`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
     body: JSON.stringify({ manifest: { ...tabB.manifest, testMarker: "tab-b" }, expectedRevision: tabB.revision, deletedCourseUids: [] }),
   });
   assert.equal(staleB.status, 409);
   assert.equal((await staleB.json()).currentRevision, savedA.revision);
   const staleSync = await fetch(`http://127.0.0.1:${port}/admin-api/sync-r2-all`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
     body: JSON.stringify({ expectedRevision: tabB.revision }),
   });
   assert.equal(staleSync.status, 409, "stale R2 sync must fail CAS before touching R2");
@@ -132,13 +158,13 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal((await feedbackResponse.json()).ok, true);
   const staleReviews = await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
     body: JSON.stringify({ data: reviewsLoaded.data, expectedRevision: reviewsLoaded.revision }),
   });
   assert.equal(staleReviews.status, 409, "public review submission must make a loaded admin revision stale");
   const staleFeedback = await fetch(`http://127.0.0.1:${port}/admin-api/feedback`, {
     method: "POST",
-    headers: { "content-type": "application/json", cookie },
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
     body: JSON.stringify({ data: feedbackLoaded.data, expectedRevision: feedbackLoaded.revision }),
   });
   assert.equal(staleFeedback.status, 409, "public feedback submission must make a loaded admin revision stale");
@@ -170,7 +196,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   for (let index = 0; index < 30; index += 1) {
     invalidAttempts.push(await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: adminHeaders({ "content-type": "application/json" }),
       body: "{}",
     }));
   }
@@ -189,7 +215,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   for (let index = 0; index < 5; index += 1) {
     badLogins.push(await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: adminHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ password: "wrong" }),
     }));
   }
@@ -203,9 +229,11 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     stdio: ["ignore", "pipe", "pipe"],
   });
   await waitForServer(child);
+  const persistedSession = await fetch(`http://127.0.0.1:${port}/admin-api/session`, { headers: { cookie } });
+  assert.equal(persistedSession.status, 200, "admin sessions must survive a server restart until server-side expiry or logout");
   const persistedLoginLimit = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: adminHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
   });
   assert.equal(persistedLoginLimit.status, 429, "login limit must survive a server restart");
@@ -215,6 +243,13 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     body: "{}",
   });
   assert.equal(persistedAttempt.status, 429, "attempt limit must survive a server restart");
+  const logout = await fetch(`http://127.0.0.1:${port}/admin-api/logout`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
+    body: "{}",
+  });
+  assert.equal(logout.status, 200);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/admin-api/session`, { headers: { cookie } })).status, 401, "logout must revoke the session server-side");
 
   const reviews = JSON.parse(await fs.readFile(path.join(dataDir, "reviews.json"), "utf8"));
   const feedback = JSON.parse(await fs.readFile(path.join(dataDir, "feedback.json"), "utf8"));

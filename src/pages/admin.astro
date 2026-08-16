@@ -502,6 +502,7 @@ import "vditor/dist/index.css";
         ...options,
         headers: {
           "content-type": "application/json",
+          "x-nkustudy-admin-request": "1",
           ...(options.headers || {}),
         },
       });
@@ -1883,6 +1884,7 @@ import "vditor/dist/index.css";
       const data = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "/admin-api/upload?courseId=" + encodeURIComponent(course.id) + "&sectionIndex=" + sectionIndex);
+        xhr.setRequestHeader("x-nkustudy-admin-request", "1");
         xhr.upload.addEventListener("progress", (event) => {
           if (!event.lengthComputable) return;
           const percent = Math.round((event.loaded / event.total) * 100);

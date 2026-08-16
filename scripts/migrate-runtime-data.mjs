@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { AtomicJsonStore } from "../server/atomic-json-store.mjs";
 import { DATA_ROOT_SENTINEL, DATA_ROOT_SENTINEL_CONTENT } from "../server/runtime-config.mjs";
 import { validateManifest } from "../server/manifest-schema.mjs";
+import { assertNoReplacementCharacters, decodeUtf8Strict } from "../server/text-integrity.mjs";
 
 const REQUIRED_FILES = ["manifest.json", "reviews.json", "home.json", "about.json", "participate.json", "links.json", "footer.json"];
 const OPTIONAL_FILES = ["guides.json", "feedback.json", "visit-stats.json", "editor-settings.json", "backup-settings.json"];
@@ -157,13 +158,15 @@ async function loadFiles(sourceDir) {
   for (const filename of REQUIRED_FILES) {
     const fileBytes = await fs.readFile(path.join(sourceDir, filename));
     bytes[filename] = fileBytes;
-    files[filename] = JSON.parse(fileBytes.toString("utf8"));
+    files[filename] = JSON.parse(decodeUtf8Strict(fileBytes, filename));
+    assertNoReplacementCharacters(files[filename], filename);
   }
   for (const filename of OPTIONAL_FILES) {
     try {
       const fileBytes = await fs.readFile(path.join(sourceDir, filename));
       bytes[filename] = fileBytes;
-      files[filename] = JSON.parse(fileBytes.toString("utf8"));
+      files[filename] = JSON.parse(decodeUtf8Strict(fileBytes, filename));
+      assertNoReplacementCharacters(files[filename], filename);
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }

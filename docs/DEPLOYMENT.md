@@ -11,6 +11,7 @@ NODE_ENV=production
 DATA_DIR=/var/lib/nkustudy/json
 STATE_DB_PATH=/var/lib/nkustudy/miniprogram.sqlite
 ADMIN_SECRET_FILE=/var/lib/nkustudy/admin-secret
+ADMIN_ORIGIN=https://nkustudy.top
 TRUSTED_PROXIES=127.0.0.1/32,::1/128
 PUBLIC_RESOURCE_ORIGIN=https://resources.nkustudy.top
 PUBLIC_GUIDE_CORRECTION_URL=https://nkustudy.top/feedback
@@ -19,6 +20,41 @@ PUBLIC_RELEASES_DIR=/var/www/nkustudy-publish/releases
 ```
 
 Before startup, create `/var/lib/nkustudy` and `${DATA_DIR}` as mode `0700`, create `${DATA_DIR}/.nkustudy-data-root` containing exactly `NKUSTUDY_RUNTIME_DATA_V1`, and install all core JSON files. Use `STATE_DB_PATH=/var/lib/nkustudy/miniprogram.sqlite` and `ADMIN_SECRET_FILE=/var/lib/nkustudy/admin-secret`; all data, database and secret files are mode `0600`. `ADMIN_SECRET_FILE` must already exist and contain at least 32 random characters. Production startup validates the sentinel, core JSON, paths, symlinks, permissions, secret and trusted proxy configuration before SQLite or mutable JSON is created.
+
+Administrator sessions are opaque random tokens whose HMAC hashes, absolute expiry and last-use time are stored in `STATE_DB_PATH`. The defaults are a 30-minute idle timeout and an 8-hour absolute timeout; logout revokes the session in SQLite. Every non-GET `/admin-api/*` request must come from the exact `ADMIN_ORIGIN`, carry `X-NKUStudy-Admin-Request: 1`, and use the expected JSON or multipart content type. Keep `ADMIN_ORIGIN` canonical and redirect alternate hostnames to it.
+
+## Reverse-proxy and host baseline
+
+The public Node listener stays on `127.0.0.1:8787`. Caddy is the only public HTTP entry point. Apply response headers at the canonical site block and do not expose the static site on the raw server IP:
+
+```caddyfile
+www.nkustudy.top {
+  redir https://nkustudy.top{uri} permanent
+}
+
+nkustudy.top {
+  header {
+    -Server
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy "base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
+  }
+  # Existing API handlers and static root follow here.
+}
+
+http://8.217.248.245 {
+  respond 404
+}
+```
+
+Validate the Caddy configuration before reloading it. The host firewall should expose only 22, 80 and 443; use a rate-limited SSH rule and remove unused public ports. Do not disable password authentication or root login until a tested non-root sudo account and at least two working administrator public keys exist.
+
+## Text-encoding integrity
+
+All JSON transport is decoded as strict UTF-8. Public write requests containing the Unicode replacement character `U+FFFD` are rejected, and runtime-data migration rejects both malformed UTF-8 and existing replacement characters. Run `DATA_DIR=/var/lib/nkustudy/json npm run audit:encoding` before deployment and after bulk import. If it reports a finding, restore the exact field from a verified earlier source or ask the content owner; never guess the missing character or add a display-time substitution rule.
 
 `PUBLIC_DIR` must be the `current` symlink beside `PUBLIC_RELEASES_DIR` in one service-owned publish directory. Publishing builds a fresh versioned directory and switches that inner symlink with a same-filesystem rename; it never deletes the live tree in place. A root-owned stable symlink keeps Caddy outside that writable boundary:
 

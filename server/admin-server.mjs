@@ -8,6 +8,7 @@ import Busboy from "busboy";
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { AtomicJsonStore } from "./atomic-json-store.mjs";
 import { syncCourseResponse } from "./admin-response.mjs";
+import { AdminSessionStore } from "./admin-session-store.mjs";
 import { clientIp, hashActor, trustedProxyRules } from "./client-identity.mjs";
 import { ContentPublishJournal, ContentPublishService } from "./content-publish-service.mjs";
 import { manifestRevision, ManifestConflictError, ManifestService } from "./manifest-service.mjs";
@@ -55,6 +56,7 @@ const staticReleasePublisher = new StaticReleasePublisher({
 const host = process.env.ADMIN_HOST || "127.0.0.1";
 const port = Number(process.env.ADMIN_PORT || 8787);
 const password = process.env.ADMIN_PASSWORD;
+const adminOrigin = String(process.env.ADMIN_ORIGIN || (process.env.NODE_ENV === "production" ? "" : `http://${host}:${port}`)).replace(/\/+$/, "");
 const secretPath = runtime.adminSecretPath;
 const r2Bucket = process.env.R2_BUCKET;
 const r2Prefix = strictR2Path(process.env.R2_PREFIX || "resources", "R2_PREFIX");
@@ -84,6 +86,10 @@ if (!password) {
   console.error("ADMIN_PASSWORD is required.");
   process.exit(1);
 }
+if (!adminOrigin || !/^https?:\/\/[^/]+$/i.test(adminOrigin)) {
+  console.error("ADMIN_ORIGIN must be an exact http(s) origin without a path.");
+  process.exit(1);
+}
 
 let secret;
 if (fs.existsSync(secretPath)) {
@@ -96,6 +102,12 @@ if (fs.existsSync(secretPath)) {
 }
 if (secret.length < 32) throw new Error("ADMIN_SECRET_FILE must contain at least 32 characters.");
 const rateLimiter = new PersistentRateLimiter({ dbPath: runtime.stateDbPath });
+const sessionStore = new AdminSessionStore({
+  dbPath: runtime.stateDbPath,
+  secret,
+  absoluteTtlMs: Number(process.env.ADMIN_SESSION_ABSOLUTE_TTL_MS || 8 * 60 * 60 * 1000),
+  idleTtlMs: Number(process.env.ADMIN_SESSION_IDLE_TTL_MS || 30 * 60 * 1000),
+});
 const reviewSubmissionService = new ReviewSubmissionService({
   store: jsonStore,
   reviewsPath,
@@ -115,7 +127,8 @@ const publicApiService = new PublicApiService({
   publicResourceOrigin: process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top",
   guideCorrectionUrl: process.env.PUBLIC_GUIDE_CORRECTION_URL || "https://nkustudy.top/feedback",
 });
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, readBody: readJsonBody, clientIp });
+const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
+const handlePublicApi = createPublicApiHandler({ service: publicApiService, readBody: readPublicBody, clientIp });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -123,6 +136,7 @@ function json(res, status, data) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
   });
   res.end(body);
 }
@@ -610,38 +624,51 @@ function startBackupScheduler() {
 }
 
 const readBody = readJsonBody;
+const adminCookieName = "__Host-nkustudy_admin";
 
-function sign(value) {
-  return createHmac("sha256", secret).update(value).digest("hex");
-}
-
-function makeToken() {
-  const value = randomBytes(24).toString("hex");
-  return `${value}.${sign(value)}`;
-}
-
-function validToken(token = "") {
-  const [value, mac] = token.split(".");
-  if (!value || !mac) return false;
-  const expected = sign(value);
-  const a = Buffer.from(mac);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+function safePasswordEqual(candidate) {
+  const actual = createHmac("sha256", secret).update(String(candidate ?? ""), "utf8").digest();
+  const expected = createHmac("sha256", secret).update(password, "utf8").digest();
+  return timingSafeEqual(actual, expected);
 }
 
 function cookie(req, name) {
   const header = req.headers.cookie || "";
   for (const part of header.split(";")) {
     const [key, ...value] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
+    if (key === name) {
+      try {
+        return decodeURIComponent(value.join("="));
+      } catch {
+        return "";
+      }
+    }
   }
   return "";
 }
 
 function requireAuth(req, res) {
-  if (validToken(cookie(req, "nkustudy_admin"))) return true;
+  if (sessionStore.validate(cookie(req, adminCookieName))) return true;
   json(res, 401, { ok: false, error: "Unauthorized" });
   return false;
+}
+
+function requireAdminMutationProvenance(req, res, url) {
+  const origin = String(req.headers.origin || "");
+  const fetchSite = String(req.headers["sec-fetch-site"] || "");
+  if (origin !== adminOrigin || (fetchSite && fetchSite !== "same-origin") || req.headers["x-nkustudy-admin-request"] !== "1") {
+    json(res, 403, { ok: false, error: "Admin request origin could not be verified." });
+    req.resume();
+    return false;
+  }
+  const contentType = String(req.headers["content-type"] || "").toLowerCase();
+  const expected = url.pathname === "/admin-api/upload" ? "multipart/form-data" : "application/json";
+  if (!contentType.startsWith(expected)) {
+    json(res, 415, { ok: false, error: `Content-Type must be ${expected}.` });
+    req.resume();
+    return false;
+  }
+  return true;
 }
 
 function normalizeKey(value) {
@@ -1105,7 +1132,7 @@ async function handleFeedbackSubmit(req, res) {
     return;
   }
 
-  const body = await readBody(req);
+  const body = await readPublicBody(req);
   if (body.website) {
     json(res, 200, { ok: true });
     return;
@@ -1149,7 +1176,7 @@ async function handleFeedbackSubmit(req, res) {
 async function handleReviewSubmit(req, res) {
   const ip = clientIp(req);
   reviewSubmissionService.assertAttempt(ip);
-  const result = await reviewSubmissionService.submit(await readBody(req), { clientIp: ip, userAgent: req.headers["user-agent"] });
+  const result = await reviewSubmissionService.submit(await readPublicBody(req), { clientIp: ip, userAgent: req.headers["user-agent"] });
   json(res, 200, { ok: true, pending: result.pending });
 }
 
@@ -1775,8 +1802,9 @@ await contentPublishService.recoverStartup();
 await initializeRuntimeData();
 
 const server = createServer(async (req, res) => {
+  let url;
   try {
-    const url = new URL(req.url || "/", `http://${req.headers.host}`);
+    url = new URL(req.url || "/", `http://${req.headers.host}`);
     if (await handlePublicApi(req, res, url)) return;
     if (url.pathname.startsWith("/review-api/")) {
       if (req.method === "GET" && url.pathname === "/review-api/reviews") {
@@ -1815,7 +1843,7 @@ const server = createServer(async (req, res) => {
           req.resume();
           return;
         }
-        const body = await readBody(req);
+        const body = await readPublicBody(req);
         json(res, 200, { ok: true, stats: await recordVisit(req, body.path || req.headers.referer || "/") });
         return;
       }
@@ -1833,6 +1861,8 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (!["GET", "HEAD"].includes(req.method || "GET") && !requireAdminMutationProvenance(req, res, url)) return;
+
     if (req.method === "POST" && url.pathname === "/admin-api/login") {
       const ip = clientIp(req);
       if (!consumeLayeredAttempt("admin-login-attempt", ip, { perIp: 5, global: 60, windowMs: 5 * 60 * 1000 })) {
@@ -1841,18 +1871,22 @@ const server = createServer(async (req, res) => {
         return;
       }
       const body = await readBody(req);
-      if (body.password !== password) {
+      if (!safePasswordEqual(body.password)) {
         json(res, 403, { ok: false, error: "Password is incorrect." });
         return;
       }
-      const token = makeToken();
-      res.setHeader("set-cookie", `nkustudy_admin=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800`);
+      const token = sessionStore.create();
+      res.setHeader("set-cookie", `${adminCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`);
       json(res, 200, { ok: true });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/logout") {
-      res.setHeader("set-cookie", "nkustudy_admin=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0");
+      sessionStore.revoke(cookie(req, adminCookieName));
+      res.setHeader("set-cookie", [
+        `${adminCookieName}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`,
+        "nkustudy_admin=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+      ]);
       json(res, 200, { ok: true });
       return;
     }
@@ -2051,7 +2085,14 @@ const server = createServer(async (req, res) => {
 
     json(res, 404, { ok: false, error: "Not found" });
   } catch (error) {
-    json(res, Number(error.statusCode) || 500, { ok: false, error: error.message, currentRevision: error.currentRevision });
+    const statusCode = Number(error.statusCode) || 500;
+    const authenticatedAdmin = Boolean(url?.pathname.startsWith("/admin-api/") && sessionStore.validate(cookie(req, adminCookieName)));
+    if (statusCode >= 500) console.error(`Request failed (${req.method} ${url?.pathname || "unknown"}): ${error.message}`);
+    json(res, statusCode, {
+      ok: false,
+      error: statusCode < 500 || authenticatedAdmin ? error.message : "Internal server error.",
+      currentRevision: error.currentRevision,
+    });
   }
 });
 
@@ -2067,6 +2108,7 @@ function shutdown(signal) {
   for (const child of activeChildren) terminateChildTree(child);
   server.close(() => {
     try {
+      sessionStore.close();
       rateLimiter.close();
       process.exit(0);
     } catch (error) {

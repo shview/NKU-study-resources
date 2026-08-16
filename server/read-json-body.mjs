@@ -1,10 +1,12 @@
+import { assertNoReplacementCharacters, decodeUtf8Strict } from "./text-integrity.mjs";
+
 export const MAX_BODY_BYTES = 2_000_000;
 
 function requestError(message, statusCode) {
   return Object.assign(new Error(message), { statusCode });
 }
 
-export function readJsonBody(req, { maxBytes = MAX_BODY_BYTES } = {}) {
+export function readJsonBody(req, { maxBytes = MAX_BODY_BYTES, rejectReplacementCharacters = false } = {}) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let byteLength = 0;
@@ -38,11 +40,13 @@ export function readJsonBody(req, { maxBytes = MAX_BODY_BYTES } = {}) {
       cleanup();
       try {
         const bytes = Buffer.concat(chunks, byteLength);
-        const body = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-        resolve(body ? JSON.parse(body) : {});
+        const body = decodeUtf8Strict(bytes, "Request body");
+        const parsed = body ? JSON.parse(body) : {};
+        if (rejectReplacementCharacters) assertNoReplacementCharacters(parsed, "Request body");
+        resolve(parsed);
       } catch (error) {
-        const message = error instanceof SyntaxError ? "Invalid JSON request body." : "Request body must be valid UTF-8.";
-        reject(requestError(message, 400));
+        if (error.statusCode) reject(error);
+        else reject(requestError("Invalid JSON request body.", 400));
       }
     };
     const onError = (error) => fail(error);
