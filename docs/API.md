@@ -30,7 +30,7 @@
 | `GET` | `/feedback-api/feedback` | 公开 | 网站读取公开反馈及规则 |
 | `POST` | `/feedback-api/submit` | 公开、限流 | 网站提交反馈 |
 | `GET` | `/visit-api/stats` | 公开 | 读取公开访问统计 |
-| `POST` | `/visit-api/hit` | 公开、限流 | 记录访问 |（网站固定路径白名单；另接受 `/mp/<页面名>` 供小程序上报，归入「小程序」类统计） |
+| `POST` | `/visit-api/hit` | 公开、限流 | 记录访问 |（网站固定路径白名单；另接受 `/mp/<页面名>` 供小程序上报，归入「小程序」类统计。访客记录按 IP+UA 哈希 30 分钟去重，`/admin-api/visit-stats` 面向管理员返回最近访客 IP；公开接口只暴露汇总数字） |
 | `GET` | `/editor-settings` | 公开 | 读取公开编辑器工具栏配置 |
 | `POST` | `/admin-api/login` | 公开、限流 | 账号+密码登录并签发 Cookie |
 | `POST` | `/admin-api/logout` | 公开 | 清除管理员 Cookie |

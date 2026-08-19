@@ -239,7 +239,7 @@ import "vditor/dist/index.css";
               <div class="review-admin-list" id="stats-admin-pages" style="margin-top: 14px;"></div>
             </details>
             <details class="card admin-collapsible-card" style="margin-top: 18px;">
-              <summary>最近访客（去重标识）</summary>
+              <summary>最近访客（IP · 30 分钟去重）</summary>
               <div class="review-admin-list" id="stats-admin-visitors" style="margin-top: 14px;"></div>
             </details>
           </div>
@@ -338,7 +338,7 @@ import "vditor/dist/index.css";
                   <label class="admin-field"><span>确认初始密码</span><input id="new-account-password-confirm" type="text" autocomplete="off" placeholder="再次输入初始密码" /></label>
                 </div>
                 <div class="filter-row">
-                  <label class="admin-field"><span>角色预设</span>
+                  <label class="admin-field perm-role-field"><span>角色预设</span>
                     <select id="new-account-role">
                       <option value="">自定义（手动勾选）</option>
                       <option value="super_admin">super_admin（全部权限）</option>
@@ -347,10 +347,13 @@ import "vditor/dist/index.css";
                       <option value="viewer">viewer（只读）</option>
                     </select>
                   </label>
-                  <label class="admin-field"><span>权限点</span><div id="new-account-permissions" class="filter-row"></div></label>
+                </div>
+                <div class="perm-editor-row">
+                  <span class="perm-editor-label">权限点</span>
+                  <div id="new-account-permissions" class="perm-editor"></div>
                 </div>
                 <div class="filter-row">
-                  <label><input id="new-account-must-change" type="checkbox" checked /> 首次登录强制修改密码</label>
+                  <label class="perm-check perm-check-inline"><input id="new-account-must-change" type="checkbox" checked /> 首次登录强制修改密码</label>
                   <button class="button" id="create-account" type="button">创建账号</button>
                 </div>
               </div>
@@ -893,7 +896,7 @@ import "vditor/dist/index.css";
       container.innerHTML = "";
       for (const [permission, label] of Object.entries(permissionLabels)) {
         const box = document.createElement("label");
-        box.style.marginRight = "12px";
+        box.className = "perm-check";
         box.innerHTML = `<input type="checkbox" value="${permission}" ${checked.includes(permission) ? "checked" : ""} /> ${escapeHtml(label)}`;
         container.append(box);
       }
@@ -2150,36 +2153,53 @@ import "vditor/dist/index.css";
         return `<line x1="${paddingX}" y1="${y.toFixed(1)}" x2="${width - 12}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1" /><text x="${paddingX - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="currentColor">${label}</text>`;
       }).join("");
       const dateLabels = labelIndexes.map((index) => `<text x="${(paddingX + (series.length === 1 ? innerW / 2 : (index / (series.length - 1)) * innerW)).toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="10" fill="currentColor">${chartKeys[index].slice(5)}</text>`).join("");
+      const pointXs = series.map((_, index) => paddingX + (series.length === 1 ? innerW / 2 : (index / (series.length - 1)) * innerW));
       statsAdminChart.innerHTML = `
         <div style="position: relative;">
           <div id="stats-chart-tooltip" style="position: absolute; display: none; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 0.82rem; white-space: nowrap; z-index: 5; box-shadow: var(--shadow);"></div>
-          <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="每日访问量折线图">
+          <svg id="stats-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="每日访问量折线图" style="display: block; cursor: crosshair;">
             ${gridLines}
+            <line id="stats-chart-guide" x1="0" x2="0" y1="${paddingY}" y2="${paddingY + innerH}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3,3" style="display: none;" />
             <polyline points="${points.join(" ")}" fill="none" stroke="currentColor" stroke-width="2" />
-            ${series.map((value, index) => `<circle data-index="${index}" cx="${points[index].split(",")[0]}" cy="${points[index].split(",")[1]}" r="3" fill="currentColor"><title>${chartKeys[index]}：${value} 次</title></circle>`).join("")}
+            ${series.map((value, index) => `<circle data-index="${index}" cx="${pointXs[index].toFixed(1)}" cy="${points[index].split(",")[1]}" r="2.5" fill="currentColor" />`).join("")}
             ${dateLabels}
           </svg>
         </div>
       `;
+      const chartSvg = statsAdminChart.querySelector("#stats-chart-svg");
       const tooltip = statsAdminChart.querySelector("#stats-chart-tooltip");
-      for (const dot of statsAdminChart.querySelectorAll("circle")) {
-        const index = Number(dot.dataset.index);
-        dot.style.cursor = "pointer";
-        dot.addEventListener("mouseenter", () => {
-          dot.setAttribute("r", "5");
-          tooltip.textContent = `${chartKeys[index]} · ${series[index]} 次访问`;
-          tooltip.style.display = "block";
-        });
-        dot.addEventListener("mousemove", (event) => {
-          const bounds = statsAdminChart.getBoundingClientRect();
-          tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - 140))}px`;
-          tooltip.style.top = `${Math.max(0, event.clientY - bounds.top - 34)}px`;
-        });
-        dot.addEventListener("mouseleave", () => {
-          dot.setAttribute("r", "3");
-          tooltip.style.display = "none";
-        });
-      }
+      const guide = statsAdminChart.querySelector("#stats-chart-guide");
+      const dots = [...statsAdminChart.querySelectorAll("circle[data-index]")];
+      const highlight = (index) => {
+        for (const dot of dots) dot.setAttribute("r", Number(dot.dataset.index) === index ? "5" : "2.5");
+        tooltip.textContent = `${chartKeys[index]} · ${series[index]} 次访问`;
+        tooltip.style.display = "block";
+        guide.setAttribute("x1", pointXs[index].toFixed(1));
+        guide.setAttribute("x2", pointXs[index].toFixed(1));
+        guide.style.display = "";
+      };
+      chartSvg.addEventListener("mousemove", (event) => {
+        const bounds = chartSvg.getBoundingClientRect();
+        const viewBoxX = ((event.clientX - bounds.left) / bounds.width) * width;
+        let nearest = 0;
+        let nearestDistance = Infinity;
+        for (let index = 0; index < pointXs.length; index += 1) {
+          const distance = Math.abs(pointXs[index] - viewBoxX);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearest = index;
+          }
+        }
+        highlight(nearest);
+        const chartBounds = statsAdminChart.getBoundingClientRect();
+        tooltip.style.left = `${Math.max(0, Math.min(event.clientX - chartBounds.left + 14, chartBounds.width - 150))}px`;
+        tooltip.style.top = `${Math.max(0, event.clientY - chartBounds.top - 36)}px`;
+      });
+      chartSvg.addEventListener("mouseleave", () => {
+        tooltip.style.display = "none";
+        guide.style.display = "none";
+        for (const dot of dots) dot.setAttribute("r", "2.5");
+      });
 
       const categories = new Map();
       const mergedPages = new Map();
@@ -2253,9 +2273,9 @@ import "vditor/dist/index.css";
         const item = document.createElement("article");
         item.className = "review-admin-item";
         const time = visitor?.lastSeen ? beijingDateTime(Number(visitor.lastSeen)) : "";
-        const actor = String(visitor?.actorHash || "").slice(0, 12) || "未知";
+        const identity = visitor?.ip || `哈希 ${String(visitor?.actorHash || "").slice(0, 12)}…` || "未知";
         item.innerHTML = `
-          <strong>访客 ${escapeHtml(actor)}…</strong>
+          <strong>${escapeHtml(identity)}</strong>
           <p>最近访问 ${escapeHtml(time)}</p>
         `;
         statsAdminVisitors.append(item);

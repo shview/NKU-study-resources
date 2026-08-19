@@ -773,7 +773,6 @@ function normalizeVisitStats(stats) {
   stats.visitors = stats.visitors && typeof stats.visitors === "object" ? stats.visitors : {};
   for (const visitor of Object.values(stats.visitors)) {
     if (visitor?.ip && !visitor.actorHash) visitor.actorHash = ipHash(visitor.ip);
-    if (visitor && typeof visitor === "object") delete visitor.ip;
   }
   return stats;
 }
@@ -833,7 +832,7 @@ async function recordVisit(req, pagePath) {
     for (const [visitorKey, visitor] of Object.entries(current.visitors)) {
       if (Number(visitor?.lastSeen || 0) < cutoff) delete current.visitors[visitorKey];
     }
-    current.visitors[key] = { actorHash: ipHash(clientIp(req)), userAgentHash: userAgentHash(req), lastSeen: now };
+    current.visitors[key] = { ip: clientIp(req), actorHash: ipHash(clientIp(req)), userAgentHash: userAgentHash(req), lastSeen: now };
     const visitorEntries = Object.entries(current.visitors);
     if (visitorEntries.length > visitVisitorCap) {
       visitorEntries.sort((a, b) => Number(a[1]?.lastSeen || 0) - Number(b[1]?.lastSeen || 0));

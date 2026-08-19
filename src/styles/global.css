@@ -2257,3 +2257,52 @@ details.resource-subsection summary::-webkit-details-marker {
     grid-template-columns: 1fr;
   }
 }
+
+.perm-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 2px 12px 2px 0;
+  font-size: 0.88rem;
+  font-weight: 400;
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.perm-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  margin: 0;
+  accent-color: #6366f1;
+  flex: none;
+}
+.perm-editor-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 8px 0;
+}
+.perm-editor-label {
+  flex: none;
+  padding-top: 4px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 750;
+}
+.perm-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  min-width: 0;
+}
+.perm-role-field {
+  min-width: 260px;
+}
+.admin-table .admin-table-ops .button {
+  margin: 0;
+  padding: 2px 8px;
+  font-size: 0.8em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
