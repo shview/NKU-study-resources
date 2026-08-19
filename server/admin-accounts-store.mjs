@@ -51,6 +51,9 @@ function hashPassword(password) {
   return `scrypt$${SCRYPT_N}$${salt.toString("base64url")}$${derived.toString("base64url")}`;
 }
 
+// 未知用户名也执行一次等成本的哈希计算，抹平「用户是否存在」的时序侧信道。
+const DUMMY_PASSWORD_HASH = "scrypt$16384$bmt1c3R1ZHktdGltaW5nLWVxdWFsaXplci12MQ$LWGHWAaV2zPx2PPOZjp5TedlFPoK4XaOWjQEGrhtFvw";
+
 function verifyPasswordHash(password, stored) {
   const parts = String(stored || "").split("$");
   if (parts.length !== 4 || parts[0] !== "scrypt") return false;
@@ -209,7 +212,10 @@ export class AdminAccountsStore {
 
   verify(username, password, { now = Date.now() } = {}) {
     const row = this.selectByUsername.get(String(username ?? ""));
-    if (!row) return null;
+    if (!row) {
+      verifyPasswordHash(String(password ?? ""), DUMMY_PASSWORD_HASH);
+      return null;
+    }
     if (!verifyPasswordHash(String(password ?? ""), row.password_hash)) {
       this.markFailure.run(row.id);
       return null;
