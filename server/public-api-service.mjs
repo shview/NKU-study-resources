@@ -55,7 +55,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "" } = {}) {
+  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -66,6 +66,7 @@ export class PublicApiService {
     this.reviewSubmissionService = reviewSubmissionService;
     this.publicResourceOrigin = publicResourceOrigin;
     this.guideCorrectionUrl = guideCorrectionUrl;
+    this.assertMpAuthAttempt = assertMpAuthAttempt;
   }
 
   snapshot() {

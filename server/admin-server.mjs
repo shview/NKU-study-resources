@@ -17,6 +17,7 @@ import { validateManifest } from "./manifest-schema.mjs";
 import { PersistentRateLimiter } from "./persistent-rate-limiter.mjs";
 import { createPublicApiHandler } from "./public-api-router.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
+import { MpAuthService } from "./mp-auth-service.mjs";
 import { readJsonBody } from "./read-json-body.mjs";
 import { mergeCourseR2Discovery, mergeR2Discoveries } from "./r2-sync-merge.mjs";
 import { assertR2CleanupSafety, planR2ManifestMutation, planR2ObjectCopies, strictR2BasePath, strictR2Path } from "./r2-mutation-plan.mjs";
@@ -141,9 +142,15 @@ const publicApiService = new PublicApiService({
   reviewSubmissionService,
   publicResourceOrigin: process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top",
   guideCorrectionUrl: process.env.PUBLIC_GUIDE_CORRECTION_URL || "https://nkustudy.top/feedback",
+  assertMpAuthAttempt: (ip) => consumeLayeredAttempt("mp-auth-attempt", ip, { perIp: 10, global: 240 }),
+});
+const mpAuthService = new MpAuthService({
+  dbPath: runtime.stateDbPath,
+  appid: process.env.WECHAT_APPID || "",
+  secret: process.env.WECHAT_APPSECRET || "",
 });
 const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, readBody: readPublicBody, clientIp });
+const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, readBody: readPublicBody, clientIp });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -2179,6 +2186,14 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/admin-api/mp-users") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      const beijingDay = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const dayStartMs = Date.parse(`${beijingDay}T00:00:00+08:00`);
+      json(res, 200, { ok: true, data: mpAuthService.adminOverview({ dayStartMs }) });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/admin-api/accounts") {
       if (!requirePermission(req, account, "accounts.manage", res)) return;
       json(res, 200, { ok: true, data: { accounts: accountsStore.list(), permissionPoints: ADMIN_PERMISSION_POINTS, rolePresets: ADMIN_ROLE_PRESETS } });
@@ -2300,6 +2315,7 @@ function shutdown(signal) {
     try {
       sessionStore.close();
       accountsStore.close();
+      mpAuthService.close();
       rateLimiter.close();
       process.exit(0);
     } catch (error) {

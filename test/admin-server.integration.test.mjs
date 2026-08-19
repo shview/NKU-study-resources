@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import http from "node:http";
 import fs from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
@@ -47,6 +48,14 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     await fs.copyFile(path.join(fixtureDir, name), path.join(dataDir, name));
   }
   const port = await freePort();
+  const wxMock = http.createServer((req, res) => {
+    const code = new URL(req.url || "/", "http://127.0.0.1").searchParams.get("js_code");
+    res.setHeader("content-type", "application/json");
+    if (code === "mp-good-code") res.end(JSON.stringify({ openid: "integration-openid-1" }));
+    else res.end(JSON.stringify({ errcode: 40029, errmsg: "invalid code" }));
+  });
+  await new Promise((resolve) => wxMock.listen(0, "127.0.0.1", resolve));
+  const wxMockPort = wxMock.address().port;
   const childEnv = {
     ...process.env,
     DATA_DIR: dataDir,
@@ -56,6 +65,9 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     PUBLIC_DIR: path.join(publicRoot, "current"),
     PUBLIC_RELEASES_DIR: path.join(publicRoot, "releases"),
     ADMIN_INITIAL_PASSWORD: "isolated-test-password-123",
+    WECHAT_APPID: "wx-integration-appid",
+    WECHAT_APPSECRET: "integration-secret-value",
+    MP_CODE2SESSION_URL: `http://127.0.0.1:${wxMockPort}/sns/jscode2session`,
     ADMIN_ORIGIN: `http://127.0.0.1:${port}`,
     ADMIN_HOST: "127.0.0.1",
     ADMIN_PORT: String(port),
@@ -78,6 +90,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
       child.kill("SIGTERM");
       await new Promise((resolve) => child.once("exit", resolve));
     }
+    await new Promise((resolve) => wxMock.close(resolve));
     await fs.rm(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     await fs.rm(publicRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
@@ -207,6 +220,54 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal(courses.data.items[0].id, "11111111-1111-4111-8111-111111111111");
   assert.equal(Object.hasOwn(courses.data.items[0], "basePath"), false);
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/admin-api/manifest`)).status, 404);
+
+  const mpBadLogin = await fetch(`http://127.0.0.1:${port}/api/v1/auth/wechat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "mp-bad-code" }),
+  });
+  assert.equal(mpBadLogin.status, 401);
+  assert.equal((await mpBadLogin.json()).code, "AUTH_INVALID_CODE");
+
+  const mpLogin = await fetch(`http://127.0.0.1:${port}/api/v1/auth/wechat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "mp-good-code" }),
+  });
+  assert.equal(mpLogin.status, 200);
+  const mpLoginBody = await mpLogin.json();
+  assert.equal(mpLoginBody.code, 0);
+  assert.equal(JSON.stringify(mpLoginBody).includes("openid"), false, "login response must not contain openid");
+  assert.match(mpLoginBody.data.token, /^[A-Za-z0-9_-]{40,}$/);
+  const mpAuth = { authorization: `Bearer ${mpLoginBody.data.token}` };
+
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/me`)).status, 401);
+  const meResponse = await fetch(`http://127.0.0.1:${port}/api/v1/me`, { headers: mpAuth });
+  assert.equal(meResponse.status, 200);
+  assert.equal((await meResponse.json()).data.user.id, mpLoginBody.data.user.id);
+
+  const profileResponse = await fetch(`http://127.0.0.1:${port}/api/v1/me/profile`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...mpAuth },
+    body: JSON.stringify({ nickname: "集成测试用户", avatar_url: "https://example.com/avatar.png" }),
+  });
+  assert.equal(profileResponse.status, 200);
+  assert.equal((await profileResponse.json()).data.user.nickname, "集成测试用户");
+
+  const mpLogout = await fetch(`http://127.0.0.1:${port}/api/v1/auth/logout`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...mpAuth },
+    body: "{}",
+  });
+  assert.equal(mpLogout.status, 200);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/me`, { headers: mpAuth })).status, 401, "logout must revoke the token");
+
+  const mpUsersAdmin = await (await fetch(`http://127.0.0.1:${port}/admin-api/mp-users`, { headers: { cookie } })).json();
+  assert.equal(mpUsersAdmin.ok, true);
+  assert.equal(mpUsersAdmin.data.total, 1);
+  assert.equal(mpUsersAdmin.data.users[0].login_count, 1);
+  assert.equal(mpUsersAdmin.data.users[0].nickname, "集成测试用户");
+  assert.equal(JSON.stringify(mpUsersAdmin).includes("integration-openid-1"), false, "admin list must only expose masked openid");
 
   const publicReviewResponse = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",

@@ -32,7 +32,7 @@ function decodePathPart(value) {
   }
 }
 
-export function createPublicApiHandler({ service, readBody, clientIp } = {}) {
+export function createPublicApiHandler({ service, mpAuthService = null, readBody, clientIp } = {}) {
   if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
   return async function handlePublicApi(req, res, url) {
     if (url.pathname !== "/api/v1" && !url.pathname.startsWith("/api/v1/")) return false;
@@ -43,7 +43,36 @@ export function createPublicApiHandler({ service, readBody, clientIp } = {}) {
       else if (req.method === "GET" && url.pathname === "/api/v1/search-index") data = service.searchIndex();
       else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);
-      else {
+      else if (req.method === "POST" && url.pathname === "/api/v1/auth/wechat") {
+        if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        if (!service.assertMpAuthAttempt(clientIp(req))) {
+          throw new PublicApiError(429, "登录尝试过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
+        }
+        let body;
+        try {
+          body = await readBody(req);
+        } catch {
+          throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+        }
+        data = await mpAuthService.loginWithCode(body.code);
+      } else if (req.method === "GET" && url.pathname === "/api/v1/me") {
+        if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        data = { user: mpAuthService.requireUser(req.headers.authorization) };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/me/profile") {
+        if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(req.headers.authorization);
+        let body;
+        try {
+          body = await readBody(req);
+        } catch {
+          throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+        }
+        data = { user: mpAuthService.updateProfile(user, { nickname: body.nickname, avatarUrl: body.avatar_url }) };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/auth/logout") {
+        if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const revoked = mpAuthService.revoke(req.headers.authorization);
+        data = { revoked };
+      } else {
         let match = url.pathname.match(/^\/api\/v1\/guides\/([^/]+)$/);
         if (req.method === "GET" && match) data = service.guide(decodePathPart(match[1]));
         else {

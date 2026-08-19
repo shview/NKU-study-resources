@@ -45,6 +45,7 @@ import "vditor/dist/index.css";
         <button class="button secondary" type="button" data-admin-tab="about">关于页面</button>
         <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
         <button class="button secondary" type="button" data-admin-tab="accounts">账号管理</button>
+        <button class="button secondary" type="button" data-admin-tab="mp-users">小程序用户</button>
         <button class="button secondary" type="button" data-admin-tab="audit">审计日志</button>
       </div>
 
@@ -377,6 +378,23 @@ import "vditor/dist/index.css";
         </div>
       </div>
 
+      <div id="mp-users-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>小程序用户</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button secondary" id="reload-mp-users" type="button">重新加载</button>
+              <span class="muted" id="mp-users-admin-status"></span>
+            </div>
+            <div class="backup-grid" id="mp-users-summary" style="margin-top: 18px;"></div>
+            <div id="mp-users-list" style="margin-top: 14px;"></div>
+            <p class="muted" style="margin-top: 14px;">用户身份来自微信登录（openid）。列表仅显示掩码后的 openid 标识，不记录手机号；昵称与头像为用户自行设置。</p>
+          </div>
+        </div>
+      </div>
+
       <div id="audit-admin-panel" hidden>
         <div class="panel">
           <div class="panel-header">
@@ -557,6 +575,11 @@ import "vditor/dist/index.css";
     const accountsAdminPanel = document.querySelector("#accounts-admin-panel");
     const accountsAdminStatus = document.querySelector("#accounts-admin-status");
     const accountsAdminList = document.querySelector("#accounts-admin-list");
+    const mpUsersAdminPanel = document.querySelector("#mp-users-admin-panel");
+    const mpUsersAdminStatus = document.querySelector("#mp-users-admin-status");
+    const mpUsersSummary = document.querySelector("#mp-users-summary");
+    const mpUsersList = document.querySelector("#mp-users-list");
+    let mpUsersState = null;
     const auditAdminPanel = document.querySelector("#audit-admin-panel");
     const auditAdminStatus = document.querySelector("#audit-admin-status");
     const auditAdminList = document.querySelector("#audit-admin-list");
@@ -594,6 +617,7 @@ import "vditor/dist/index.css";
       "editor-settings": "content.edit",
       backup: "backup.manage",
       accounts: "accounts.manage",
+      "mp-users": "content.read",
       audit: "audit.read",
     };
     const toolbarOptions = [
@@ -1033,6 +1057,55 @@ import "vditor/dist/index.css";
       cell.append(layout);
       editorRow.append(cell);
       row.after(editorRow);
+    }
+
+    async function loadMpUsersAdmin() {
+      const data = await api("/mp-users");
+      mpUsersState = data.data;
+      renderMpUsersAdmin();
+    }
+
+    function renderMpUsersAdmin() {
+      if (!mpUsersState) return;
+      const today = beijingDate();
+      mpUsersSummary.innerHTML = `
+        <article class="card">
+          <h3>用户总数</h3>
+          <p class="muted">${escapeHtml(mpUsersState.total ?? 0)} 人</p>
+        </article>
+        <article class="card">
+          <h3>今日登录</h3>
+          <p class="muted">${escapeHtml(mpUsersState.logins_since ?? 0)} 次</p>
+        </article>
+        <article class="card">
+          <h3>统计日期</h3>
+          <p class="muted">${escapeHtml(today)}</p>
+        </article>
+      `;
+      mpUsersList.innerHTML = "";
+      if (!mpUsersState.users?.length) {
+        mpUsersList.innerHTML = `<p class="empty">还没有小程序用户登录过。</p>`;
+        return;
+      }
+      const table = document.createElement("table");
+      table.className = "admin-table";
+      table.innerHTML = `
+        <thead><tr><th>昵称</th><th>OpenID</th><th>登录次数</th><th>最近登录</th><th>注册时间</th></tr></thead>
+        <tbody></tbody>
+      `;
+      const body = table.querySelector("tbody");
+      for (const user of mpUsersState.users) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td style="width: 26%;">${escapeHtml(user.nickname || "未设置")}${user.avatar_url ? `<br /><span class="muted" style="font-size:0.8em;">已设置头像</span>` : ""}</td>
+          <td style="width: 18%;">${escapeHtml(user.openid_masked)}</td>
+          <td style="width: 12%;">${escapeHtml(String(user.login_count ?? 0))}</td>
+          <td style="width: 22%;">${user.last_login_at ? escapeHtml(beijingDateTime(new Date(user.last_login_at))) : "-"}</td>
+          <td style="width: 22%;">${escapeHtml(beijingDateTime(new Date(user.created_at)))}</td>
+        `;
+        body.append(row);
+      }
+      mpUsersList.append(table);
     }
 
     async function loadAuditAdmin() {
@@ -3128,6 +3201,16 @@ import "vditor/dist/index.css";
       }
     });
 
+    document.querySelector("#reload-mp-users").addEventListener("click", async () => {
+      mpUsersAdminStatus.textContent = "加载中...";
+      try {
+        await loadMpUsersAdmin();
+        mpUsersAdminStatus.textContent = "";
+      } catch (error) {
+        mpUsersAdminStatus.textContent = error.message;
+      }
+    });
+
     document.querySelector("#audit-filter-apply").addEventListener("click", async () => {
       auditPage = 1;
       auditAdminStatus.textContent = "加载中...";
@@ -3179,7 +3262,17 @@ import "vditor/dist/index.css";
         aboutAdminPanel.hidden = tab !== "about";
         backupAdminPanel.hidden = tab !== "backup";
         accountsAdminPanel.hidden = tab !== "accounts";
+        mpUsersAdminPanel.hidden = tab !== "mp-users";
         auditAdminPanel.hidden = tab !== "audit";
+        if (tab === "mp-users") {
+          mpUsersAdminStatus.textContent = "加载中...";
+          try {
+            await loadMpUsersAdmin();
+            mpUsersAdminStatus.textContent = "";
+          } catch (error) {
+            mpUsersAdminStatus.textContent = error.message;
+          }
+        }
         if (tab === "accounts" && !accountsState) {
           accountsAdminStatus.textContent = "加载中...";
           try {

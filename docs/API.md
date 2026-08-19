@@ -24,6 +24,10 @@
 | `GET` | `/api/v1/courses/:courseUid/resources` | 公开 | 课程资源与 R2 下载地址 |
 | `GET` | `/api/v1/review-groups` | 公开 | 评价分组列表 |
 | `GET` | `/api/v1/review-groups/:groupKey` | 公开 | 某评价分组及评价明细 |
+| `POST` | `/api/v1/auth/wechat` | 公开、限流 | 小程序微信登录（code 换 token） |
+| `POST` | `/api/v1/auth/logout` | Bearer Token | 注销小程序登录令牌 |
+| `GET` | `/api/v1/me` | Bearer Token | 当前小程序用户信息 |
+| `POST` | `/api/v1/me/profile` | Bearer Token | 更新昵称与头像 |
 | `POST` | `/api/v1/reviews` | 公开、限流 | 小程序提交评价 |
 | `GET` | `/review-api/reviews` | 公开 | 网站读取已通过评价及规则 |
 | `POST` | `/review-api/submit` | 公开、限流 | 网站提交评价 |
@@ -74,6 +78,7 @@
 | `DELETE` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 删除管理员账号 |
 | `POST` | `/admin-api/me/password` | Cookie | 修改自己的密码 |
 | `GET` | `/admin-api/audit` | Cookie（需相应权限） | 分页查询管理操作审计日志 |
+| `GET` | `/admin-api/mp-users` | Cookie（需相应权限） | 小程序用户列表与登录统计 |
 <!-- api-route-registry:end -->
 
 ### 管理员账号与权限
@@ -87,6 +92,22 @@
 - 首次部署会自动创建 `Shview` 超级管理员；初始密码来自一次性环境变量 `ADMIN_INITIAL_PASSWORD`，否则生成随机密码写入数据目录的 `admin-initial-password.txt`（0600），首次登录强制改密。
 - 所有非 GET 管理请求、登录成功/失败都会写入审计日志；禁止停用、降级或删除最后一个持有 `accounts.manage` 的启用账号，也不能删除自己的账号。
 - 账号与审计数据随备份导出（含密码哈希，不含明文）。
+
+## 小程序微信登录
+
+个人主体小程序无法使用手机号授权，身份基于微信 openid：
+
+1. 小程序端 `wx.login()` 获取一次性 `code`（5 分钟有效）。
+2. `POST /api/v1/auth/wechat`，body `{ "code": "..." }`。服务端用 `WECHAT_APPID` + `WECHAT_APPSECRET`
+   调用微信 `code2Session` 换取 openid（AppSecret 只存在于服务器环境变量，绝不下发）。
+3. 成功返回 `{ "code": 0, "data": { "token": "...", "expires_in": 2592000, "user": { "id", "nickname", "avatar_url", ... } } }`。
+   `token` 有效期 30 天，后续写请求放在 `Authorization: Bearer <token>` 头中。
+4. 响应与数据库记录均不含 openid；管理后台「小程序用户」页只显示掩码后的 openid 标识。
+5. 昵称（≤32 字符）与头像（仅 https）通过 `POST /api/v1/me/profile` 更新；建议前端使用
+   `chooseAvatar` 开放能力按钮和 `type="nickname"` 输入框采集。
+6. 错误码：`AUTH_INVALID_CODE`（401，code 无效/过期）、`AUTH_RATE_LIMITED`（429）、
+   `MP_AUTH_NOT_CONFIGURED`（503，服务端未配置微信密钥）、`MP_AUTH_UPSTREAM`（502，微信接口异常）。
+7. 登录接口限流：每 IP 每分钟 10 次、全局每分钟 240 次。
 
 ## 通用约定
 
