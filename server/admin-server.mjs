@@ -808,6 +808,9 @@ function cleanVisitPath(value) {
     pathname = "/";
   }
   if (pathname.startsWith("/admin") || pathname.startsWith("/admin-api") || pathname.startsWith("/visit-api")) return "";
+  // 小程序端上报：接受 /mp/<页面名>（小写字母/数字/中划线），其余 /mp/ 路径归入 /mp/other。
+  if (/^\/mp\/[a-z0-9-]{1,32}$/.test(pathname)) return pathname;
+  if (pathname.startsWith("/mp/")) return "/mp/other";
   pathname = pathname.replace(/\/+$/, "") || "/";
   const fixed = new Set(["/", "/about", "/feedback", "/friends", "/participate", "/reviews", "/courses"]);
   if (fixed.has(pathname)) return pathname;

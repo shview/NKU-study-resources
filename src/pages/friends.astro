@@ -6,13 +6,6 @@ import { markdownToHtml } from "../lib/markdown";
 const links = readBuildData("links.json");
 const mutualLinks = (links.links ?? []).filter((item) => item.type !== "recommended" && item.hidden !== true);
 const recommendedLinks = (links.links ?? []).filter((item) => item.type === "recommended" && item.hidden !== true);
-const plainText = (value) => String(value ?? "")
-  .replace(/```[\s\S]*?```/g, " ")
-  .replace(/`([^`]+)`/g, "$1")
-  .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-  .replace(/[#>*_~`-]+/g, " ")
-  .replace(/\s+/g, " ")
-  .trim();
 ---
 
 <Layout title="友链" eyebrow="Links">
@@ -32,7 +25,7 @@ const plainText = (value) => String(value ?? "")
               {mutualLinks.map((item) => (
                 <a class="link-card" href={item.url} target="_blank" rel="noreferrer">
                   <strong>{item.name}</strong>
-                  {item.description && <p>{plainText(item.description)}</p>}
+                  {item.description && <div class="link-desc markdown-body" set:html={markdownToHtml(item.description)}></div>}
                   <small>{item.url}</small>
                 </a>
               ))}
@@ -47,7 +40,7 @@ const plainText = (value) => String(value ?? "")
               {recommendedLinks.map((item) => (
                 <a class="link-card" href={item.url} target="_blank" rel="noreferrer">
                   <strong>{item.name}</strong>
-                  {item.description && <p>{plainText(item.description)}</p>}
+                  {item.description && <div class="link-desc markdown-body" set:html={markdownToHtml(item.description)}></div>}
                   <small>{item.url}</small>
                 </a>
               ))}

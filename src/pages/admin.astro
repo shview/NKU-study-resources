@@ -105,24 +105,34 @@ import "vditor/dist/index.css";
               <button class="button secondary" id="logout-reviews" type="button">退出</button>
               <span class="muted" id="review-admin-status"></span>
             </div>
-            <div class="review-admin-layout">
-              <details class="card admin-collapsible-card" open>
-                <summary>审核规则框架</summary>
-                <div class="admin-form" id="review-rules-editor" style="margin-top: 14px;"></div>
-              </details>
-              <div class="card">
-                <h3>评论内容</h3>
-                <input class="searchbar" id="review-admin-search" type="search" placeholder="搜索课程或老师" autocomplete="off" style="margin-top: 14px;" />
-                <select class="searchbar" id="review-status-filter" style="margin-top: 10px;">
-                  <option value="all">全部状态</option>
-                  <option value="pending">待审</option>
-                  <option value="approved">已通过</option>
-                  <option value="hidden">已隐藏</option>
-                  <option value="visible">显示中</option>
-                </select>
-                <div class="review-admin-list" id="review-admin-list" style="margin-top: 14px;"></div>
+              <div class="review-admin-layout">
+                <details class="card admin-collapsible-card" open>
+                  <summary>审核规则框架</summary>
+                  <div class="admin-form" id="review-rules-editor" style="margin-top: 14px;"></div>
+                </details>
+                <div class="card">
+                  <h3>评论内容</h3>
+                  <div class="admin-moderation-grid" style="margin-top: 14px;">
+                    <aside class="admin-moderation-sidebar">
+                      <input class="searchbar" id="review-admin-sidebar-search" type="search" placeholder="筛选课程" autocomplete="off" />
+                      <div class="admin-tree" id="review-admin-sidebar" style="margin-top: 10px;"></div>
+                    </aside>
+                    <div class="admin-moderation-main">
+                      <div class="filter-row">
+                        <input class="searchbar" id="review-admin-search" type="search" placeholder="搜索评价内容" autocomplete="off" />
+                        <select class="searchbar" id="review-status-filter">
+                          <option value="all">全部状态</option>
+                          <option value="pending">待审</option>
+                          <option value="approved">已通过</option>
+                          <option value="hidden">已隐藏</option>
+                          <option value="visible">显示中</option>
+                        </select>
+                      </div>
+                      <div class="review-admin-list" id="review-admin-list" style="margin-top: 14px;"></div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
           </div>
         </div>
       </div>
@@ -162,6 +172,14 @@ import "vditor/dist/index.css";
             <div class="card" style="margin-top: 18px;">
               <h3>反馈内容</h3>
               <input class="searchbar" id="feedback-admin-search" type="search" placeholder="搜索标题、内容或联系方式" autocomplete="off" />
+              <select class="searchbar" id="feedback-status-filter">
+                <option value="all">全部状态</option>
+                <option value="open">待处理</option>
+                <option value="completed">已完成</option>
+                <option value="rejected">不予完成</option>
+                <option value="parked">搁置</option>
+                <option value="hidden">已隐藏</option>
+              </select>
               <div class="review-admin-list" id="feedback-admin-list" style="margin-top: 14px;"></div>
             </div>
           </div>
@@ -203,6 +221,19 @@ import "vditor/dist/index.css";
               <span class="muted" id="stats-admin-status"></span>
             </div>
             <div class="backup-grid" id="stats-admin-summary" style="margin-top: 18px;"></div>
+            <details class="card admin-collapsible-card" style="margin-top: 18px;" open>
+              <summary>访问趋势</summary>
+              <div class="filter-row" style="margin-top: 12px;">
+                <button class="button secondary stats-range" data-range="7" type="button">近 7 天</button>
+                <button class="button secondary stats-range" data-range="30" type="button">近 30 天</button>
+                <button class="button secondary stats-range" data-range="90" type="button">近 90 天</button>
+              </div>
+              <div class="admin-stats-chart" id="stats-admin-chart" style="margin-top: 10px;"></div>
+            </details>
+            <details class="card admin-collapsible-card" style="margin-top: 18px;" open>
+              <summary>按类别统计</summary>
+              <div id="stats-admin-categories" style="margin-top: 14px;"></div>
+            </details>
             <details class="card admin-collapsible-card" style="margin-top: 18px;">
               <summary>页面访问明细</summary>
               <div class="review-admin-list" id="stats-admin-pages" style="margin-top: 14px;"></div>
@@ -304,6 +335,7 @@ import "vditor/dist/index.css";
                 <div class="filter-row">
                   <label class="admin-field"><span>用户名</span><input id="new-account-username" type="text" autocomplete="off" placeholder="字母开头，3-32 位" /></label>
                   <label class="admin-field"><span>初始密码</span><input id="new-account-password" type="text" autocomplete="off" placeholder="至少 10 位" /></label>
+                  <label class="admin-field"><span>确认初始密码</span><input id="new-account-password-confirm" type="text" autocomplete="off" placeholder="再次输入初始密码" /></label>
                 </div>
                 <div class="filter-row">
                   <label class="admin-field"><span>角色预设</span>
@@ -334,6 +366,7 @@ import "vditor/dist/index.css";
             <div class="filter-row">
               <label class="admin-field"><span>当前密码</span><input id="self-current-password" type="password" autocomplete="current-password" /></label>
               <label class="admin-field"><span>新密码</span><input id="self-new-password" type="password" autocomplete="new-password" placeholder="至少 10 位" /></label>
+              <label class="admin-field"><span>确认新密码</span><input id="self-confirm-password" type="password" autocomplete="new-password" placeholder="再次输入新密码" /></label>
               <button class="button" id="change-self-password" type="button">修改密码</button>
               <span class="muted" id="self-password-status"></span>
             </div>
@@ -454,6 +487,7 @@ import "vditor/dist/index.css";
     let editorSettingsState = null;
     const adminPageSize = 10;
     let reviewAdminPage = 1;
+    let reviewAdminSelected = "";
     let feedbackAdminPage = 1;
     const selectedAdminFiles = new WeakSet();
 
@@ -474,11 +508,14 @@ import "vditor/dist/index.css";
     const reviewAdminPanel = document.querySelector("#review-admin-panel");
     const reviewRulesEditor = document.querySelector("#review-rules-editor");
     const reviewAdminList = document.querySelector("#review-admin-list");
+    const reviewAdminSidebar = document.querySelector("#review-admin-sidebar");
+    const reviewAdminSidebarSearch = document.querySelector("#review-admin-sidebar-search");
     const reviewAdminSearch = document.querySelector("#review-admin-search");
     const reviewStatusFilter = document.querySelector("#review-status-filter");
     const reviewAdminStatus = document.querySelector("#review-admin-status");
     const feedbackAdminPanel = document.querySelector("#feedback-admin-panel");
     const feedbackAdminList = document.querySelector("#feedback-admin-list");
+    const feedbackStatusFilter = document.querySelector("#feedback-status-filter");
     const feedbackAdminSearch = document.querySelector("#feedback-admin-search");
     const feedbackSettingsEditor = document.querySelector("#feedback-settings-editor");
     const feedbackRulesEditor = document.querySelector("#feedback-rules-editor");
@@ -508,6 +545,8 @@ import "vditor/dist/index.css";
     const statsAdminPages = document.querySelector("#stats-admin-pages");
     const statsAdminVisitors = document.querySelector("#stats-admin-visitors");
     const statsAdminStatus = document.querySelector("#stats-admin-status");
+    const statsAdminChart = document.querySelector("#stats-admin-chart");
+    const statsAdminCategories = document.querySelector("#stats-admin-categories");
     const backupAdminPanel = document.querySelector("#backup-admin-panel");
     const backupAdminStatus = document.querySelector("#backup-admin-status");
     const backupSettingsEditor = document.querySelector("#backup-settings-editor");
@@ -881,13 +920,13 @@ import "vditor/dist/index.css";
       const body = table.querySelector("tbody");
       for (const account of accountsState.accounts) {
         const row = document.createElement("tr");
-        const permText = account.permissions.map((item) => permissionLabels[item] || item).join("、");
+        const permTags = account.permissions.map((item) => `<span class="perm-tag">${escapeHtml(permissionLabels[item] || item)}</span>`).join("");
         row.innerHTML = `
-          <td>${escapeHtml(account.username)}${account.username === sessionState.username ? ' <span class="muted">(我)</span>' : ""}</td>
-          <td>${escapeHtml(permText || "-")}${account.mustChangePassword ? ' <span class="muted">[待改密]</span>' : ""}</td>
-          <td>${account.enabled ? "是" : "否"}</td>
-          <td>${account.lastLoginAt ? escapeHtml(beijingDate(new Date(account.lastLoginAt))) : "从未"}</td>
-          <td class="filter-row"></td>
+          <td style="width: 15%;">${escapeHtml(account.username)}${account.username === sessionState.username ? ' <span class="muted">(我)</span>' : ""}</td>
+          <td style="width: 45%;">${permTags || "-"}${account.mustChangePassword ? ' <span class="muted">[待改密]</span>' : ""}</td>
+          <td style="width: 8%;">${account.enabled ? "是" : "否"}</td>
+          <td style="width: 16%;">${account.lastLoginAt ? escapeHtml(beijingDateTime(new Date(account.lastLoginAt))) : "从未"}</td>
+          <td style="width: 16%;" class="filter-row"></td>
         `;
         const ops = row.querySelector("td:last-child");
 
@@ -1005,6 +1044,36 @@ import "vditor/dist/index.css";
       renderAuditAdmin();
     }
 
+    const auditActionLabels = [
+      ["login.success", "登录成功"],
+      ["login.failed", "登录失败"],
+      ["POST /admin-api/manifest", "发布课程树"],
+      ["POST /admin-api/manifest-draft", "保存课程树草稿"],
+      ["POST /admin-api/upload", "上传课程文件"],
+      ["POST /admin-api/sync-r2", "同步课程 R2"],
+      ["POST /admin-api/sync-r2-all", "重建课程树"],
+      ["POST /admin-api/r2-publish", "发布 R2 变更"],
+      ["POST /admin-api/reviews", "保存评价数据"],
+      ["POST /admin-api/feedback", "保存反馈数据"],
+      ["POST /admin-api/home", "发布首页"],
+      ["POST /admin-api/footer", "发布页脚"],
+      ["POST /admin-api/about", "发布关于页"],
+      ["POST /admin-api/participate", "发布参与页"],
+      ["POST /admin-api/links", "发布友链页"],
+      ["POST /admin-api/editor-settings", "保存编辑器设置"],
+      ["POST /admin-api/backup-run", "手动备份"],
+      ["POST /admin-api/backup-settings", "保存备份设置"],
+      ["POST /admin-api/backup-test-webdav", "测试 WebDAV"],
+      ["POST /admin-api/accounts", "创建账号"],
+      ["POST /admin-api/me/password", "修改自己密码"],
+    ];
+    const auditActionLabel = (action) => {
+      if (/^PATCH \/admin-api\/accounts\//.test(action)) return "修改账号权限";
+      if (/^POST \/admin-api\/accounts\/.+\/password$/.test(action)) return "重置账号密码";
+      if (/^DELETE \/admin-api\/accounts\//.test(action)) return "删除账号";
+      return auditActionLabels.find(([key]) => action === key)?.[1] || action;
+    };
+
     function renderAuditAdmin() {
       auditAdminList.innerHTML = "";
       const table = document.createElement("table");
@@ -1017,11 +1086,11 @@ import "vditor/dist/index.css";
       for (const item of auditState.items) {
         const row = document.createElement("tr");
         row.innerHTML = `
-          <td>${escapeHtml(beijingDate(new Date(item.at)))}</td>
-          <td>${escapeHtml(item.username)}</td>
-          <td>${escapeHtml(item.action)}</td>
-          <td>${escapeHtml(String(item.status))}</td>
-          <td>${escapeHtml(item.ip || "-")}</td>
+          <td style="width: 20%;">${escapeHtml(beijingDateTime(new Date(item.at)))}</td>
+          <td style="width: 14%;">${escapeHtml(item.username)}</td>
+          <td style="width: 40%;"><strong>${escapeHtml(auditActionLabel(item.action))}</strong><br /><span class="muted" style="font-size: 0.8em;">${escapeHtml(item.action)}</span></td>
+          <td style="width: 10%;">${escapeHtml(String(item.status))}</td>
+          <td style="width: 16%;">${escapeHtml(item.ip || "-")}</td>
         `;
         body.append(row);
       }
@@ -1436,6 +1505,38 @@ import "vditor/dist/index.css";
       renderReviewAdmin();
     }
 
+    function renderReviewAdminSidebar(groups, allReviews) {
+      reviewAdminSidebar.innerHTML = "";
+      const totalPending = groups.reduce((sum, entry) => sum + entry.pending, 0);
+      const allButton = document.createElement("button");
+      allButton.type = "button";
+      allButton.className = "admin-tree-course";
+      allButton.dataset.active = reviewAdminSelected === "" ? "true" : "false";
+      allButton.innerHTML = `<strong>全部课程</strong><small>${allReviews.length} 条 · 待审 ${totalPending}</small>`;
+      allButton.addEventListener("click", () => {
+        reviewAdminSelected = "";
+        reviewAdminPage = 1;
+        renderReviewAdmin();
+      });
+      reviewAdminSidebar.append(allButton);
+      for (const entry of groups) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "admin-tree-course";
+        button.dataset.active = reviewAdminSelected === entry.key ? "true" : "false";
+        button.innerHTML = `
+          <strong>${escapeHtml(entry.key)}</strong>
+          <small>${entry.pending ? `<span class="pill">待审 ${entry.pending}</span> ` : ""}共 ${entry.total} 条</small>
+        `;
+        button.addEventListener("click", () => {
+          reviewAdminSelected = entry.key;
+          reviewAdminPage = 1;
+          renderReviewAdmin();
+        });
+        reviewAdminSidebar.append(button);
+      }
+    }
+
     function renderReviewAdmin() {
       if (!reviewState) return;
       const rules = reviewState.rules ??= {};
@@ -1453,15 +1554,34 @@ import "vditor/dist/index.css";
 
       const keyword = reviewAdminSearch.value.trim().toLowerCase();
       const statusFilter = reviewStatusFilter.value;
+      const sidebarKeyword = reviewAdminSidebarSearch.value.trim().toLowerCase();
+      const groupKeyOf = (review) => `${review.courseTitle || "未命名课程"} · ${review.teacher || "未填写老师"}`;
+      const matchesStatus = (review) =>
+        statusFilter === "all" ||
+        (statusFilter === "hidden" && review.hidden) ||
+        (statusFilter === "visible" && !review.hidden) ||
+        statusFilter === String(review.status || "pending");
+
+      const groups = new Map();
+      for (const review of reviewState.reviews ?? []) {
+        const key = groupKeyOf(review);
+        const entry = groups.get(key) || { key, total: 0, pending: 0 };
+        entry.total += 1;
+        if (String(review.status || "pending") === "pending" && !review.hidden) entry.pending += 1;
+        groups.set(key, entry);
+      }
+      if (reviewAdminSelected && !groups.has(reviewAdminSelected)) reviewAdminSelected = "";
+
+      renderReviewAdminSidebar(
+        [...groups.values()]
+          .filter((entry) => !sidebarKeyword || entry.key.toLowerCase().includes(sidebarKeyword))
+          .sort((a, b) => (b.pending - a.pending) || (b.total - a.total)),
+        reviewState.reviews ?? [],
+      );
+
       const reviews = (reviewState.reviews ?? []).filter((review) => {
-        const text = `${review.courseTitle} ${review.teacher}`.toLowerCase();
-        const status = String(review.status || "pending");
-        const matchesStatus =
-          statusFilter === "all" ||
-          (statusFilter === "hidden" && review.hidden) ||
-          (statusFilter === "visible" && !review.hidden) ||
-          (statusFilter === status);
-        return matchesStatus && (!keyword || text.includes(keyword));
+        const text = `${review.courseTitle} ${review.teacher} ${review.content}`.toLowerCase();
+        return (!reviewAdminSelected || groupKeyOf(review) === reviewAdminSelected) && matchesStatus(review) && (!keyword || text.includes(keyword));
       });
 
       reviewAdminList.innerHTML = "";
@@ -1474,22 +1594,7 @@ import "vditor/dist/index.css";
       reviewAdminPage = Math.min(reviewAdminPage, reviewPages);
       const pageReviews = reviews.slice((reviewAdminPage - 1) * adminPageSize, reviewAdminPage * adminPageSize);
 
-      const groupedReviews = new Map();
       for (const review of pageReviews) {
-        const key = `${review.courseTitle || "未命名课程"}-${review.teacher || "未填写老师"}`;
-        if (!groupedReviews.has(key)) groupedReviews.set(key, []);
-        groupedReviews.get(key).push(review);
-      }
-
-      for (const [groupName, groupReviews] of groupedReviews) {
-        const group = document.createElement("details");
-        group.className = "resource-section review-admin-group";
-        group.open = true;
-        group.innerHTML = `<summary>${escapeHtml(groupName)} <span class="muted">(${groupReviews.length})</span></summary>`;
-        const groupBody = document.createElement("div");
-        groupBody.className = "admin-section-body";
-
-        for (const review of groupReviews) {
         const item = document.createElement("div");
         item.className = "review-admin-item";
         item.innerHTML = `
@@ -1573,10 +1678,7 @@ import "vditor/dist/index.css";
         });
         actions.append(edit, approve, pending, hide, remove);
         item.append(editForm, actions);
-        groupBody.append(item);
-        }
-        group.append(groupBody);
-        reviewAdminList.append(group);
+        reviewAdminList.append(item);
       }
       appendPagination(reviewAdminList, reviews.length, reviewAdminPage, (page) => {
         reviewAdminPage = page;
@@ -1628,9 +1730,14 @@ import "vditor/dist/index.css";
         }, { height: 150 })
       );
       const keyword = feedbackAdminSearch.value.trim().toLowerCase();
+      const statusFilter = feedbackStatusFilter.value;
       const items = (feedbackState.items ?? []).filter((item) => {
         const text = `${item.title} ${item.content} ${item.contact} ${item.type} ${item.status}`.toLowerCase();
-        return !keyword || text.includes(keyword);
+        const matchesStatus =
+          statusFilter === "all" ||
+          (statusFilter === "hidden" && item.hidden) ||
+          (statusFilter !== "hidden" && !item.hidden && String(item.status || "open") === statusFilter);
+        return matchesStatus && (!keyword || text.includes(keyword));
       });
 
       feedbackAdminList.innerHTML = "";
@@ -1650,15 +1757,17 @@ import "vditor/dist/index.css";
         ["rejected", "不予完成"],
         ["parked", "搁置"],
       ];
+      const statusLabels = Object.fromEntries(statusOptions);
+      const typeLabels = { bug: "Bug", feature: "功能改进", content: "内容问题" };
 
       for (const item of pageItems) {
         const wrap = document.createElement("div");
         wrap.className = "review-admin-item";
         wrap.innerHTML = `
           <div class="course-meta">
-            <span class="pill">${escapeHtml(item.type || "feedback")}</span>
-            <span class="pill">${escapeHtml(item.status || "open")}</span>
-            <span class="pill">${escapeHtml(item.hidden ? "已隐藏" : "显示中")}</span>
+            <span class="pill">${escapeHtml(typeLabels[item.type] || item.type || "feedback")}</span>
+            <span class="pill">${escapeHtml(statusLabels[item.status] || item.status || "open")}</span>
+            <span class="pill">${escapeHtml(item.hidden ? "已隐藏" : "公开显示")}</span>
           </div>
           <h3 style="margin: 12px 0 0;">${escapeHtml(item.title || "")}</h3>
           <p>${escapeHtml(item.content || "")}</p>
@@ -1926,15 +2035,56 @@ import "vditor/dist/index.css";
       renderFooterAdmin();
     }
 
+    let statsRange = 30;
+    const pageCategoryLabels = {
+      "/": "首页",
+      "/courses": "课程列表",
+      "/courses/:id": "课程详情",
+      "/reviews": "评价列表",
+      "/reviews/detail": "评价详情",
+      "/about": "关于",
+      "/feedback": "反馈",
+      "/friends": "友链",
+      "/participate": "参与贡献",
+    };
+
+    function decodePathLabel(path) {
+      try {
+        return decodeURIComponent(String(path));
+      } catch {
+        return String(path);
+      }
+    }
+
+    function pageCategory(path) {
+      if (path.startsWith("/mp/")) return "小程序";
+      return pageCategoryLabels[path] || (path === "/__unknown__" ? "未识别页面" : "其他");
+    }
+
+    function beijingDayKeys(count) {
+      const keys = [];
+      const now = new Date();
+      for (let offset = count - 1; offset >= 0; offset -= 1) {
+        keys.push(beijingDate(new Date(now.getTime() - offset * 86_400_000)));
+      }
+      return keys;
+    }
+
+    function sumDays(daysMap, keys) {
+      let sum = 0;
+      for (const key of keys) sum += Number(daysMap?.[key] || 0);
+      return sum;
+    }
+
     function renderStatsAdmin() {
       if (!statsState) return;
       const summary = statsState.summary || {};
       const stats = statsState.stats || {};
       const todayKey = beijingDate();
-      const pages = Object.entries(stats.pages || {})
-        .map(([path, item]) => ({ path, total: Number(item?.total || 0), today: Number(item?.days?.[todayKey] || 0) }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 20);
+      const last7 = beijingDayKeys(7);
+      const last30 = beijingDayKeys(30);
+      const total7 = sumDays(stats.days || {}, last7);
+      const total30 = sumDays(stats.days || {}, last30);
       statsAdminSummary.innerHTML = `
         <article class="card">
           <h3>总访问量</h3>
@@ -1945,21 +2095,98 @@ import "vditor/dist/index.css";
           <p class="muted">${escapeHtml(summary.today ?? 0)} 次</p>
         </article>
         <article class="card">
+          <h3>近 7 天</h3>
+          <p class="muted">${escapeHtml(total7)} 次</p>
+        </article>
+        <article class="card">
+          <h3>近 30 天</h3>
+          <p class="muted">${escapeHtml(total30)} 次</p>
+        </article>
+        <article class="card">
           <h3>短期去重记录</h3>
-          <p class="muted">${escapeHtml(Object.keys(stats.visitors || {}).length)} 个 IP 记录</p>
+          <p class="muted">${escapeHtml(Object.keys(stats.visitors || {}).length)} 个访客记录</p>
         </article>
         <article class="card">
           <h3>更新时间</h3>
           <p class="muted">${escapeHtml(beijingDateTime(stats.updatedAt))}</p>
         </article>
       `;
+
+      const chartKeys = beijingDayKeys(statsRange);
+      const series = chartKeys.map((key) => Number(stats.days?.[key] || 0));
+      const maxValue = Math.max(1, ...series);
+      const width = 720;
+      const height = 200;
+      const paddingX = 44;
+      const paddingY = 18;
+      const innerW = width - paddingX - 12;
+      const innerH = height - paddingY - 30;
+      const points = series.map((value, index) => {
+        const x = paddingX + (series.length === 1 ? innerW / 2 : (index / (series.length - 1)) * innerW);
+        const y = paddingY + innerH - (value / maxValue) * innerH;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      const labelIndexes = [0, Math.floor((series.length - 1) / 2), series.length - 1];
+      const gridLines = [0, 0.5, 1].map((ratio) => {
+        const y = paddingY + innerH - ratio * innerH;
+        const label = Math.round(maxValue * (1 - ratio));
+        return `<line x1="${paddingX}" y1="${y.toFixed(1)}" x2="${width - 12}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1" /><text x="${paddingX - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="currentColor">${label}</text>`;
+      }).join("");
+      const dateLabels = labelIndexes.map((index) => `<text x="${(paddingX + (series.length === 1 ? innerW / 2 : (index / (series.length - 1)) * innerW)).toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="10" fill="currentColor">${chartKeys[index].slice(5)}</text>`).join("");
+      statsAdminChart.innerHTML = `
+        <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="每日访问量折线图">
+          ${gridLines}
+          <polyline points="${points.join(" ")}" fill="none" stroke="currentColor" stroke-width="2" />
+          ${series.map((value, index) => `<circle cx="${points[index].split(",")[0]}" cy="${points[index].split(",")[1]}" r="2.5" fill="currentColor"><title>${chartKeys[index]}：${value} 次</title></circle>`).join("")}
+          ${dateLabels}
+        </svg>
+      `;
+
+      const categories = new Map();
+      for (const [path, item] of Object.entries(stats.pages || {})) {
+        const label = pageCategory(path);
+        const entry = categories.get(label) || { label, total: 0, today: 0, last7: 0, last30: 0 };
+        entry.total += Number(item?.total || 0);
+        entry.today += Number(item?.days?.[todayKey] || 0);
+        entry.last7 += sumDays(item?.days || {}, last7);
+        entry.last30 += sumDays(item?.days || {}, last30);
+        categories.set(label, entry);
+      }
+      const categoryRows = [...categories.values()].sort((a, b) => b.total - a.total);
+      const grandTotal = categoryRows.reduce((sum, row) => sum + row.total, 0) || 1;
+      if (categoryRows.length) {
+        const table = document.createElement("table");
+        table.className = "admin-table";
+        table.innerHTML = `
+          <thead><tr><th>类别</th><th>总访问</th><th>占比</th><th>今日</th><th>近 7 天</th><th>近 30 天</th></tr></thead>
+          <tbody>
+            ${categoryRows.map((row) => `<tr>
+              <td>${escapeHtml(row.label)}</td>
+              <td>${row.total}</td>
+              <td>${((row.total / grandTotal) * 100).toFixed(1)}%</td>
+              <td>${row.today}</td>
+              <td>${row.last7}</td>
+              <td>${row.last30}</td>
+            </tr>`).join("")}
+          </tbody>
+        `;
+        statsAdminCategories.innerHTML = "";
+        statsAdminCategories.append(table);
+      } else {
+        statsAdminCategories.innerHTML = `<p class="empty">暂无页面访问记录。</p>`;
+      }
+
+      const pages = Object.entries(stats.pages || {})
+        .map(([path, item]) => ({ path, total: Number(item?.total || 0), today: Number(item?.days?.[todayKey] || 0) }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 30);
       statsAdminPages.innerHTML = pages.length ? "" : `<p class="empty">暂无页面访问记录。</p>`;
       for (const page of pages) {
         const item = document.createElement("article");
         item.className = "review-admin-item";
         item.innerHTML = `
-          <strong>${escapeHtml(page.path)}</strong>
-          <p>总访问 ${escapeHtml(page.total)} 次</p>
+          <strong>${escapeHtml(pageCategory(page.path))} · ${escapeHtml(decodePathLabel(page.path))}</strong>
+          <p>总访问 ${escapeHtml(page.total)} 次 · 今日 ${escapeHtml(page.today)} 次</p>
         `;
         statsAdminPages.append(item);
       }
@@ -2745,6 +2972,15 @@ import "vditor/dist/index.css";
       window.location.reload();
     });
 
+    document.querySelectorAll(".stats-range").forEach((button) => {
+      button.addEventListener("click", () => {
+        statsRange = Number(button.dataset.range) || 30;
+        document.querySelectorAll(".stats-range").forEach((item) => item.classList.toggle("secondary", item !== button));
+        if (statsState) renderStatsAdmin();
+      });
+    });
+    document.querySelector(".stats-range[data-range=\"30\"]")?.classList.remove("secondary");
+
     document.querySelector("#new-account-role").addEventListener("change", (event) => {
       const role = event.target.value;
       if (role) renderPermissionEditor(document.querySelector("#new-account-permissions"), rolePresets[role]);
@@ -2753,18 +2989,25 @@ import "vditor/dist/index.css";
 
     document.querySelector("#create-account").addEventListener("click", async () => {
       accountsAdminStatus.textContent = "";
+      const password = document.querySelector("#new-account-password").value;
+      const confirmPassword = document.querySelector("#new-account-password-confirm").value;
+      if (password !== confirmPassword) {
+        accountsAdminStatus.textContent = "两次输入的初始密码不一致。";
+        return;
+      }
       try {
         await api("/accounts", {
           method: "POST",
           body: JSON.stringify({
             username: document.querySelector("#new-account-username").value.trim(),
-            password: document.querySelector("#new-account-password").value,
+            password,
             permissions: checkedPermissions(document.querySelector("#new-account-permissions")),
             mustChangePassword: document.querySelector("#new-account-must-change").checked,
           }),
         });
         document.querySelector("#new-account-username").value = "";
         document.querySelector("#new-account-password").value = "";
+        document.querySelector("#new-account-password-confirm").value = "";
         accountsAdminStatus.textContent = "账号已创建";
         await loadAccountsAdmin();
       } catch (error) {
@@ -2785,16 +3028,23 @@ import "vditor/dist/index.css";
     document.querySelector("#change-self-password").addEventListener("click", async () => {
       const status = document.querySelector("#self-password-status");
       status.textContent = "";
+      const newPassword = document.querySelector("#self-new-password").value;
+      const confirmPassword = document.querySelector("#self-confirm-password").value;
+      if (newPassword !== confirmPassword) {
+        status.textContent = "两次输入的新密码不一致。";
+        return;
+      }
       try {
         await api("/me/password", {
           method: "POST",
           body: JSON.stringify({
             currentPassword: document.querySelector("#self-current-password").value,
-            newPassword: document.querySelector("#self-new-password").value,
+            newPassword,
           }),
         });
         document.querySelector("#self-current-password").value = "";
         document.querySelector("#self-new-password").value = "";
+        document.querySelector("#self-confirm-password").value = "";
         status.textContent = "密码已修改";
         applySession({ ...sessionState, mustChangePassword: false });
       } catch (error) {
@@ -3002,7 +3252,14 @@ import "vditor/dist/index.css";
       reviewAdminPage = 1;
       renderReviewAdmin();
     });
+    reviewAdminSidebarSearch.addEventListener("input", () => {
+      renderReviewAdmin();
+    });
     feedbackAdminSearch.addEventListener("input", () => {
+      feedbackAdminPage = 1;
+      renderFeedbackAdmin();
+    });
+    feedbackStatusFilter.addEventListener("change", () => {
       feedbackAdminPage = 1;
       renderFeedbackAdmin();
     });

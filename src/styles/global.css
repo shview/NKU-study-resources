@@ -577,10 +577,27 @@ button.tag[data-active="true"] {
   background: #f8fafc;
 }
 
-.link-card p {
+.link-card p,
+.link-card .link-desc {
   margin: 0;
   color: #475569;
   line-height: 1.6;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.link-card strong {
+  overflow-wrap: anywhere;
+}
+
+.link-card .link-desc :is(ul, ol) {
+  margin: 4px 0;
+  padding-left: 1.2em;
+}
+
+.link-card .link-desc :is(h1, h2, h3, h4) {
+  margin: 4px 0;
+  font-size: 1em;
 }
 
 .link-card small {
@@ -2165,6 +2182,7 @@ details.resource-subsection summary::-webkit-details-marker {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.92rem;
+  table-layout: fixed;
 }
 .admin-table th,
 .admin-table td {
@@ -2172,6 +2190,7 @@ details.resource-subsection summary::-webkit-details-marker {
   padding: 8px 10px;
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 .admin-table thead th {
   background: var(--surface);
@@ -2179,4 +2198,43 @@ details.resource-subsection summary::-webkit-details-marker {
 .admin-table .filter-row {
   gap: 6px;
   flex-wrap: wrap;
+}
+.perm-tag {
+  display: inline-block;
+  margin: 2px 3px 2px 0;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.admin-stats-chart svg {
+  width: 100%;
+  height: auto;
+}
+
+.admin-moderation-grid {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.admin-moderation-sidebar {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.admin-moderation-sidebar .admin-tree {
+  margin-top: 10px;
+}
+.admin-moderation-main {
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .admin-moderation-grid {
+    grid-template-columns: 1fr;
+  }
 }
