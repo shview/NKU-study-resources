@@ -2160,3 +2160,23 @@ details.resource-subsection summary::-webkit-details-marker {
   background: var(--surface);
   box-shadow: var(--shadow);
 }
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.admin-table th,
+.admin-table td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.admin-table thead th {
+  background: var(--surface);
+}
+.admin-table .filter-row {
+  gap: 6px;
+  flex-wrap: wrap;
+}

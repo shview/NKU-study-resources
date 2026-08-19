@@ -32,42 +32,61 @@
 | `GET` | `/visit-api/stats` | 公开 | 读取公开访问统计 |
 | `POST` | `/visit-api/hit` | 公开、限流 | 记录访问 |
 | `GET` | `/editor-settings` | 公开 | 读取公开编辑器工具栏配置 |
-| `POST` | `/admin-api/login` | 公开、限流 | 管理员登录并签发 Cookie |
+| `POST` | `/admin-api/login` | 公开、限流 | 账号+密码登录并签发 Cookie |
 | `POST` | `/admin-api/logout` | 公开 | 清除管理员 Cookie |
-| `POST` | `/admin-api/upload` | Cookie | 上传课程文件到 R2 |
-| `POST` | `/admin-api/sync-r2` | Cookie | 从 R2 同步一门课程 |
-| `POST` | `/admin-api/sync-r2-all` | Cookie | 从 R2 重建/合并全部课程树 |
+| `POST` | `/admin-api/upload` | Cookie（需相应权限） | 上传课程文件到 R2 |
+| `POST` | `/admin-api/sync-r2` | Cookie（需相应权限） | 从 R2 同步一门课程 |
+| `POST` | `/admin-api/sync-r2-all` | Cookie（需相应权限） | 从 R2 重建/合并全部课程树 |
 | `POST` | `/admin-api/delete-r2` | Cookie；已禁用 | 旧 R2 删除接口，固定 410 |
 | `POST` | `/admin-api/delete-r2-course` | Cookie；已禁用 | 旧课程 R2 删除接口，固定 410 |
 | `POST` | `/admin-api/move-r2-prefix` | Cookie；已禁用 | 旧 R2 移动接口，固定 410 |
-| `POST` | `/admin-api/r2-publish` | Cookie | 通过 CAS 安全发布 manifest 与 R2 变更 |
-| `GET` | `/admin-api/backup` | Cookie | 下载 JSON 备份 |
-| `GET` | `/admin-api/backup-settings` | Cookie | 读取备份设置（不返回密码） |
-| `POST` | `/admin-api/backup-settings` | Cookie | 更新备份设置和独立保存的密码 |
-| `GET` | `/admin-api/editor-settings` | Cookie | 读取编辑器设置 |
-| `POST` | `/admin-api/editor-settings` | Cookie | 更新编辑器设置 |
-| `POST` | `/admin-api/backup-run` | Cookie | 立即执行备份 |
-| `POST` | `/admin-api/backup-test-webdav` | Cookie | 测试 WebDAV 目标 |
-| `GET` | `/admin-api/visit-stats` | Cookie | 读取完整访问统计 |
-| `GET` | `/admin-api/home` | Cookie | 读取首页内容和 revision |
-| `POST` | `/admin-api/home` | Cookie | 发布首页内容 |
-| `GET` | `/admin-api/footer` | Cookie | 读取页脚内容和 revision |
-| `POST` | `/admin-api/footer` | Cookie | 发布页脚内容 |
-| `GET` | `/admin-api/about` | Cookie | 读取关于页内容和 revision |
-| `POST` | `/admin-api/about` | Cookie | 发布关于页内容 |
-| `GET` | `/admin-api/participate` | Cookie | 读取参与贡献页和 revision |
-| `POST` | `/admin-api/participate` | Cookie | 发布参与贡献页 |
-| `GET` | `/admin-api/links` | Cookie | 读取友链页和 revision |
-| `POST` | `/admin-api/links` | Cookie | 发布友链页 |
-| `GET` | `/admin-api/feedback` | Cookie | 读取完整反馈数据和 revision |
-| `POST` | `/admin-api/feedback` | Cookie | 发布反馈数据 |
-| `GET` | `/admin-api/reviews` | Cookie | 读取完整评价数据和 revision |
-| `POST` | `/admin-api/reviews` | Cookie | 以 CAS 更新评价及审核状态 |
-| `GET` | `/admin-api/session` | Cookie | 检查管理会话 |
-| `GET` | `/admin-api/manifest` | Cookie | 读取完整课程树和 revision |
-| `POST` | `/admin-api/manifest` | Cookie | 发布课程树并重建网站 |
-| `POST` | `/admin-api/manifest-draft` | Cookie | 保存课程树草稿，不重建网站 |
+| `POST` | `/admin-api/r2-publish` | Cookie（需相应权限） | 通过 CAS 安全发布 manifest 与 R2 变更 |
+| `GET` | `/admin-api/backup` | Cookie（需相应权限） | 下载 JSON 备份 |
+| `GET` | `/admin-api/backup-settings` | Cookie（需相应权限） | 读取备份设置（不返回密码） |
+| `POST` | `/admin-api/backup-settings` | Cookie（需相应权限） | 更新备份设置和独立保存的密码 |
+| `GET` | `/admin-api/editor-settings` | Cookie（需相应权限） | 读取编辑器设置 |
+| `POST` | `/admin-api/editor-settings` | Cookie（需相应权限） | 更新编辑器设置 |
+| `POST` | `/admin-api/backup-run` | Cookie（需相应权限） | 立即执行备份 |
+| `POST` | `/admin-api/backup-test-webdav` | Cookie（需相应权限） | 测试 WebDAV 目标 |
+| `GET` | `/admin-api/visit-stats` | Cookie（需相应权限） | 读取完整访问统计 |
+| `GET` | `/admin-api/home` | Cookie（需相应权限） | 读取首页内容和 revision |
+| `POST` | `/admin-api/home` | Cookie（需相应权限） | 发布首页内容 |
+| `GET` | `/admin-api/footer` | Cookie（需相应权限） | 读取页脚内容和 revision |
+| `POST` | `/admin-api/footer` | Cookie（需相应权限） | 发布页脚内容 |
+| `GET` | `/admin-api/about` | Cookie（需相应权限） | 读取关于页内容和 revision |
+| `POST` | `/admin-api/about` | Cookie（需相应权限） | 发布关于页内容 |
+| `GET` | `/admin-api/participate` | Cookie（需相应权限） | 读取参与贡献页和 revision |
+| `POST` | `/admin-api/participate` | Cookie（需相应权限） | 发布参与贡献页 |
+| `GET` | `/admin-api/links` | Cookie（需相应权限） | 读取友链页和 revision |
+| `POST` | `/admin-api/links` | Cookie（需相应权限） | 发布友链页 |
+| `GET` | `/admin-api/feedback` | Cookie（需相应权限） | 读取完整反馈数据和 revision |
+| `POST` | `/admin-api/feedback` | Cookie（需相应权限） | 发布反馈数据 |
+| `GET` | `/admin-api/reviews` | Cookie（需相应权限） | 读取完整评价数据和 revision |
+| `POST` | `/admin-api/reviews` | Cookie（需相应权限） | 以 CAS 更新评价及审核状态 |
+| `GET` | `/admin-api/session` | Cookie（需相应权限） | 检查管理会话 |
+| `GET` | `/admin-api/manifest` | Cookie（需相应权限） | 读取完整课程树和 revision |
+| `POST` | `/admin-api/manifest` | Cookie（需相应权限） | 发布课程树并重建网站 |
+| `POST` | `/admin-api/manifest-draft` | Cookie（需相应权限） | 保存课程树草稿，不重建网站 |
+| `GET` | `/admin-api/accounts` | Cookie（需相应权限） | 账号列表、权限点与角色预设 |
+| `POST` | `/admin-api/accounts` | Cookie（需相应权限） | 创建管理员账号 |
+| `PATCH` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 更新账号权限、启用状态或改密提示 |
+| `POST` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 重置账号密码 |
+| `DELETE` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 删除管理员账号 |
+| `POST` | `/admin-api/me/password` | Cookie | 修改自己的密码 |
+| `GET` | `/admin-api/audit` | Cookie（需相应权限） | 分页查询管理操作审计日志 |
 <!-- api-route-registry:end -->
+
+### 管理员账号与权限
+
+管理端使用命名账号（用户名+密码，scrypt 哈希存储）登录。权限点共 8 个：
+`content.read`（内容查看）、`content.edit`（内容编辑）、`content.moderate`（反馈处理）、
+`storage.manage`（R2 同步）、`storage.delete`（R2 删除，已禁用的旧路由除外）、
+`backup.manage`（备份管理）、`accounts.manage`（账号管理）、`audit.read`（审计查看）。
+角色预设：`super_admin`（全部）、`content_admin`（查看+编辑+反馈处理）、`reviewer`（查看+反馈处理）、`viewer`（只读）。
+
+- 首次部署会自动创建 `Shview` 超级管理员；初始密码来自一次性环境变量 `ADMIN_INITIAL_PASSWORD`，否则生成随机密码写入数据目录的 `admin-initial-password.txt`（0600），首次登录强制改密。
+- 所有非 GET 管理请求、登录成功/失败都会写入审计日志；禁止停用、降级或删除最后一个持有 `accounts.manage` 的启用账号，也不能删除自己的账号。
+- 账号与审计数据随备份导出（含密码哈希，不含明文）。
 
 ## 通用约定
 
@@ -446,11 +465,13 @@ curl -sS https://nkustudy.top/editor-settings
 
 ## 管理接口认证
 
-管理密码由服务器环境变量 `ADMIN_PASSWORD` 配置；Cookie 签名密钥从仅服务器可读的 `ADMIN_SECRET_FILE` 加载。密钥不是 API 参数，不应进入网页、小程序、curl 历史或 Git。当前实现**没有**自定义 secret header。
+管理端使用**命名账号**（用户名+密码）登录；密码以 scrypt 哈希存储在服务器 SQLite 中，权限点见上文「管理员账号与权限」。Cookie 签名密钥从仅服务器可读的 `ADMIN_SECRET_FILE` 加载。密钥不是 API 参数，不应进入网页、小程序、curl 历史或 Git。当前实现**没有**自定义 secret header。
+
+首次部署且账号表为空时，自动创建超管 `Shview`：优先使用一次性环境变量 `ADMIN_INITIAL_PASSWORD`（≥10 位），否则生成随机密码写入数据目录 `admin-initial-password.txt`（0600，仅 root/服务账号可读）；该账号首次登录强制改密。旧的共享 `ADMIN_PASSWORD` 登录方式已移除。
 
 ### 登录、Cookie 与退出
 
-`POST /admin-api/login` 请求 `{ "password":"..." }`。成功返回 `{ "ok":true }`，并设置：
+`POST /admin-api/login` 请求 `{ "username":"...", "password":"..." }`。成功返回 `{ "ok":true, "data":{ "username":"...", "permissions":[...], "mustChangePassword":false } }`，并设置：
 
 ```text
 Set-Cookie: nkustudy_admin=<signed-token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800
@@ -466,7 +487,7 @@ Set-Cookie: nkustudy_admin=<signed-token>; HttpOnly; Secure; SameSite=Strict; Pa
 umask 077
 read -r -s -p 'Admin password: ' ADMIN_PASSWORD_INPUT; printf '\n'
 printf '%s' "$ADMIN_PASSWORD_INPUT" \
-  | node -e 'let s="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>process.stdout.write(JSON.stringify({password:s})))' \
+  | node -e 'let s="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>process.stdout.write(JSON.stringify({username:"Shview",password:s})))' \
   | curl -sS -c admin.cookies https://nkustudy.top/admin-api/login \
       -H 'Content-Type: application/json' \
       --data-binary @-
@@ -476,7 +497,7 @@ curl -sS -b admin.cookies https://nkustudy.top/admin-api/session
 curl -sS -b admin.cookies -c admin.cookies -X POST https://nkustudy.top/admin-api/logout --data '{}'
 ```
 
-除 login/logout 外，所有 `/admin-api/*` 均要求请求头携带登录所得 Cookie；缺失或签名无效返回 `401 {"ok":false,"error":"Unauthorized"}`。`GET /admin-api/session` 成功仅返回 `{ "ok":true }`。
+除 login/logout 外，所有 `/admin-api/*` 均要求请求头携带登录所得 Cookie；缺失、签名无效或账号已停用返回 `401 {"ok":false,"error":"Unauthorized"}`。`GET /admin-api/session` 成功返回 `{ "ok":true, "data":{ "username":"...", "permissions":[...], "mustChangePassword":false } }`。缺少对应权限点的写操作返回 `403`，并计入审计日志。
 
 ## 管理接口：课程树与 R2
 

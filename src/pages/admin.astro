@@ -12,7 +12,11 @@ import "vditor/dist/index.css";
       <div class="panel-body">
         <form class="admin-form" id="login-form">
           <label class="admin-field">
-            <span>管理密码</span>
+            <span>账号</span>
+            <input id="admin-username" type="text" autocomplete="username" />
+          </label>
+          <label class="admin-field">
+            <span>密码</span>
             <input id="admin-password" type="password" autocomplete="current-password" />
           </label>
           <div class="filter-row">
@@ -24,6 +28,10 @@ import "vditor/dist/index.css";
     </div>
 
     <div id="admin-app" hidden>
+      <div class="card" id="must-change-banner" hidden>
+        <strong>首次登录请修改密码</strong>
+        <p class="muted">当前使用初始密码，请在下方「修改我的密码」中设置新密码后继续。</p>
+      </div>
       <div class="admin-tabs">
         <button class="button" type="button" data-admin-tab="resources">课程资源</button>
         <button class="button secondary" type="button" data-admin-tab="reviews">评价审核</button>
@@ -36,6 +44,8 @@ import "vditor/dist/index.css";
         <button class="button secondary" type="button" data-admin-tab="stats">访问统计</button>
         <button class="button secondary" type="button" data-admin-tab="about">关于页面</button>
         <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
+        <button class="button secondary" type="button" data-admin-tab="accounts">账号管理</button>
+        <button class="button secondary" type="button" data-admin-tab="audit">审计日志</button>
       </div>
 
       <div id="resource-admin-panel">
@@ -278,6 +288,81 @@ import "vditor/dist/index.css";
         </div>
       </div>
 
+      <div id="accounts-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>账号管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="reload-accounts" type="button">重新加载</button>
+              <span class="muted" id="accounts-admin-status"></span>
+            </div>
+            <details class="card admin-collapsible-card" id="create-account-card">
+              <summary>新增账号</summary>
+              <div class="admin-form" style="margin-top: 14px;">
+                <div class="filter-row">
+                  <label class="admin-field"><span>用户名</span><input id="new-account-username" type="text" autocomplete="off" placeholder="字母开头，3-32 位" /></label>
+                  <label class="admin-field"><span>初始密码</span><input id="new-account-password" type="text" autocomplete="off" placeholder="至少 10 位" /></label>
+                </div>
+                <div class="filter-row">
+                  <label class="admin-field"><span>角色预设</span>
+                    <select id="new-account-role">
+                      <option value="">自定义（手动勾选）</option>
+                      <option value="super_admin">super_admin（全部权限）</option>
+                      <option value="content_admin">content_admin（内容编辑+审核）</option>
+                      <option value="reviewer">reviewer（只读+反馈处理）</option>
+                      <option value="viewer">viewer（只读）</option>
+                    </select>
+                  </label>
+                  <label class="admin-field"><span>权限点</span><div id="new-account-permissions" class="filter-row"></div></label>
+                </div>
+                <div class="filter-row">
+                  <label><input id="new-account-must-change" type="checkbox" checked /> 首次登录强制修改密码</label>
+                  <button class="button" id="create-account" type="button">创建账号</button>
+                </div>
+              </div>
+            </details>
+            <div id="accounts-admin-list" style="margin-top: 14px;"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 14px;">
+          <div class="panel-header">
+            <h2>修改我的密码</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <label class="admin-field"><span>当前密码</span><input id="self-current-password" type="password" autocomplete="current-password" /></label>
+              <label class="admin-field"><span>新密码</span><input id="self-new-password" type="password" autocomplete="new-password" placeholder="至少 10 位" /></label>
+              <button class="button" id="change-self-password" type="button">修改密码</button>
+              <span class="muted" id="self-password-status"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="audit-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>审计日志</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <label class="admin-field"><span>账号</span><input id="audit-filter-username" type="text" autocomplete="off" placeholder="按用户名筛选" /></label>
+              <label class="admin-field"><span>动作</span><input id="audit-filter-action" type="text" autocomplete="off" placeholder="如 login 或 manifest" /></label>
+              <button class="button secondary" id="audit-filter-apply" type="button">查询</button>
+              <span class="muted" id="audit-admin-status"></span>
+            </div>
+            <div id="audit-admin-list" style="margin-top: 14px;"></div>
+            <div class="filter-row" style="margin-top: 14px;">
+              <button class="button secondary" id="audit-prev-page" type="button">上一页</button>
+              <span class="muted" id="audit-page-info"></span>
+              <button class="button secondary" id="audit-next-page" type="button">下一页</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="backup-admin-panel" hidden>
         <div class="panel">
           <div class="panel-header">
@@ -427,6 +512,48 @@ import "vditor/dist/index.css";
     const backupAdminStatus = document.querySelector("#backup-admin-status");
     const backupSettingsEditor = document.querySelector("#backup-settings-editor");
     const webdavSettingsEditor = document.querySelector("#webdav-settings-editor");
+    const accountsAdminPanel = document.querySelector("#accounts-admin-panel");
+    const accountsAdminStatus = document.querySelector("#accounts-admin-status");
+    const accountsAdminList = document.querySelector("#accounts-admin-list");
+    const auditAdminPanel = document.querySelector("#audit-admin-panel");
+    const auditAdminStatus = document.querySelector("#audit-admin-status");
+    const auditAdminList = document.querySelector("#audit-admin-list");
+    const mustChangeBanner = document.querySelector("#must-change-banner");
+    let sessionState = { username: "", permissions: [], mustChangePassword: false };
+    let accountsState = null;
+    let auditState = null;
+    let auditPage = 1;
+    const permissionLabels = {
+      "content.read": "内容查看",
+      "content.edit": "内容编辑",
+      "content.moderate": "反馈处理",
+      "storage.manage": "R2 同步",
+      "storage.delete": "R2 删除",
+      "backup.manage": "备份管理",
+      "accounts.manage": "账号管理",
+      "audit.read": "审计查看",
+    };
+    const rolePresets = {
+      super_admin: ["accounts.manage", "audit.read", "backup.manage", "content.edit", "content.moderate", "content.read", "storage.delete", "storage.manage"],
+      content_admin: ["content.read", "content.edit", "content.moderate"],
+      reviewer: ["content.read", "content.moderate"],
+      viewer: ["content.read"],
+    };
+    const tabPermissions = {
+      resources: "content.read",
+      reviews: "content.read",
+      feedback: "content.read",
+      stats: "content.read",
+      participate: "content.edit",
+      links: "content.edit",
+      home: "content.edit",
+      footer: "content.edit",
+      about: "content.edit",
+      "editor-settings": "content.edit",
+      backup: "backup.manage",
+      accounts: "accounts.manage",
+      audit: "audit.read",
+    };
     const toolbarOptions = [
       ["headings", "标题"],
       ["bold", "加粗"],
@@ -723,10 +850,233 @@ import "vditor/dist/index.css";
       renderEditorSettingsAdmin();
     }
 
+    function renderPermissionEditor(container, checked) {
+      container.innerHTML = "";
+      for (const [permission, label] of Object.entries(permissionLabels)) {
+        const box = document.createElement("label");
+        box.style.marginRight = "12px";
+        box.innerHTML = `<input type="checkbox" value="${permission}" ${checked.includes(permission) ? "checked" : ""} /> ${escapeHtml(label)}`;
+        container.append(box);
+      }
+    }
+
+    function checkedPermissions(container) {
+      return [...container.querySelectorAll("input[type=checkbox]:checked")].map((item) => item.value);
+    }
+
+    async function loadAccountsAdmin() {
+      const data = await api("/accounts");
+      accountsState = data.data;
+      renderAccountsAdmin();
+    }
+
+    function renderAccountsAdmin() {
+      accountsAdminList.innerHTML = "";
+      const table = document.createElement("table");
+      table.className = "admin-table";
+      table.innerHTML = `
+        <thead><tr><th>账号</th><th>权限</th><th>启用</th><th>最近登录</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      `;
+      const body = table.querySelector("tbody");
+      for (const account of accountsState.accounts) {
+        const row = document.createElement("tr");
+        const permText = account.permissions.map((item) => permissionLabels[item] || item).join("、");
+        row.innerHTML = `
+          <td>${escapeHtml(account.username)}${account.username === sessionState.username ? ' <span class="muted">(我)</span>' : ""}</td>
+          <td>${escapeHtml(permText || "-")}${account.mustChangePassword ? ' <span class="muted">[待改密]</span>' : ""}</td>
+          <td>${account.enabled ? "是" : "否"}</td>
+          <td>${account.lastLoginAt ? escapeHtml(beijingDate(new Date(account.lastLoginAt))) : "从未"}</td>
+          <td class="filter-row"></td>
+        `;
+        const ops = row.querySelector("td:last-child");
+
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.className = "button secondary";
+        editButton.textContent = "编辑";
+        editButton.addEventListener("click", () => renderAccountEditor(row, account));
+        ops.append(editButton);
+
+        const resetButton = document.createElement("button");
+        resetButton.type = "button";
+        resetButton.className = "button secondary";
+        resetButton.textContent = "重置密码";
+        resetButton.addEventListener("click", async () => {
+          const next = window.prompt(`为 ${account.username} 设置新密码（至少 10 位）：`);
+          if (!next) return;
+          try {
+            await api(`/accounts/${account.id}/password`, {
+              method: "POST",
+              body: JSON.stringify({ password: next, mustChangePassword: true }),
+            });
+            accountsAdminStatus.textContent = `已重置 ${account.username} 的密码`;
+            await loadAccountsAdmin();
+          } catch (error) {
+            accountsAdminStatus.textContent = error.message;
+          }
+        });
+        ops.append(resetButton);
+
+        if (account.username !== sessionState.username) {
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.className = "button secondary";
+          deleteButton.textContent = "删除";
+          deleteButton.addEventListener("click", async () => {
+            if (!window.confirm(`确定删除账号 ${account.username}？`)) return;
+            try {
+              await api(`/accounts/${account.id}`, { method: "DELETE" });
+              accountsAdminStatus.textContent = `已删除 ${account.username}`;
+              await loadAccountsAdmin();
+            } catch (error) {
+              accountsAdminStatus.textContent = error.message;
+            }
+          });
+          ops.append(deleteButton);
+        }
+        body.append(row);
+      }
+      accountsAdminList.append(table);
+    }
+
+    function renderAccountEditor(row, account) {
+      const existing = accountsAdminList.querySelector(".account-editor-row");
+      if (existing) existing.remove();
+      const editorRow = document.createElement("tr");
+      editorRow.className = "account-editor-row";
+      const cell = document.createElement("td");
+      cell.colSpan = 5;
+      const roleSelect = document.createElement("select");
+      roleSelect.className = "searchbar";
+      roleSelect.innerHTML = `<option value="">自定义</option>${Object.keys(rolePresets).map((role) => `<option value="${role}">${role}</option>`).join("")}`;
+      roleSelect.addEventListener("change", () => {
+        if (roleSelect.value) renderPermissionEditor(permBox, rolePresets[roleSelect.value]);
+      });
+      const permBox = document.createElement("div");
+      permBox.className = "filter-row";
+      renderPermissionEditor(permBox, account.permissions);
+      const enabledBox = document.createElement("label");
+      enabledBox.innerHTML = `<input type="checkbox" ${account.enabled ? "checked" : ""} /> 启用`;
+      const mustChangeBox = document.createElement("label");
+      mustChangeBox.innerHTML = `<input type="checkbox" ${account.mustChangePassword ? "checked" : ""} /> 下次登录强制改密`;
+      const saveButton = document.createElement("button");
+      saveButton.type = "button";
+      saveButton.className = "button";
+      saveButton.textContent = "保存";
+      saveButton.addEventListener("click", async () => {
+        try {
+          await api(`/accounts/${account.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              permissions: checkedPermissions(permBox),
+              enabled: enabledBox.querySelector("input").checked,
+              mustChangePassword: mustChangeBox.querySelector("input").checked,
+            }),
+          });
+          accountsAdminStatus.textContent = `已更新 ${account.username}`;
+          await loadAccountsAdmin();
+        } catch (error) {
+          accountsAdminStatus.textContent = error.message;
+        }
+      });
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.className = "button secondary";
+      cancelButton.textContent = "取消";
+      cancelButton.addEventListener("click", () => editorRow.remove());
+      const layout = document.createElement("div");
+      layout.className = "admin-form";
+      layout.append(roleSelect, permBox, enabledBox, mustChangeBox, saveButton, cancelButton);
+      cell.append(layout);
+      editorRow.append(cell);
+      row.after(editorRow);
+    }
+
+    async function loadAuditAdmin() {
+      const params = new URLSearchParams({
+        page: String(auditPage),
+        page_size: "30",
+        username: document.querySelector("#audit-filter-username").value.trim(),
+        action: document.querySelector("#audit-filter-action").value.trim(),
+      });
+      const data = await api(`/audit?${params.toString()}`);
+      auditState = data.data;
+      renderAuditAdmin();
+    }
+
+    function renderAuditAdmin() {
+      auditAdminList.innerHTML = "";
+      const table = document.createElement("table");
+      table.className = "admin-table";
+      table.innerHTML = `
+        <thead><tr><th>时间</th><th>账号</th><th>动作</th><th>状态</th><th>来源 IP</th></tr></thead>
+        <tbody></tbody>
+      `;
+      const body = table.querySelector("tbody");
+      for (const item of auditState.items) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${escapeHtml(beijingDate(new Date(item.at)))}</td>
+          <td>${escapeHtml(item.username)}</td>
+          <td>${escapeHtml(item.action)}</td>
+          <td>${escapeHtml(String(item.status))}</td>
+          <td>${escapeHtml(item.ip || "-")}</td>
+        `;
+        body.append(row);
+      }
+      if (!auditState.items.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "没有符合条件的审计记录。";
+        auditAdminList.append(empty);
+      }
+      auditAdminList.append(table);
+      const totalPages = Math.max(1, Math.ceil(auditState.total / auditState.page_size));
+      document.querySelector("#audit-page-info").textContent = `第 ${auditState.page} / ${totalPages} 页，共 ${auditState.total} 条`;
+    }
+
+    function hasPerm(permission) {
+      return sessionState.permissions.includes(permission);
+    }
+
+    function applySession(data = {}) {
+      sessionState = {
+        username: data.username || "",
+        permissions: Array.isArray(data.permissions) ? data.permissions : [],
+        mustChangePassword: Boolean(data.mustChangePassword),
+      };
+      for (const button of document.querySelectorAll("[data-admin-tab]")) {
+        const required = tabPermissions[button.dataset.adminTab];
+        button.hidden = Boolean(required) && !hasPerm(required);
+      }
+      mustChangeBanner.hidden = !sessionState.mustChangePassword;
+    }
+
+    function showFirstAllowedTab() {
+      const first = document.querySelector("[data-admin-tab]:not([hidden])");
+      if (first) first.click();
+      else {
+        loginPanel.hidden = true;
+        adminApp.hidden = false;
+      }
+    }
+
+    async function enterAdminApp() {
+      loginPanel.hidden = true;
+      adminApp.hidden = false;
+      if (hasPerm("content.read")) {
+        await loadManifest();
+      } else {
+        showFirstAllowedTab();
+      }
+    }
+
     async function checkSession() {
       try {
-        await api("/session");
-        await loadManifest();
+        const data = await api("/session");
+        applySession(data.data || {});
+        await enterAdminApp();
       } catch {
         loginPanel.hidden = false;
         adminApp.hidden = true;
@@ -2198,12 +2548,16 @@ import "vditor/dist/index.css";
       event.preventDefault();
       loginStatus.textContent = "登录中...";
       try {
-        await api("/login", {
+        const data = await api("/login", {
           method: "POST",
-          body: JSON.stringify({ password: document.querySelector("#admin-password").value }),
+          body: JSON.stringify({
+            username: document.querySelector("#admin-username").value.trim(),
+            password: document.querySelector("#admin-password").value,
+          }),
         });
+        applySession(data.data || {});
         loginStatus.textContent = "";
-        await loadManifest();
+        await enterAdminApp();
       } catch (error) {
         loginStatus.textContent = error.message;
       }
@@ -2391,6 +2745,95 @@ import "vditor/dist/index.css";
       window.location.reload();
     });
 
+    document.querySelector("#new-account-role").addEventListener("change", (event) => {
+      const role = event.target.value;
+      if (role) renderPermissionEditor(document.querySelector("#new-account-permissions"), rolePresets[role]);
+    });
+    renderPermissionEditor(document.querySelector("#new-account-permissions"), []);
+
+    document.querySelector("#create-account").addEventListener("click", async () => {
+      accountsAdminStatus.textContent = "";
+      try {
+        await api("/accounts", {
+          method: "POST",
+          body: JSON.stringify({
+            username: document.querySelector("#new-account-username").value.trim(),
+            password: document.querySelector("#new-account-password").value,
+            permissions: checkedPermissions(document.querySelector("#new-account-permissions")),
+            mustChangePassword: document.querySelector("#new-account-must-change").checked,
+          }),
+        });
+        document.querySelector("#new-account-username").value = "";
+        document.querySelector("#new-account-password").value = "";
+        accountsAdminStatus.textContent = "账号已创建";
+        await loadAccountsAdmin();
+      } catch (error) {
+        accountsAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-accounts").addEventListener("click", async () => {
+      accountsAdminStatus.textContent = "加载中...";
+      try {
+        await loadAccountsAdmin();
+        accountsAdminStatus.textContent = "";
+      } catch (error) {
+        accountsAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#change-self-password").addEventListener("click", async () => {
+      const status = document.querySelector("#self-password-status");
+      status.textContent = "";
+      try {
+        await api("/me/password", {
+          method: "POST",
+          body: JSON.stringify({
+            currentPassword: document.querySelector("#self-current-password").value,
+            newPassword: document.querySelector("#self-new-password").value,
+          }),
+        });
+        document.querySelector("#self-current-password").value = "";
+        document.querySelector("#self-new-password").value = "";
+        status.textContent = "密码已修改";
+        applySession({ ...sessionState, mustChangePassword: false });
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#audit-filter-apply").addEventListener("click", async () => {
+      auditPage = 1;
+      auditAdminStatus.textContent = "加载中...";
+      try {
+        await loadAuditAdmin();
+        auditAdminStatus.textContent = "";
+      } catch (error) {
+        auditAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#audit-prev-page").addEventListener("click", async () => {
+      if (auditPage <= 1) return;
+      auditPage -= 1;
+      try {
+        await loadAuditAdmin();
+      } catch (error) {
+        auditAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#audit-next-page").addEventListener("click", async () => {
+      const totalPages = Math.max(1, Math.ceil((auditState?.total || 0) / (auditState?.page_size || 30)));
+      if (auditPage >= totalPages) return;
+      auditPage += 1;
+      try {
+        await loadAuditAdmin();
+      } catch (error) {
+        auditAdminStatus.textContent = error.message;
+      }
+    });
+
     document.querySelectorAll("[data-admin-tab]").forEach((button) => {
       button.addEventListener("click", async () => {
         const tab = button.dataset.adminTab;
@@ -2409,6 +2852,27 @@ import "vditor/dist/index.css";
         statsAdminPanel.hidden = tab !== "stats";
         aboutAdminPanel.hidden = tab !== "about";
         backupAdminPanel.hidden = tab !== "backup";
+        accountsAdminPanel.hidden = tab !== "accounts";
+        auditAdminPanel.hidden = tab !== "audit";
+        if (tab === "accounts" && !accountsState) {
+          accountsAdminStatus.textContent = "加载中...";
+          try {
+            await loadAccountsAdmin();
+            accountsAdminStatus.textContent = "";
+          } catch (error) {
+            accountsAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "audit") {
+          auditPage = 1;
+          auditAdminStatus.textContent = "加载中...";
+          try {
+            await loadAuditAdmin();
+            auditAdminStatus.textContent = "";
+          } catch (error) {
+            auditAdminStatus.textContent = error.message;
+          }
+        }
         if (tab === "reviews" && !reviewState) {
           reviewAdminStatus.textContent = "加载中...";
           try {

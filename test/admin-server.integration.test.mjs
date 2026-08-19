@@ -55,7 +55,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     BACKUP_SECRET_FILE: path.join(dataDir, "backup-secrets.json"),
     PUBLIC_DIR: path.join(publicRoot, "current"),
     PUBLIC_RELEASES_DIR: path.join(publicRoot, "releases"),
-    ADMIN_PASSWORD: "isolated-test-password",
+    ADMIN_INITIAL_PASSWORD: "isolated-test-password-123",
     ADMIN_ORIGIN: `http://127.0.0.1:${port}`,
     ADMIN_HOST: "127.0.0.1",
     ADMIN_PORT: String(port),
@@ -86,26 +86,26 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const missingCsrfHeader = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
     method: "POST",
     headers: { origin: childEnv.ADMIN_ORIGIN, "content-type": "application/json" },
-    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+    body: JSON.stringify({ username: "Shview", password: childEnv.ADMIN_INITIAL_PASSWORD }),
   });
   assert.equal(missingCsrfHeader.status, 403);
   const crossSiteLogin = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
     method: "POST",
     headers: { origin: "https://attacker.example", "sec-fetch-site": "cross-site", "x-nkustudy-admin-request": "1", "content-type": "application/json" },
-    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+    body: JSON.stringify({ username: "Shview", password: childEnv.ADMIN_INITIAL_PASSWORD }),
   });
   assert.equal(crossSiteLogin.status, 403);
   const simpleContentType = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
     method: "POST",
     headers: adminHeaders({ "content-type": "text/plain" }),
-    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+    body: JSON.stringify({ username: "Shview", password: childEnv.ADMIN_INITIAL_PASSWORD }),
   });
   assert.equal(simpleContentType.status, 415);
 
   const login = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
     method: "POST",
     headers: adminHeaders({ "content-type": "application/json" }),
-    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+    body: JSON.stringify({ username: "Shview", password: childEnv.ADMIN_INITIAL_PASSWORD }),
   });
   assert.equal(login.status, 200);
   const cookie = login.headers.get("set-cookie").split(";", 1)[0];
@@ -132,6 +132,37 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     body: JSON.stringify({ expectedRevision: tabB.revision }),
   });
   assert.equal(staleSync.status, 409, "stale R2 sync must fail CAS before touching R2");
+
+  const createAccount = await fetch(`http://127.0.0.1:${port}/admin-api/accounts`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
+    body: JSON.stringify({ username: "viewer1", password: "viewer-password-123", permissions: ["content.read"] }),
+  });
+  assert.equal(createAccount.status, 200);
+  const viewerLogin = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({ username: "viewer1", password: "viewer-password-123" }),
+  });
+  assert.equal(viewerLogin.status, 200);
+  const viewerCookie = viewerLogin.headers.get("set-cookie").split(";", 1)[0];
+  const viewerSession = await (await fetch(`http://127.0.0.1:${port}/admin-api/session`, { headers: { cookie: viewerCookie } })).json();
+  assert.equal(viewerSession.data.username, "viewer1");
+  assert.deepEqual(viewerSession.data.permissions, ["content.read"]);
+  const viewerForbidden = await fetch(`http://127.0.0.1:${port}/admin-api/accounts`, { headers: { cookie: viewerCookie } });
+  assert.equal(viewerForbidden.status, 403, "viewer must not manage accounts");
+  const viewerManifest = await fetch(`http://127.0.0.1:${port}/admin-api/manifest`, { headers: { cookie: viewerCookie } });
+  assert.equal(viewerManifest.status, 200, "viewer can read manifest");
+  const viewerWrite = await fetch(`http://127.0.0.1:${port}/admin-api/manifest-draft`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json", cookie: viewerCookie }),
+    body: JSON.stringify({ manifest: tabA.manifest, expectedRevision: savedA.revision, deletedCourseUids: [] }),
+  });
+  assert.equal(viewerWrite.status, 403, "viewer must not edit content");
+  const auditFeed = await (await fetch(`http://127.0.0.1:${port}/admin-api/audit?username=viewer1`, { headers: { cookie } })).json();
+  assert.equal(auditFeed.ok, true);
+  assert.equal(auditFeed.data.items.length >= 1, true, "viewer write attempt must be audited");
+  assert.equal(auditFeed.data.items.some((item) => item.action.includes("manifest-draft") && item.status === 403), true);
 
   const reviewsLoaded = await (await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, { headers: { cookie } })).json();
   const feedbackLoaded = await (await fetch(`http://127.0.0.1:${port}/admin-api/feedback`, { headers: { cookie } })).json();
@@ -212,11 +243,11 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   }
 
   const badLogins = [];
-  for (let index = 0; index < 5; index += 1) {
+  for (let index = 0; index < 4; index += 1) {
     badLogins.push(await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
       method: "POST",
       headers: adminHeaders({ "content-type": "application/json" }),
-      body: JSON.stringify({ password: "wrong" }),
+      body: JSON.stringify({ username: "Shview", password: "wrong-password" }),
     }));
   }
   assert.equal(badLogins.at(-1).status, 429, "login attempts are counted before password verification");
@@ -234,7 +265,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const persistedLoginLimit = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
     method: "POST",
     headers: adminHeaders({ "content-type": "application/json" }),
-    body: JSON.stringify({ password: childEnv.ADMIN_PASSWORD }),
+    body: JSON.stringify({ username: "Shview", password: childEnv.ADMIN_INITIAL_PASSWORD }),
   });
   assert.equal(persistedLoginLimit.status, 429, "login limit must survive a server restart");
   const persistedAttempt = await fetch(`http://127.0.0.1:${port}/review-api/submit`, {

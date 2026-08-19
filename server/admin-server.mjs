@@ -1,4 +1,4 @@
-﻿import { createCipheriv, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypto";
+﻿import { createCipheriv, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { PassThrough } from "node:stream";
@@ -8,6 +8,7 @@ import Busboy from "busboy";
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { AtomicJsonStore } from "./atomic-json-store.mjs";
 import { syncCourseResponse } from "./admin-response.mjs";
+import { AdminAccountsStore, ADMIN_PERMISSION_POINTS, ADMIN_ROLE_PRESETS, hasAdminPermission } from "./admin-accounts-store.mjs";
 import { AdminSessionStore } from "./admin-session-store.mjs";
 import { clientIp, hashActor, trustedProxyRules } from "./client-identity.mjs";
 import { ContentPublishJournal, ContentPublishService } from "./content-publish-service.mjs";
@@ -55,7 +56,6 @@ const staticReleasePublisher = new StaticReleasePublisher({
 });
 const host = process.env.ADMIN_HOST || "127.0.0.1";
 const port = Number(process.env.ADMIN_PORT || 8787);
-const password = process.env.ADMIN_PASSWORD;
 const adminOrigin = String(process.env.ADMIN_ORIGIN || (process.env.NODE_ENV === "production" ? "" : `http://${host}:${port}`)).replace(/\/+$/, "");
 const secretPath = runtime.adminSecretPath;
 const r2Bucket = process.env.R2_BUCKET;
@@ -82,10 +82,6 @@ let contentPublishService;
 const r2MutationQueue = new R2MutationQueue();
 const activeChildren = new Set();
 
-if (!password) {
-  console.error("ADMIN_PASSWORD is required.");
-  process.exit(1);
-}
 if (!adminOrigin || !/^https?:\/\/[^/]+$/i.test(adminOrigin)) {
   console.error("ADMIN_ORIGIN must be an exact http(s) origin without a path.");
   process.exit(1);
@@ -108,6 +104,25 @@ const sessionStore = new AdminSessionStore({
   absoluteTtlMs: Number(process.env.ADMIN_SESSION_ABSOLUTE_TTL_MS || 8 * 60 * 60 * 1000),
   idleTtlMs: Number(process.env.ADMIN_SESSION_IDLE_TTL_MS || 30 * 60 * 1000),
 });
+const accountsStore = new AdminAccountsStore({ dbPath: runtime.stateDbPath });
+seedInitialAdminAccount();
+
+function seedInitialAdminAccount() {
+  if (accountsStore.count() > 0) return;
+  const initialPassword = String(process.env.ADMIN_INITIAL_PASSWORD || "").trim();
+  const permissions = ADMIN_PERMISSION_POINTS.slice();
+  if (initialPassword.length >= 10) {
+    accountsStore.create({ username: "Shview", password: initialPassword, permissions, mustChangePassword: true, createdBy: "system" });
+    console.log("Seeded initial admin account Shview from ADMIN_INITIAL_PASSWORD.");
+    return;
+  }
+  const generated = randomBytes(15).toString("base64url");
+  accountsStore.create({ username: "Shview", password: generated, permissions, mustChangePassword: true, createdBy: "system" });
+  const passwordFile = path.join(dataDir, "admin-initial-password.txt");
+  fs.writeFileSync(passwordFile, `Shview / ${generated}\n`, { mode: 0o600 });
+  fs.chmodSync(passwordFile, 0o600);
+  console.log(`Seeded admin account Shview; one-time initial password written to ${passwordFile}`);
+}
 const reviewSubmissionService = new ReviewSubmissionService({
   store: jsonStore,
   reviewsPath,
@@ -356,7 +371,7 @@ function backupData(scope = "all") {
     r2Bucket: r2Bucket || "",
     r2Prefix,
     r2Configured: Boolean(r2Client && r2Bucket),
-    note: "Sensitive values such as ADMIN_PASSWORD and R2 secret keys are intentionally not included.",
+    note: "Admin password hashes are included for account recovery; plaintext passwords and R2 secret keys are never included.",
   };
   const data = {
     ok: true,
@@ -379,6 +394,7 @@ function backupData(scope = "all") {
   if (scope === "all" || scope === "pages") data.pages = pages();
   if (scope === "all" || scope === "stats") data.visitStats = readVisitStats();
   if (scope === "all" || scope === "config") data.editorSettings = readEditorSettings();
+  if (scope === "all" || scope === "config") data.adminAccounts = accountsStore.exportForBackup();
   if (!["all", "manifest", "reviews", "feedback", "pages", "stats", "config"].includes(scope)) {
     return null;
   }
@@ -626,12 +642,6 @@ function startBackupScheduler() {
 const readBody = readJsonBody;
 const adminCookieName = "__Host-nkustudy_admin";
 
-function safePasswordEqual(candidate) {
-  const actual = createHmac("sha256", secret).update(String(candidate ?? ""), "utf8").digest();
-  const expected = createHmac("sha256", secret).update(password, "utf8").digest();
-  return timingSafeEqual(actual, expected);
-}
-
 function cookie(req, name) {
   const header = req.headers.cookie || "";
   for (const part of header.split(";")) {
@@ -648,8 +658,26 @@ function cookie(req, name) {
 }
 
 function requireAuth(req, res) {
-  if (sessionStore.validate(cookie(req, adminCookieName))) return true;
-  json(res, 401, { ok: false, error: "Unauthorized" });
+  const token = cookie(req, adminCookieName);
+  const identity = sessionStore.lookup(token);
+  if (!identity?.username) {
+    json(res, 401, { ok: false, error: "Unauthorized" });
+    return null;
+  }
+  const account = accountsStore.getByUsername(identity.username);
+  if (!account || !account.enabled) {
+    sessionStore.revoke(token);
+    json(res, 401, { ok: false, error: "Unauthorized" });
+    return null;
+  }
+  req.__adminAccount = account;
+  return account;
+}
+
+function requirePermission(req, account, permission, res) {
+  if (hasAdminPermission(account, permission)) return true;
+  json(res, 403, { ok: false, error: "没有执行该操作的权限。" });
+  req.resume();
   return false;
 }
 
@@ -1863,6 +1891,23 @@ const server = createServer(async (req, res) => {
 
     if (!["GET", "HEAD"].includes(req.method || "GET") && !requireAdminMutationProvenance(req, res, url)) return;
 
+    res.on("finish", () => {
+      try {
+        if (!req.__adminAccount || ["GET", "HEAD"].includes(req.method)) return;
+        accountsStore.audit({
+          username: req.__adminAccount.username,
+          action: `${req.method} ${url.pathname}`,
+          method: req.method,
+          path: url.pathname,
+          status: res.statusCode,
+          ip: clientIp(req),
+          userAgent: req.headers["user-agent"] || "",
+        });
+      } catch {
+        // 审计失败不影响已完成的响应。
+      }
+    });
+
     if (req.method === "POST" && url.pathname === "/admin-api/login") {
       const ip = clientIp(req);
       if (!consumeLayeredAttempt("admin-login-attempt", ip, { perIp: 5, global: 60, windowMs: 5 * 60 * 1000 })) {
@@ -1871,13 +1916,32 @@ const server = createServer(async (req, res) => {
         return;
       }
       const body = await readBody(req);
-      if (!safePasswordEqual(body.password)) {
-        json(res, 403, { ok: false, error: "Password is incorrect." });
+      const account = accountsStore.verify(body.username, body.password);
+      if (!account) {
+        accountsStore.audit({
+          username: cleanText(body.username, 64) || "unknown",
+          action: "login.failed",
+          method: "POST",
+          path: "/admin-api/login",
+          status: 403,
+          ip,
+          userAgent: req.headers["user-agent"] || "",
+        });
+        json(res, 403, { ok: false, error: "账号或密码不正确。" });
         return;
       }
-      const token = sessionStore.create();
+      const token = sessionStore.create({ username: account.username });
       res.setHeader("set-cookie", `${adminCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`);
-      json(res, 200, { ok: true });
+      accountsStore.audit({
+        username: account.username,
+        action: "login.success",
+        method: "POST",
+        path: "/admin-api/login",
+        status: 200,
+        ip,
+        userAgent: req.headers["user-agent"] || "",
+      });
+      json(res, 200, { ok: true, data: { username: account.username, permissions: account.permissions, mustChangePassword: account.mustChangePassword } });
       return;
     }
 
@@ -1891,14 +1955,17 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (!requireAuth(req, res)) return;
+    const account = requireAuth(req, res);
+    if (!account) return;
 
     if (req.method === "POST" && url.pathname === "/admin-api/upload") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       await runExclusiveR2Mutation({ queue: r2MutationQueue, mutate: () => handleUpload(req, res, url) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/sync-r2") {
+      if (!requirePermission(req, account, "storage.manage", res)) return;
       const body = await readBody(req);
       const result = await syncCourseFromR2(body.courseId, body.expectedRevision);
       json(res, 200, syncCourseResponse(result));
@@ -1906,6 +1973,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/sync-r2-all") {
+      if (!requirePermission(req, account, "storage.manage", res)) return;
       const body = await readBody(req);
       const result = await syncAllCoursesFromR2(body.expectedRevision);
       json(res, 200, { ok: true, ...result });
@@ -1919,6 +1987,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/r2-publish") {
+      if (!requirePermission(req, account, "storage.manage", res)) return;
       const body = await readBody(req);
       const result = await safeR2ManifestPublish(body);
       json(res, 200, result);
@@ -1926,6 +1995,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/backup") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
       const scope = cleanText(url.searchParams.get("scope") || "all", 40);
       const data = backupData(scope);
       if (!data) {
@@ -1937,34 +2007,40 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/backup-settings") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
       json(res, 200, { ok: true, data: publicBackupSettings() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/backup-settings") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
       const body = await readBody(req);
       json(res, 200, { ok: true, data: await writeBackupSettings(body.data || {}) });
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/editor-settings") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, data: publicEditorSettings() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/editor-settings") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       json(res, 200, { ok: true, data: await writeEditorSettings(body.data || {}) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/backup-run") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
       const result = await runBackupJob({ manual: true });
       json(res, result.ok === false ? 409 : 200, result);
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/backup-test-webdav") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
       const body = await readBody(req);
       const result = await testWebdavDestination(body.destination || {});
       json(res, result.ok ? 200 : 400, result);
@@ -1972,16 +2048,19 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/visit-stats") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, stats: readVisitStats(), summary: publicVisitStats() });
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/home") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readPublishedContent(homePath, normalizeHome) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/home") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       const result = await publishContent(homePath, body.data || {}, body.expectedRevision, normalizeHome);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
@@ -1989,11 +2068,13 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/footer") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readPublishedContent(footerPath, normalizeFooter) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/footer") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       const result = await publishContent(footerPath, body.data || {}, body.expectedRevision, normalizeFooter);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
@@ -2001,11 +2082,13 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/about") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readPublishedContent(aboutPath, normalizeAbout) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/about") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       const result = await publishContent(aboutPath, body.data || {}, body.expectedRevision, normalizeAbout);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
@@ -2013,11 +2096,13 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/participate") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readPublishedContent(participatePath, normalizeParticipate) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/participate") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       const result = await publishContent(participatePath, body.data || {}, body.expectedRevision, normalizeParticipate);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
@@ -2025,11 +2110,13 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/links") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readPublishedContent(linksPath, normalizeLinks) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/links") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       const result = await publishContent(linksPath, body.data || {}, body.expectedRevision, normalizeLinks);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
@@ -2037,11 +2124,13 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/feedback") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readPublishedContent(feedbackPath, normalizeFeedbackData) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/feedback") {
+      if (!requirePermission(req, account, "content.moderate", res)) return;
       const body = await readBody(req);
       const result = await publishContent(feedbackPath, body.data || {}, body.expectedRevision, normalizeFeedbackData);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
@@ -2049,27 +2138,31 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/reviews") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readReviewStore() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/reviews") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       json(res, 200, { ok: true, ...await updateReviewStore(body.data || {}, body.expectedRevision) });
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/session") {
-      json(res, 200, { ok: true });
+      json(res, 200, { ok: true, data: { username: account.username, permissions: account.permissions, mustChangePassword: account.mustChangePassword } });
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/manifest") {
+      if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await manifestService.readWithRevision() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/manifest") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       const result = await publish(body.manifest, { expectedRevision: body.expectedRevision, deletedCourseUids: body.deletedCourseUids });
       json(res, result.ok ? 200 : result.statusCode || 400, result);
@@ -2077,9 +2170,104 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/manifest-draft") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
       const result = await saveManifestDraft(body.manifest, { expectedRevision: body.expectedRevision, deletedCourseUids: body.deletedCourseUids });
       json(res, result.ok ? 200 : result.statusCode || 400, result);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/accounts") {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      json(res, 200, { ok: true, data: { accounts: accountsStore.list(), permissionPoints: ADMIN_PERMISSION_POINTS, rolePresets: ADMIN_ROLE_PRESETS } });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/accounts") {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const created = accountsStore.create({
+          username: body.username,
+          password: body.password,
+          permissions: body.permissions,
+          mustChangePassword: body.mustChangePassword !== false,
+          createdBy: account.username,
+        });
+        json(res, 200, { ok: true, data: created });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    const accountPatchMatch = url.pathname.match(/^\/admin-api\/accounts\/([^/]+)$/);
+    if (req.method === "PATCH" && accountPatchMatch && /^\d+$/.test(accountPatchMatch[1])) {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const updated = accountsStore.updateSettings(Number(accountPatchMatch[1]), {
+          permissions: body.permissions,
+          enabled: body.enabled,
+          mustChangePassword: body.mustChangePassword,
+        });
+        json(res, 200, { ok: true, data: updated });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    const accountPasswordMatch = url.pathname.match(/^\/admin-api\/accounts\/([^/]+)$/);
+    if (req.method === "POST" && accountPasswordMatch && /^\d+$/.test(accountPasswordMatch[1])) {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        accountsStore.setPassword(Number(accountPasswordMatch[1]), body.password, { forceChangeNextLogin: body.mustChangePassword === true });
+        json(res, 200, { ok: true });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    const accountDeleteMatch = url.pathname.match(/^\/admin-api\/accounts\/([^/]+)$/);
+    if (req.method === "DELETE" && accountDeleteMatch && /^\d+$/.test(accountDeleteMatch[1])) {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      try {
+        accountsStore.remove(Number(accountDeleteMatch[1]), { actorUsername: account.username });
+        json(res, 200, { ok: true });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/me/password") {
+      const body = await readBody(req);
+      const fresh = accountsStore.verify(account.username, body.currentPassword);
+      if (!fresh) {
+        json(res, 403, { ok: false, error: "当前密码不正确。" });
+        return;
+      }
+      try {
+        accountsStore.setPassword(account.id, body.newPassword);
+        json(res, 200, { ok: true });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/audit") {
+      if (!requirePermission(req, account, "audit.read", res)) return;
+      const data = accountsStore.queryAudit({
+        page: url.searchParams.get("page") || 1,
+        pageSize: url.searchParams.get("page_size") || 50,
+        username: cleanText(url.searchParams.get("username") || "", 64),
+        action: cleanText(url.searchParams.get("action") || "", 64),
+      });
+      json(res, 200, { ok: true, data });
       return;
     }
 
@@ -2109,6 +2297,7 @@ function shutdown(signal) {
   server.close(() => {
     try {
       sessionStore.close();
+      accountsStore.close();
       rateLimiter.close();
       process.exit(0);
     } catch (error) {

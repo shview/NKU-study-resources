@@ -39,15 +39,18 @@ export class AdminSessionStore {
         token_hash TEXT PRIMARY KEY,
         created_at INTEGER NOT NULL,
         last_seen_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL
+        expires_at INTEGER NOT NULL,
+        username TEXT
       );
       CREATE INDEX IF NOT EXISTS admin_sessions_expiry_idx ON admin_sessions(expires_at);
     `);
+    const columns = this.db.pragma("table_info(admin_sessions)").map((column) => column.name);
+    if (!columns.includes("username")) this.db.exec("ALTER TABLE admin_sessions ADD COLUMN username TEXT");
     this.insert = this.db.prepare(`
-      INSERT INTO admin_sessions(token_hash, created_at, last_seen_at, expires_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO admin_sessions(token_hash, created_at, last_seen_at, expires_at, username)
+      VALUES (?, ?, ?, ?, ?)
     `);
-    this.select = this.db.prepare("SELECT created_at, last_seen_at, expires_at FROM admin_sessions WHERE token_hash = ?");
+    this.select = this.db.prepare("SELECT created_at, last_seen_at, expires_at, username FROM admin_sessions WHERE token_hash = ?");
     this.touch = this.db.prepare("UPDATE admin_sessions SET last_seen_at = ? WHERE token_hash = ?");
     this.remove = this.db.prepare("DELETE FROM admin_sessions WHERE token_hash = ?");
     this.removeExpired = this.db.prepare("DELETE FROM admin_sessions WHERE expires_at <= ? OR last_seen_at + ? <= ?");
@@ -79,13 +82,13 @@ export class AdminSessionStore {
     return value.length >= 32 && value.length <= 128 && /^[A-Za-z0-9_-]+$/.test(value) ? value : "";
   }
 
-  create({ now = Date.now() } = {}) {
+  create({ username = null, now = Date.now() } = {}) {
     const timestamp = positiveSafeInteger(now, "now");
     this.removeExpired.run(timestamp, this.idleTtlMs, timestamp);
     const overflow = Number(this.count.get().count) - this.maxSessions + 1;
     if (overflow > 0) this.removeOldest.run(overflow);
     const token = randomBytes(32).toString("base64url");
-    this.insert.run(this.#tokenHash(token), timestamp, timestamp, timestamp + this.absoluteTtlMs);
+    this.insert.run(this.#tokenHash(token), timestamp, timestamp, timestamp + this.absoluteTtlMs, username ? String(username) : null);
     this.#secureDatabaseFiles();
     return token;
   }
@@ -97,6 +100,23 @@ export class AdminSessionStore {
     const valid = this.validateTransaction.immediate(this.#tokenHash(value), timestamp);
     this.#secureDatabaseFiles();
     return valid;
+  }
+
+  lookup(token, { now = Date.now() } = {}) {
+    const value = this.#boundedToken(token);
+    if (!value) return null;
+    const timestamp = positiveSafeInteger(now, "now");
+    const tokenHash = this.#tokenHash(value);
+    const row = this.select.get(tokenHash);
+    if (!row) return null;
+    if (row.expires_at <= timestamp || row.last_seen_at + this.idleTtlMs <= timestamp) {
+      this.remove.run(tokenHash);
+      this.#secureDatabaseFiles();
+      return null;
+    }
+    this.touch.run(timestamp, tokenHash);
+    this.#secureDatabaseFiles();
+    return { username: row.username || null };
   }
 
   revoke(token) {

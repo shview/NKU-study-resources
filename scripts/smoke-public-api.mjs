@@ -45,7 +45,7 @@ try {
       STATE_DB_PATH: path.join(dataDir, "state.sqlite"),
       ADMIN_SECRET_FILE: path.join(dataDir, "admin-secret"),
       BACKUP_SECRET_FILE: path.join(dataDir, "backup-secrets.json"),
-      ADMIN_PASSWORD: "isolated-smoke-password",
+      ADMIN_INITIAL_PASSWORD: "isolated-smoke-password-123",
       ADMIN_HOST: "127.0.0.1",
       ADMIN_PORT: String(port),
     },
