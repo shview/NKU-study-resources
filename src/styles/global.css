@@ -2250,17 +2250,10 @@ details.resource-subsection summary::-webkit-details-marker {
   min-height: 0;
   overflow-y: auto;
 }
-.admin-table-ops {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
 .admin-table-ops .button {
   margin: 0;
-  padding: 3px 9px;
-  font-size: 0.85em;
+  padding: 3px 10px;
+  font-size: 0.8em;
   white-space: nowrap;
 }
 .admin-moderation-sidebar .admin-tree {
