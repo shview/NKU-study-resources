@@ -23,11 +23,11 @@ const recommendedLinks = (links.links ?? []).filter((item) => item.type === "rec
             <h3>{links.mutualTitle ?? "友情链接"}</h3>
             <div class="link-grid">
               {mutualLinks.map((item) => (
-                <a class="link-card" href={item.url} target="_blank" rel="noreferrer">
-                  <strong>{item.name}</strong>
+                <div class="link-card">
+                  <a href={item.url} target="_blank" rel="noreferrer"><strong>{item.name}</strong></a>
                   {item.description && <div class="link-desc markdown-body" set:html={markdownToHtml(item.description)}></div>}
-                  <small>{item.url}</small>
-                </a>
+                  <a class="link-url" href={item.url} target="_blank" rel="noreferrer"><small>{item.url}</small></a>
+                </div>
               ))}
             </div>
           </section>
@@ -38,11 +38,11 @@ const recommendedLinks = (links.links ?? []).filter((item) => item.type === "rec
             <h3>{links.recommendedTitle ?? "推荐链接"}</h3>
             <div class="link-grid">
               {recommendedLinks.map((item) => (
-                <a class="link-card" href={item.url} target="_blank" rel="noreferrer">
-                  <strong>{item.name}</strong>
+                <div class="link-card">
+                  <a href={item.url} target="_blank" rel="noreferrer"><strong>{item.name}</strong></a>
                   {item.description && <div class="link-desc markdown-body" set:html={markdownToHtml(item.description)}></div>}
-                  <small>{item.url}</small>
-                </a>
+                  <a class="link-url" href={item.url} target="_blank" rel="noreferrer"><small>{item.url}</small></a>
+                </div>
               ))}
             </div>
           </section>

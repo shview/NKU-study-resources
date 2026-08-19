@@ -239,7 +239,7 @@ import "vditor/dist/index.css";
               <div class="review-admin-list" id="stats-admin-pages" style="margin-top: 14px;"></div>
             </details>
             <details class="card admin-collapsible-card" style="margin-top: 18px;">
-              <summary>最近去重 IP</summary>
+              <summary>最近访客（去重标识）</summary>
               <div class="review-admin-list" id="stats-admin-visitors" style="margin-top: 14px;"></div>
             </details>
           </div>
@@ -922,11 +922,11 @@ import "vditor/dist/index.css";
         const row = document.createElement("tr");
         const permTags = account.permissions.map((item) => `<span class="perm-tag">${escapeHtml(permissionLabels[item] || item)}</span>`).join("");
         row.innerHTML = `
-          <td style="width: 15%;">${escapeHtml(account.username)}${account.username === sessionState.username ? ' <span class="muted">(我)</span>' : ""}</td>
-          <td style="width: 45%;">${permTags || "-"}${account.mustChangePassword ? ' <span class="muted">[待改密]</span>' : ""}</td>
-          <td style="width: 8%;">${account.enabled ? "是" : "否"}</td>
+          <td style="width: 14%;">${escapeHtml(account.username)}${account.username === sessionState.username ? ' <span class="muted">(我)</span>' : ""}</td>
+          <td style="width: 36%;">${permTags || "-"}${account.mustChangePassword ? ' <span class="muted">[待改密]</span>' : ""}</td>
+          <td style="width: 6%;">${account.enabled ? "是" : "否"}</td>
           <td style="width: 16%;">${account.lastLoginAt ? escapeHtml(beijingDateTime(new Date(account.lastLoginAt))) : "从未"}</td>
-          <td style="width: 16%;" class="filter-row"></td>
+          <td style="width: 28%;" class="admin-table-ops"></td>
         `;
         const ops = row.querySelector("td:last-child");
 
@@ -2036,17 +2036,6 @@ import "vditor/dist/index.css";
     }
 
     let statsRange = 30;
-    const pageCategoryLabels = {
-      "/": "首页",
-      "/courses": "课程列表",
-      "/courses/:id": "课程详情",
-      "/reviews": "评价列表",
-      "/reviews/detail": "评价详情",
-      "/about": "关于",
-      "/feedback": "反馈",
-      "/friends": "友链",
-      "/participate": "参与贡献",
-    };
 
     function decodePathLabel(path) {
       try {
@@ -2056,9 +2045,37 @@ import "vditor/dist/index.css";
       }
     }
 
+    function normalizeStatsKey(path) {
+      const decoded = decodePathLabel(path).replace(/\/+$/, "") || "/";
+      return decoded.toLowerCase();
+    }
+
+    function courseTitleFromStatsKey(path) {
+      const decoded = decodePathLabel(path).replace(/\/+$/, "");
+      const match = decoded.match(/^\/courses\/([^/]+)/);
+      return match ? match[1] : "";
+    }
+
     function pageCategory(path) {
-      if (path.startsWith("/mp/")) return "小程序";
-      return pageCategoryLabels[path] || (path === "/__unknown__" ? "未识别页面" : "其他");
+      const key = normalizeStatsKey(path);
+      if (key.startsWith("/mp/")) return "小程序";
+      if (key === "/") return "首页";
+      if (key === "/courses") return "课程列表";
+      if (/^\/courses\/./.test(key)) return "课程详情";
+      if (key === "/reviews") return "评价列表";
+      if (key === "/reviews/detail") return "评价详情";
+      if (key === "/about") return "关于";
+      if (key === "/feedback") return "反馈";
+      if (key === "/friends") return "友链";
+      if (key === "/participate") return "参与贡献";
+      if (key === "/__unknown__") return "未识别页面";
+      return "其他";
+    }
+
+    function statsKeyLabel(path) {
+      const key = normalizeStatsKey(path);
+      if (/^\/courses\/./.test(key)) return `课程 · ${courseTitleFromStatsKey(path) || key}`;
+      return key;
     }
 
     function beijingDayKeys(count) {
@@ -2103,7 +2120,7 @@ import "vditor/dist/index.css";
           <p class="muted">${escapeHtml(total30)} 次</p>
         </article>
         <article class="card">
-          <h3>短期去重记录</h3>
+          <h3>短期去重访客</h3>
           <p class="muted">${escapeHtml(Object.keys(stats.visitors || {}).length)} 个访客记录</p>
         </article>
         <article class="card">
@@ -2129,21 +2146,59 @@ import "vditor/dist/index.css";
       const labelIndexes = [0, Math.floor((series.length - 1) / 2), series.length - 1];
       const gridLines = [0, 0.5, 1].map((ratio) => {
         const y = paddingY + innerH - ratio * innerH;
-        const label = Math.round(maxValue * (1 - ratio));
+        const label = Math.round(maxValue * ratio);
         return `<line x1="${paddingX}" y1="${y.toFixed(1)}" x2="${width - 12}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1" /><text x="${paddingX - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="currentColor">${label}</text>`;
       }).join("");
       const dateLabels = labelIndexes.map((index) => `<text x="${(paddingX + (series.length === 1 ? innerW / 2 : (index / (series.length - 1)) * innerW)).toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="10" fill="currentColor">${chartKeys[index].slice(5)}</text>`).join("");
       statsAdminChart.innerHTML = `
-        <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="每日访问量折线图">
-          ${gridLines}
-          <polyline points="${points.join(" ")}" fill="none" stroke="currentColor" stroke-width="2" />
-          ${series.map((value, index) => `<circle cx="${points[index].split(",")[0]}" cy="${points[index].split(",")[1]}" r="2.5" fill="currentColor"><title>${chartKeys[index]}：${value} 次</title></circle>`).join("")}
-          ${dateLabels}
-        </svg>
+        <div style="position: relative;">
+          <div id="stats-chart-tooltip" style="position: absolute; display: none; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 0.82rem; white-space: nowrap; z-index: 5; box-shadow: var(--shadow);"></div>
+          <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="每日访问量折线图">
+            ${gridLines}
+            <polyline points="${points.join(" ")}" fill="none" stroke="currentColor" stroke-width="2" />
+            ${series.map((value, index) => `<circle data-index="${index}" cx="${points[index].split(",")[0]}" cy="${points[index].split(",")[1]}" r="3" fill="currentColor"><title>${chartKeys[index]}：${value} 次</title></circle>`).join("")}
+            ${dateLabels}
+          </svg>
+        </div>
       `;
+      const tooltip = statsAdminChart.querySelector("#stats-chart-tooltip");
+      for (const dot of statsAdminChart.querySelectorAll("circle")) {
+        const index = Number(dot.dataset.index);
+        dot.style.cursor = "pointer";
+        dot.addEventListener("mouseenter", () => {
+          dot.setAttribute("r", "5");
+          tooltip.textContent = `${chartKeys[index]} · ${series[index]} 次访问`;
+          tooltip.style.display = "block";
+        });
+        dot.addEventListener("mousemove", (event) => {
+          const bounds = statsAdminChart.getBoundingClientRect();
+          tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - 140))}px`;
+          tooltip.style.top = `${Math.max(0, event.clientY - bounds.top - 34)}px`;
+        });
+        dot.addEventListener("mouseleave", () => {
+          dot.setAttribute("r", "3");
+          tooltip.style.display = "none";
+        });
+      }
 
       const categories = new Map();
+      const mergedPages = new Map();
       for (const [path, item] of Object.entries(stats.pages || {})) {
+        const normKey = normalizeStatsKey(path);
+        const merged = mergedPages.get(normKey) || {
+          normKey,
+          display: /^\/courses\//.test(normKey) ? statsKeyLabel(path) : normKey,
+          total: 0,
+          today: 0,
+          days: {},
+        };
+        merged.total += Number(item?.total || 0);
+        merged.today += Number(item?.days?.[todayKey] || 0);
+        for (const [day, count] of Object.entries(item?.days || {})) {
+          merged.days[day] = (merged.days[day] || 0) + Number(count || 0);
+        }
+        mergedPages.set(normKey, merged);
+
         const label = pageCategory(path);
         const entry = categories.get(label) || { label, total: 0, today: 0, last7: 0, last30: 0 };
         entry.total += Number(item?.total || 0);
@@ -2176,30 +2231,31 @@ import "vditor/dist/index.css";
         statsAdminCategories.innerHTML = `<p class="empty">暂无页面访问记录。</p>`;
       }
 
-      const pages = Object.entries(stats.pages || {})
-        .map(([path, item]) => ({ path, total: Number(item?.total || 0), today: Number(item?.days?.[todayKey] || 0) }))
+      const pages = [...mergedPages.values()]
         .sort((a, b) => b.total - a.total)
         .slice(0, 30);
       statsAdminPages.innerHTML = pages.length ? "" : `<p class="empty">暂无页面访问记录。</p>`;
       for (const page of pages) {
         const item = document.createElement("article");
         item.className = "review-admin-item";
+        const pageDays7 = sumDays(page.days, last7);
         item.innerHTML = `
-          <strong>${escapeHtml(pageCategory(page.path))} · ${escapeHtml(decodePathLabel(page.path))}</strong>
-          <p>总访问 ${escapeHtml(page.total)} 次 · 今日 ${escapeHtml(page.today)} 次</p>
+          <strong>${escapeHtml(pageCategory(page.normKey))} · ${escapeHtml(decodePathLabel(page.display))}</strong>
+          <p>总访问 ${escapeHtml(page.total)} 次 · 今日 ${escapeHtml(page.today)} 次 · 近 7 天 ${escapeHtml(pageDays7)} 次</p>
         `;
         statsAdminPages.append(item);
       }
       const visitors = Object.values(stats.visitors || {})
         .sort((a, b) => Number(b?.lastSeen || 0) - Number(a?.lastSeen || 0))
         .slice(0, 30);
-      statsAdminVisitors.innerHTML = visitors.length ? "" : `<p class="empty">暂无短期去重 IP。</p>`;
+      statsAdminVisitors.innerHTML = visitors.length ? "" : `<p class="empty">暂无访客记录。</p>`;
       for (const visitor of visitors) {
         const item = document.createElement("article");
         item.className = "review-admin-item";
         const time = visitor?.lastSeen ? beijingDateTime(Number(visitor.lastSeen)) : "";
+        const actor = String(visitor?.actorHash || "").slice(0, 12) || "未知";
         item.innerHTML = `
-          <strong>${escapeHtml(visitor?.ip || "unknown")}</strong>
+          <strong>访客 ${escapeHtml(actor)}…</strong>
           <p>最近访问 ${escapeHtml(time)}</p>
         `;
         statsAdminVisitors.append(item);

@@ -996,7 +996,7 @@ function normalizeLinks(data) {
       type: item.type === "recommended" ? "recommended" : "mutual",
       name: cleanText(item.name, 120),
       url: cleanText(item.url, 500),
-      description: cleanText(item.description, 1000),
+      description: cleanText(item.description, 4000),
       hidden: item.hidden === true,
     })).filter((item) => item.name && item.url),
   };

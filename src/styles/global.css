@@ -2218,14 +2218,33 @@ details.resource-subsection summary::-webkit-details-marker {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 .admin-moderation-sidebar {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 12px;
-  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+.admin-moderation-sidebar .admin-tree {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+}
+.admin-table-ops {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.admin-table-ops .button {
+  margin: 0;
+  padding: 3px 9px;
+  font-size: 0.85em;
+  white-space: nowrap;
 }
 .admin-moderation-sidebar .admin-tree {
   margin-top: 10px;
