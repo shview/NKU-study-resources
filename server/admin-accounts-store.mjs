@@ -296,7 +296,7 @@ export class AdminAccountsStore {
     if (this.archiveDir) {
       const first = spilled[0].id;
       const last = spilled[spilled.length - 1].id;
-      const filePath = path.join(this.archiveDir, `audit-${first}-${last}-${positiveSafeInteger(now, "now")}.json`);
+      const filePath = `${this.archiveDir}/audit-${first}-${last}-${positiveSafeInteger(now, "now")}.json`;
       fs.writeFileSync(filePath, JSON.stringify({ archived_at: positiveSafeInteger(now, "now"), rows: spilled }, null, 2), { mode: 0o600 });
       fs.chmodSync(filePath, 0o600);
     }
