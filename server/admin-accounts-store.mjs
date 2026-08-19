@@ -95,10 +95,12 @@ function rowToAccount(row) {
 }
 
 export class AdminAccountsStore {
-  constructor({ dbPath, maxAuditRows = 100_000 } = {}) {
+  constructor({ dbPath, maxAuditRows = 100_000, archiveDir = null } = {}) {
     if (!dbPath) throw new Error("AdminAccountsStore requires dbPath.");
     this.dbPath = path.resolve(dbPath);
     this.maxAuditRows = positiveSafeInteger(maxAuditRows, "maxAuditRows");
+    this.archiveDir = archiveDir ? path.resolve(archiveDir) : null;
+    if (this.archiveDir) fs.mkdirSync(this.archiveDir, { recursive: true, mode: 0o700 });
     const directory = path.dirname(this.dbPath);
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.db = new Database(this.dbPath);
@@ -284,7 +286,19 @@ export class AdminAccountsStore {
       String(userAgent || "").slice(0, 256),
     );
     const overflow = Number(this.countAudit.get().count) - this.maxAuditRows;
-    if (overflow > 0) this.trimAudit.run(this.maxAuditRows);
+    if (overflow > 0) {
+      if (this.archiveDir) {
+        const spilled = this.db.prepare("SELECT * FROM admin_audit_log ORDER BY id ASC LIMIT ?").all(overflow);
+        if (spilled.length) {
+          const first = spilled[0].id;
+          const last = spilled[spilled.length - 1].id;
+          const filePath = path.join(this.archiveDir, `audit-${first}-${last}-${positiveSafeInteger(now, "now")}.json`);
+          fs.writeFileSync(filePath, JSON.stringify({ archived_at: positiveSafeInteger(now, "now"), rows: spilled }, null, 2), { mode: 0o600 });
+          fs.chmodSync(filePath, 0o600);
+        }
+      }
+      this.trimAudit.run(this.maxAuditRows);
+    }
   }
 
   queryAudit({ page = 1, pageSize = 50, username = "", action = "" } = {}) {

@@ -333,6 +333,9 @@ export class PublicApiService {
       content: body?.body,
       website: body?.website,
     }, context);
+    if (typeof context?.notify === "function" && result.pending && result.notify) {
+      Promise.resolve(context.notify({ type: "review.pending", ...result.notify })).catch(() => {});
+    }
     return { submitted: true, pending: result.pending };
   }
 }

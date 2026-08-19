@@ -47,7 +47,7 @@ export class ReviewSubmissionService {
     }
   }
 
-  async submit(input, { clientIp, userAgent } = {}) {
+  async submit(input, { clientIp, userAgent, userId = null } = {}) {
     const data = this.readReviews();
     const rules = data.rules || {};
     if (!rules.submissionOpen) {
@@ -82,6 +82,7 @@ export class ReviewSubmissionService {
       updatedAt: now,
       ipHash: this.actorHash(clientIp),
       userAgent: cleanText(userAgent, 240),
+      ...(Number.isSafeInteger(userId) && userId > 0 ? { user_id: userId } : {}),
     };
     await this.store.update(this.reviewsPath, (current) => {
       current.reviews = Array.isArray(current.reviews) ? current.reviews : [];
@@ -89,6 +90,34 @@ export class ReviewSubmissionService {
       current.updated = this.today();
       return current;
     }, { mode: 0o600 });
-    return { pending: review.status === "pending" };
+    return { pending: review.status === "pending", notify: { title: review.courseTitle, teacher: review.teacher, rating: review.rating, content: review.content } };
+  }
+
+  listByUser(userId, { page = 1, pageSize = 20 } = {}) {
+    const safePage = Math.max(1, Number(page) || 1);
+    const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
+    const data = this.readReviews();
+    const reviews = (data.reviews || [])
+      .filter((review) => Number(review.user_id) === Number(userId))
+      .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+    const total = reviews.length;
+    const offset = (safePage - 1) * safePageSize;
+    return {
+      items: reviews.slice(offset, offset + safePageSize).map((review) => ({
+        id: review.id,
+        course_title: review.courseTitle,
+        teacher_name: review.teacher,
+        rating: Number(review.rating) || 0,
+        tags: Array.isArray(review.tags) ? review.tags : [],
+        body: review.content,
+        status: String(review.status || "pending"),
+        hidden: review.hidden === true,
+        created_at: review.createdAt || "",
+        updated_at: review.updatedAt || "",
+      })),
+      total,
+      page: safePage,
+      page_size: safePageSize,
+    };
   }
 }

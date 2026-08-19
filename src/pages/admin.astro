@@ -46,6 +46,7 @@ import "vditor/dist/index.css";
         <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
         <button class="button secondary" type="button" data-admin-tab="accounts">账号管理</button>
         <button class="button secondary" type="button" data-admin-tab="mp-users">小程序用户</button>
+        <button class="button secondary" type="button" data-admin-tab="notify">通知设置</button>
         <button class="button secondary" type="button" data-admin-tab="audit">审计日志</button>
       </div>
 
@@ -128,6 +129,12 @@ import "vditor/dist/index.css";
                           <option value="hidden">已隐藏</option>
                           <option value="visible">显示中</option>
                         </select>
+                      </div>
+                      <div class="filter-row" id="review-batch-bar" style="margin-top: 12px;">
+                        <label class="perm-check"><input id="review-select-all" type="checkbox" /> 全选本页</label>
+                        <button class="button secondary" id="review-batch-approve" type="button">批量通过</button>
+                        <button class="button secondary" id="review-batch-hide" type="button">批量隐藏</button>
+                        <span class="muted" id="review-batch-status"></span>
                       </div>
                       <div class="review-admin-list" id="review-admin-list" style="margin-top: 14px;"></div>
                     </div>
@@ -386,11 +393,51 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button secondary" id="reload-mp-users" type="button">重新加载</button>
+              <select class="searchbar" id="mp-users-sort" style="max-width: 160px;">
+                <option value="recent">按最近登录</option>
+                <option value="logins">按登录次数</option>
+                <option value="newest">按注册时间</option>
+              </select>
+              <select class="searchbar" id="mp-users-days" style="max-width: 160px;">
+                <option value="0">全部时间</option>
+                <option value="1">最近 1 天登录</option>
+                <option value="7">最近 7 天登录</option>
+                <option value="30">最近 30 天登录</option>
+              </select>
               <span class="muted" id="mp-users-admin-status"></span>
             </div>
             <div class="backup-grid" id="mp-users-summary" style="margin-top: 18px;"></div>
             <div id="mp-users-list" style="margin-top: 14px;"></div>
             <p class="muted" style="margin-top: 14px;">用户身份来自微信登录（openid）。列表仅显示掩码后的 openid 标识，不记录手机号；昵称与头像为用户自行设置。</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="notify-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>通知设置（飞书群机器人）</h2>
+          </div>
+          <div class="panel-body">
+            <div class="admin-form">
+              <div class="filter-row">
+                <label class="perm-check perm-check-inline"><input id="notify-enabled" type="checkbox" /> 启用待审通知</label>
+              </div>
+              <label class="admin-field" style="max-width: 640px;">
+                <span>Webhook 地址</span>
+                <input id="notify-webhook" type="text" autocomplete="off" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
+              </label>
+              <label class="admin-field" style="max-width: 640px;">
+                <span>签名密钥（已配置则留空不变）</span>
+                <input id="notify-secret" type="password" autocomplete="new-password" placeholder="仅填写时更新" />
+              </label>
+              <div class="filter-row">
+                <button class="button" id="save-notify" type="button">保存设置</button>
+                <button class="button secondary" id="test-notify" type="button">发送测试卡片</button>
+                <span class="muted" id="notify-admin-status"></span>
+              </div>
+            </div>
+            <p class="muted" style="margin-top: 14px;">触发时机：新评价进入待审、新反馈提交（含资源失效反馈）。发送失败只记录日志，不影响提交。</p>
           </div>
         </div>
       </div>
@@ -509,6 +556,7 @@ import "vditor/dist/index.css";
     const adminPageSize = 10;
     let reviewAdminPage = 1;
     let reviewAdminSelected = "";
+    const reviewAdminSelection = new Set();
     let feedbackAdminPage = 1;
     const selectedAdminFiles = new WeakSet();
 
@@ -579,7 +627,12 @@ import "vditor/dist/index.css";
     const mpUsersAdminStatus = document.querySelector("#mp-users-admin-status");
     const mpUsersSummary = document.querySelector("#mp-users-summary");
     const mpUsersList = document.querySelector("#mp-users-list");
+    const notifyAdminPanel = document.querySelector("#notify-admin-panel");
+    const notifyAdminStatus = document.querySelector("#notify-admin-status");
     let mpUsersState = null;
+    let mpUsersSort = "recent";
+    let mpUsersDays = 0;
+    let notifyState = { enabled: false, webhookUrl: "", signSecretConfigured: false };
     const auditAdminPanel = document.querySelector("#audit-admin-panel");
     const auditAdminStatus = document.querySelector("#audit-admin-status");
     const auditAdminList = document.querySelector("#audit-admin-list");
@@ -618,6 +671,7 @@ import "vditor/dist/index.css";
       backup: "backup.manage",
       accounts: "accounts.manage",
       "mp-users": "content.read",
+      notify: "backup.manage",
       audit: "audit.read",
     };
     const toolbarOptions = [
@@ -1087,6 +1141,18 @@ import "vditor/dist/index.css";
         mpUsersList.innerHTML = `<p class="empty">还没有小程序用户登录过。</p>`;
         return;
       }
+      const cutoff = mpUsersDays > 0 ? Date.now() - mpUsersDays * 86_400_000 : 0;
+      const users = mpUsersState.users
+        .filter((user) => !cutoff || Number(user.last_login_at || 0) >= cutoff)
+        .sort((a, b) => {
+          if (mpUsersSort === "logins") return (b.login_count || 0) - (a.login_count || 0);
+          if (mpUsersSort === "newest") return (b.created_at || 0) - (a.created_at || 0);
+          return (b.last_login_at || 0) - (a.last_login_at || 0);
+        });
+      if (!users.length) {
+        mpUsersList.innerHTML = `<p class="empty">当前筛选条件下没有用户。</p>`;
+        return;
+      }
       const table = document.createElement("table");
       table.className = "admin-table";
       table.innerHTML = `
@@ -1094,7 +1160,7 @@ import "vditor/dist/index.css";
         <tbody></tbody>
       `;
       const body = table.querySelector("tbody");
-      for (const user of mpUsersState.users) {
+      for (const user of users) {
         const row = document.createElement("tr");
         row.innerHTML = `
           <td style="width: 26%;">${escapeHtml(user.nickname || "未设置")}${user.avatar_url ? `<br /><span class="muted" style="font-size:0.8em;">已设置头像</span>` : ""}</td>
@@ -1680,6 +1746,7 @@ import "vditor/dist/index.css";
             <span class="pill">${escapeHtml(review.courseTitle || "")}</span>
             <span class="pill">${escapeHtml(review.teacher || "")}</span>
             <span class="pill">${"★".repeat(Number(review.rating || 0))}</span>
+            ${review.user_id ? '<span class="pill">已绑定用户</span>' : ""}
           </div>
           <p>${escapeHtml(review.content || "")}</p>
           <small class="muted">${escapeHtml(review.createdAt || "")}</small>
@@ -1707,6 +1774,14 @@ import "vditor/dist/index.css";
         editForm.hidden = true;
         const actions = document.createElement("div");
         actions.className = "filter-row";
+        const selector = document.createElement("label");
+        selector.className = "perm-check";
+        selector.innerHTML = `<input type="checkbox" data-review-id="${escapeHtml(review.id)}" ${reviewAdminSelection.has(review.id) ? "checked" : ""} /> 选择`;
+        selector.querySelector("input").addEventListener("change", (event) => {
+          if (event.target.checked) reviewAdminSelection.add(review.id);
+          else reviewAdminSelection.delete(review.id);
+        });
+        actions.append(selector);
         const edit = document.createElement("button");
         edit.type = "button";
         edit.className = "button secondary";
@@ -1846,6 +1921,7 @@ import "vditor/dist/index.css";
             <span class="pill">${escapeHtml(item.hidden ? "已隐藏" : "公开显示")}</span>
           </div>
           <h3 style="margin: 12px 0 0;">${escapeHtml(item.title || "")}</h3>
+          ${item.resourceRef ? `<p class="muted" style="font-size:0.85em;">关联资源：${escapeHtml(item.resourceRef)}</p>` : ""}
           <p>${escapeHtml(item.content || "")}</p>
           <small class="muted">${escapeHtml(item.contact || "无联系方式")} · ${escapeHtml(item.createdAt || "")}</small>
         `;
@@ -1874,6 +1950,14 @@ import "vditor/dist/index.css";
 
         const actions = document.createElement("div");
         actions.className = "filter-row";
+        const selector = document.createElement("label");
+        selector.className = "perm-check";
+        selector.innerHTML = `<input type="checkbox" data-review-id="${escapeHtml(review.id)}" ${reviewAdminSelection.has(review.id) ? "checked" : ""} /> 选择`;
+        selector.querySelector("input").addEventListener("change", (event) => {
+          if (event.target.checked) reviewAdminSelection.add(review.id);
+          else reviewAdminSelection.delete(review.id);
+        });
+        actions.append(selector);
         const edit = document.createElement("button");
         edit.type = "button";
         edit.className = "button secondary";
@@ -3201,6 +3285,46 @@ import "vditor/dist/index.css";
       }
     });
 
+    document.querySelector("#save-notify").addEventListener("click", async () => {
+      notifyAdminStatus.textContent = "保存中...";
+      const secret = document.querySelector("#notify-secret").value;
+      try {
+        const data = await api("/notify-settings", {
+          method: "POST",
+          body: JSON.stringify({
+            enabled: document.querySelector("#notify-enabled").checked,
+            webhookUrl: document.querySelector("#notify-webhook").value.trim(),
+            ...(secret ? { signSecret: secret } : {}),
+          }),
+        });
+        notifyState = data.data;
+        document.querySelector("#notify-secret").value = "";
+        notifyAdminStatus.textContent = notifyState.signSecretConfigured ? "已保存（签名密钥已配置）" : "已保存（未配置签名密钥）";
+      } catch (error) {
+        notifyAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#test-notify").addEventListener("click", async () => {
+      notifyAdminStatus.textContent = "发送中...";
+      try {
+        await api("/notify-test", { method: "POST", body: "{}" });
+        notifyAdminStatus.textContent = "测试卡片已发送，请在群里查收。";
+      } catch (error) {
+        notifyAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#mp-users-sort").addEventListener("change", () => {
+      mpUsersSort = document.querySelector("#mp-users-sort").value;
+      if (mpUsersState) renderMpUsersAdmin();
+    });
+
+    document.querySelector("#mp-users-days").addEventListener("change", () => {
+      mpUsersDays = Number(document.querySelector("#mp-users-days").value) || 0;
+      if (mpUsersState) renderMpUsersAdmin();
+    });
+
     document.querySelector("#reload-mp-users").addEventListener("click", async () => {
       mpUsersAdminStatus.textContent = "加载中...";
       try {
@@ -3263,7 +3387,20 @@ import "vditor/dist/index.css";
         backupAdminPanel.hidden = tab !== "backup";
         accountsAdminPanel.hidden = tab !== "accounts";
         mpUsersAdminPanel.hidden = tab !== "mp-users";
+        notifyAdminPanel.hidden = tab !== "notify";
         auditAdminPanel.hidden = tab !== "audit";
+        if (tab === "notify" && !notifyState.webhookUrl) {
+          notifyAdminStatus.textContent = "加载中...";
+          try {
+            const data = await api("/notify-settings");
+            notifyState = data.data;
+            document.querySelector("#notify-enabled").checked = notifyState.enabled;
+            document.querySelector("#notify-webhook").value = notifyState.webhookUrl || "";
+            notifyAdminStatus.textContent = "";
+          } catch (error) {
+            notifyAdminStatus.textContent = error.message;
+          }
+        }
         if (tab === "mp-users") {
           mpUsersAdminStatus.textContent = "加载中...";
           try {
@@ -3424,6 +3561,37 @@ import "vditor/dist/index.css";
     reviewAdminSidebarSearch.addEventListener("input", () => {
       renderReviewAdmin();
     });
+    document.querySelector("#review-select-all").addEventListener("change", (event) => {
+      const checked = event.target.checked;
+      for (const box of reviewAdminList.querySelectorAll("input[data-review-id]")) {
+        box.checked = checked;
+        if (checked) reviewAdminSelection.add(box.dataset.reviewId);
+        else reviewAdminSelection.delete(box.dataset.reviewId);
+      }
+    });
+    async function runReviewBatch(mode) {
+      if (!reviewAdminSelection.size) {
+        document.querySelector("#review-batch-status").textContent = "请先勾选要操作的评价。";
+        return;
+      }
+      const count = reviewAdminSelection.size;
+      for (const review of reviewState.reviews ?? []) {
+        if (!reviewAdminSelection.has(review.id)) continue;
+        if (mode === "approve") {
+          review.status = "approved";
+          review.hidden = false;
+        } else {
+          review.hidden = true;
+        }
+        review.updatedAt = new Date().toISOString();
+      }
+      reviewAdminSelection.clear();
+      document.querySelector("#review-select-all").checked = false;
+      await saveReviewState(mode === "approve" ? `已批量通过 ${count} 条` : `已批量隐藏 ${count} 条`);
+      renderReviewAdmin();
+    }
+    document.querySelector("#review-batch-approve").addEventListener("click", () => runReviewBatch("approve"));
+    document.querySelector("#review-batch-hide").addEventListener("click", () => runReviewBatch("hide"));
     feedbackAdminSearch.addEventListener("input", () => {
       feedbackAdminPage = 1;
       renderFeedbackAdmin();

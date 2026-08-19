@@ -269,6 +269,55 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal(mpUsersAdmin.data.users[0].nickname, "集成测试用户");
   assert.equal(JSON.stringify(mpUsersAdmin).includes("integration-openid-1"), false, "admin list must only expose masked openid");
 
+  const mpLogin2 = await fetch(`http://127.0.0.1:${port}/api/v1/auth/wechat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "mp-good-code" }),
+  });
+  const mpAuth2 = { authorization: `Bearer ${(await mpLogin2.json()).data.token}` };
+
+  const favAdd = await fetch(`http://127.0.0.1:${port}/api/v1/favorites`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...mpAuth2 },
+    body: JSON.stringify({ course_id: "11111111-1111-4111-8111-111111111111" }),
+  });
+  assert.equal(favAdd.status, 200);
+  assert.equal((await favAdd.json()).data.total, 1);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/favorites`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ course_id: "11111111-1111-4111-8111-111111111111" }),
+  })).status, 401, "favorites require login");
+
+  const favList = await (await fetch(`http://127.0.0.1:${port}/api/v1/me/favorites`, { headers: mpAuth2 })).json();
+  assert.equal(favList.data.total, 1);
+  assert.equal(favList.data.items[0].name, "示例课程");
+
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/favorites/11111111-1111-4111-8111-111111111111`, { method: "DELETE", headers: mpAuth2 })).status, 200);
+  assert.equal((await (await fetch(`http://127.0.0.1:${port}/api/v1/me/favorites`, { headers: mpAuth2 })).json()).data.total, 0);
+
+  const boundReview = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...mpAuth2 },
+    body: JSON.stringify({
+      course_id: "11111111-1111-4111-8111-111111111111",
+      teacher: "Fixture bound teacher",
+      rating: 5,
+      tags: [],
+      body: "Bound user review content long enough for validation.",
+      anonymous: true,
+    }),
+  });
+  assert.equal(boundReview.status, 200);
+  const myReviews = await (await fetch(`http://127.0.0.1:${port}/api/v1/me/reviews`, { headers: mpAuth2 })).json();
+  assert.equal(myReviews.data.total, 1);
+  assert.equal(myReviews.data.items[0].teacher_name, "Fixture bound teacher");
+  assert.equal(JSON.stringify(myReviews.data.items[0]).includes("ipHash"), false);
+
+  const notifyState = await (await fetch(`http://127.0.0.1:${port}/admin-api/notify-settings`, { headers: { cookie } })).json();
+  assert.equal(notifyState.ok, true);
+  assert.equal(notifyState.data.enabled, false);
+
   const publicReviewResponse = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -346,7 +395,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const reviews = JSON.parse(await fs.readFile(path.join(dataDir, "reviews.json"), "utf8"));
   const feedback = JSON.parse(await fs.readFile(path.join(dataDir, "feedback.json"), "utf8"));
   const visits = JSON.parse(await fs.readFile(path.join(dataDir, "visit-stats.json"), "utf8"));
-  assert.equal(reviews.reviews.length, 2);
+  assert.equal(reviews.reviews.length, 3);
   assert.equal(feedback.items.length, 1);
   assert.equal(typeof reviews.reviews[0].ipHash, "string");
   assert.equal(JSON.stringify(reviews).includes("127.0.0.1"), false);

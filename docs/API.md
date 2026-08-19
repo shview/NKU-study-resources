@@ -27,6 +27,10 @@
 | `POST` | `/api/v1/auth/wechat` | 公开、限流 | 小程序微信登录（code 换 token） |
 | `POST` | `/api/v1/auth/logout` | Bearer Token | 注销小程序登录令牌 |
 | `GET` | `/api/v1/me` | Bearer Token | 当前小程序用户信息 |
+| `GET` | `/api/v1/me/favorites` | Bearer Token | 我的收藏课程列表（分页） |
+| `GET` | `/api/v1/me/reviews` | Bearer Token | 我提交的评价与审核状态（分页） |
+| `POST` | `/api/v1/favorites` | Bearer Token | 收藏课程（body：course_id） |
+| `DELETE` | `/api/v1/favorites/:param` | Bearer Token | 取消收藏课程 |
 | `POST` | `/api/v1/me/profile` | Bearer Token | 更新昵称与头像 |
 | `POST` | `/api/v1/reviews` | 公开、限流 | 小程序提交评价 |
 | `GET` | `/review-api/reviews` | 公开 | 网站读取已通过评价及规则 |
@@ -79,6 +83,9 @@
 | `POST` | `/admin-api/me/password` | Cookie | 修改自己的密码 |
 | `GET` | `/admin-api/audit` | Cookie（需相应权限） | 分页查询管理操作审计日志 |
 | `GET` | `/admin-api/mp-users` | Cookie（需相应权限） | 小程序用户列表与登录统计 |
+| `GET` | `/admin-api/notify-settings` | Cookie（需相应权限） | 飞书通知配置状态（不返回密钥明文） |
+| `POST` | `/admin-api/notify-settings` | Cookie（需相应权限） | 更新飞书通知开关、Webhook 与签名密钥 |
+| `POST` | `/admin-api/notify-test` | Cookie（需相应权限） | 发送测试卡片验证通知配置 |
 <!-- api-route-registry:end -->
 
 ### 管理员账号与权限

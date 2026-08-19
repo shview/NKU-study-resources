@@ -18,6 +18,8 @@ import { PersistentRateLimiter } from "./persistent-rate-limiter.mjs";
 import { createPublicApiHandler } from "./public-api-router.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
+import { MpFavoritesService } from "./mp-favorites-service.mjs";
+import { FeishuNotifyService } from "./feishu-notify-service.mjs";
 import { readJsonBody } from "./read-json-body.mjs";
 import { mergeCourseR2Discovery, mergeR2Discoveries } from "./r2-sync-merge.mjs";
 import { assertR2CleanupSafety, planR2ManifestMutation, planR2ObjectCopies, strictR2BasePath, strictR2Path } from "./r2-mutation-plan.mjs";
@@ -105,7 +107,8 @@ const sessionStore = new AdminSessionStore({
   absoluteTtlMs: Number(process.env.ADMIN_SESSION_ABSOLUTE_TTL_MS || 8 * 60 * 60 * 1000),
   idleTtlMs: Number(process.env.ADMIN_SESSION_IDLE_TTL_MS || 30 * 60 * 1000),
 });
-const accountsStore = new AdminAccountsStore({ dbPath: runtime.stateDbPath });
+const auditArchiveDir = path.join(dataDir, "audit-archive");
+const accountsStore = new AdminAccountsStore({ dbPath: runtime.stateDbPath, archiveDir: auditArchiveDir });
 seedInitialAdminAccount();
 
 function seedInitialAdminAccount() {
@@ -149,8 +152,42 @@ const mpAuthService = new MpAuthService({
   appid: process.env.WECHAT_APPID || "",
   secret: process.env.WECHAT_APPSECRET || "",
 });
+const mpFavoritesService = new MpFavoritesService({
+  dbPath: runtime.stateDbPath,
+  readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
+});
+const notifySettingsPath = path.join(dataDir, "notify-settings.json");
+const notifySecretsPath = path.join(dataDir, "notify-secrets.json");
+const notifySecretStore = new AtomicJsonStore({ allowedRoot: dataDir });
+const feishuNotify = new FeishuNotifyService({
+  readSettings: async () => {
+    try {
+      return readJsonFile(notifySettingsPath);
+    } catch {
+      return {};
+    }
+  },
+  writeSettings: async (data) => jsonStore.write(notifySettingsPath, data),
+  readSecrets: async () => (fs.existsSync(notifySecretsPath) ? notifySecretStore.readSync(notifySecretsPath) : {}),
+  writeSecrets: async (data) => notifySecretStore.write(notifySecretsPath, data, { mode: 0o600 }),
+});
+async function notifyModerators(payload = {}) {
+  const typeLabels = { "review.pending": "新评价待审", "feedback.pending": "新反馈待处理", "resource-report": "资源失效反馈" };
+  const title = typeLabels[payload.type] || "待处理通知";
+  const lines = [];
+  if (payload.type === "review.pending") {
+    lines.push(`**课程**：${payload.title || "-"}`, `**老师**：${payload.teacher || "-"}`, `**评分**：${"★".repeat(Math.max(1, Math.min(5, Number(payload.rating) || 0)))}`, `**内容预览**：${String(payload.content || "").slice(0, 80)}`);
+  } else if (payload.type === "feedback.pending") {
+    lines.push(`**标题**：${payload.title || "-"}`, `**类型**：${payload.feedbackType || "-"}`, `**内容预览**：${String(payload.content || "").slice(0, 80)}`, ...(payload.resourceRef ? [`**关联资源**：${payload.resourceRef}`] : []));
+  } else {
+    lines.push(...(payload.lines || ["请登录后台查看。"]));
+  }
+  const result = await feishuNotify.send({ title, lines });
+  if (!result.sent) console.warn(`Feishu notify skipped: ${result.reason}`);
+  return result;
+}
 const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, readBody: readPublicBody, clientIp });
+const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, notify: notifyModerators, readBody: readPublicBody, clientIp });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -628,6 +665,33 @@ function currentShanghaiTime() {
     date: shifted.toISOString().slice(0, 10),
     time: shifted.toISOString().slice(11, 16),
   };
+}
+
+async function uploadPendingAuditArchive() {
+  if (!r2Client || !r2Bucket) return;
+  let files;
+  try {
+    files = (await fs.promises.readdir(auditArchiveDir)).filter((name) => name.endsWith(".json")).sort();
+  } catch {
+    return;
+  }
+  for (const name of files.slice(0, 50)) {
+    try {
+      const filePath = path.join(auditArchiveDir, name);
+      const payload = JSON.parse(await fs.promises.readFile(filePath, "utf8"));
+      await putR2Json(objectKey("backups/audit", name), payload);
+      await fs.promises.unlink(filePath);
+    } catch (error) {
+      console.warn(`Audit archive upload failed for ${name}: ${error.message}`);
+      break;
+    }
+  }
+}
+
+function startAuditArchiveUploader() {
+  setInterval(() => {
+    uploadPendingAuditArchive().catch(() => {});
+  }, 5 * 60 * 1000).unref();
 }
 
 function startBackupScheduler() {
@@ -1114,7 +1178,7 @@ function publicReview(review) {
 }
 
 function publicFeedback(item) {
-  const { ipHash: _ipHash, userAgent: _userAgent, contact: _contact, ...safe } = item;
+  const { ipHash: _ipHash, userAgent: _userAgent, contact: _contact, resourceRef: _resourceRef, ...safe } = item;
   return safe;
 }
 
@@ -1179,6 +1243,7 @@ async function handleFeedbackSubmit(req, res) {
   const content = cleanText(body.content, 2000);
   const type = cleanText(body.type, 40) || "bug";
   const contact = cleanText(body.contact, 120);
+  const resourceRef = cleanText(body.resourceRef, 200);
   if (!title || content.length < Number(rules.minLength || 5)) {
     json(res, 400, { ok: false, error: "请填写标题，并补充更完整的反馈内容。" });
     return;
@@ -1197,6 +1262,7 @@ async function handleFeedbackSubmit(req, res) {
       content,
       type,
       contact,
+      ...(resourceRef ? { resourceRef } : {}),
       status: "open",
       hidden: false,
       createdAt: nowIso(),
@@ -1207,6 +1273,7 @@ async function handleFeedbackSubmit(req, res) {
     current.updated = today();
     return current;
   });
+  Promise.resolve(notifyModerators({ type: "feedback.pending", title, feedbackType: type, content, resourceRef })).catch(() => {});
   json(res, 200, { ok: true });
 }
 
@@ -2186,6 +2253,31 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/admin-api/notify-settings") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      json(res, 200, { ok: true, data: await feishuNotify.describe() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/notify-settings") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const data = await feishuNotify.updateConfig(body);
+        json(res, 200, { ok: true, data });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/notify-test") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
+      const result = await feishuNotify.send({ force: true, title: "NKUStudy 通知测试", lines: ["这是一条测试卡片。", "收到即说明通知配置成功。", `**触发人**：${account.username}`] });
+      json(res, result.sent ? 200 : 400, { ok: result.sent, ...(result.sent ? {} : { error: `发送失败：${result.reason}` }) });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/admin-api/mp-users") {
       if (!requirePermission(req, account, "content.read", res)) return;
       const beijingDay = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -2304,6 +2396,7 @@ const server = createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`NKUStudy admin API listening on http://${host}:${port}`);
   startBackupScheduler();
+  startAuditArchiveUploader();
 });
 
 let shuttingDown = false;
@@ -2316,6 +2409,7 @@ function shutdown(signal) {
       sessionStore.close();
       accountsStore.close();
       mpAuthService.close();
+      mpFavoritesService.close();
       rateLimiter.close();
       process.exit(0);
     } catch (error) {
