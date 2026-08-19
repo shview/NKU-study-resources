@@ -3398,10 +3398,11 @@ import "vditor/dist/index.css";
       for (const bot of notifyState.bots) {
         const row = document.createElement("tr");
         row.innerHTML = `
-          <td style="width: 30%;">${escapeHtml(bot.name)}<br /><span class="muted" style="font-size:0.78em;">${escapeHtml(bot.webhookUrl.slice(0, 46))}…</span></td>
-          <td style="width: 14%;">${bot.enabled ? "启用" : "停用"}</td>
+          <td style="width: 34%;">${escapeHtml(bot.name)}<br /><span class="muted" style="font-size:0.78em;">${escapeHtml(bot.webhookUrl.slice(0, 46))}…</span></td>
+          <td style="width: 10%;">${bot.enabled ? "启用" : "停用"}</td>
           <td style="width: 20%;">${(bot.purposes || ["moderation"]).map((purpose) => purpose === "moderation" ? "待审通知" : "每日汇总").join(" + ")}</td>
-          <td style="width: 42%;" class="admin-table-ops"></td>
+          <td style="width: 12%;">${bot.signSecretConfigured ? "已配置" : "未配置"}</td>
+          <td style="width: 24%;" class="admin-table-ops"></td>
         `;
         const ops = document.createElement("div");
         ops.className = "ops-row";
