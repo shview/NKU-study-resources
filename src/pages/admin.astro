@@ -449,10 +449,7 @@ import "vditor/dist/index.css";
                 </div>
               </div>
             </details>
-            <div class="filter-row" style="margin-top: 14px;">
-              <button class="button secondary" id="test-notify" type="button">向所有启用机器人发送测试卡片</button>
-            </div>
-            <p class="muted" style="margin-top: 14px;">触发时机：新评价进入待审、新反馈提交（含资源失效反馈）。所有启用机器人都会收到；发送失败只记录日志，不影响提交。</p>
+            <p class="muted" style="margin-top: 14px;">触发时机：新评价进入待审、新反馈提交（含资源失效反馈）。只有用途含「待审通知」的启用机器人会收到；测试请用列表中的「测试」按钮（只发单个机器人，不打扰其他群）。</p>
           </div>
         </div>
       </div>
@@ -1011,7 +1008,7 @@ import "vditor/dist/index.css";
       const table = document.createElement("table");
       table.className = "admin-table";
       table.innerHTML = `
-        <thead><tr><th>账号</th><th>权限</th><th>启用</th><th>最近登录</th><th>操作</th></tr></thead>
+        <thead><tr><th style="width: 14%;">账号</th><th style="width: 36%;">权限</th><th style="width: 7%;">启用</th><th style="width: 17%;">最近登录</th><th style="width: 26%;">操作</th></tr></thead>
         <tbody></tbody>
       `;
       const body = table.querySelector("tbody");
@@ -1176,7 +1173,7 @@ import "vditor/dist/index.css";
       const table = document.createElement("table");
       table.className = "admin-table";
       table.innerHTML = `
-        <thead><tr><th>昵称</th><th>OpenID</th><th>登录次数</th><th>最近登录</th><th>注册时间</th><th>操作</th></tr></thead>
+        <thead><tr><th style="width: 21%;">昵称</th><th style="width: 14%;">OpenID</th><th style="width: 9%;">登录次数</th><th style="width: 18%;">最近登录</th><th style="width: 18%;">注册时间</th><th style="width: 20%;">操作</th></tr></thead>
         <tbody></tbody>
       `;
       const body = table.querySelector("tbody");
@@ -3394,7 +3391,7 @@ import "vditor/dist/index.css";
       const table = document.createElement("table");
       table.className = "admin-table";
       table.innerHTML = `
-        <thead><tr><th>名称</th><th>状态</th><th>签名</th><th>操作</th></tr></thead>
+        <thead><tr><th style="width: 34%;">名称</th><th style="width: 10%;">状态</th><th style="width: 20%;">用途</th><th style="width: 12%;">签名</th><th style="width: 24%;">操作</th></tr></thead>
         <tbody></tbody>
       `;
       const body = table.querySelector("tbody");
@@ -3445,7 +3442,20 @@ import "vditor/dist/index.css";
             await loadNotifyAdmin();
           } catch (error) { notifyAdminStatus.textContent = error.message; }
         });
-        ops.append(editButton, toggleButton, deleteButton);
+        const testButton = document.createElement("button");
+        testButton.type = "button";
+        testButton.className = "button secondary";
+        testButton.textContent = "测试";
+        testButton.addEventListener("click", async () => {
+          notifyAdminStatus.textContent = `正在向「${bot.name}」发送测试卡片...`;
+          try {
+            await api("/notify-test", { method: "POST", body: JSON.stringify({ botId: bot.id }) });
+            notifyAdminStatus.textContent = `测试卡片已发送给「${bot.name}」。`;
+          } catch (error) {
+            notifyAdminStatus.textContent = `「${bot.name}」发送失败：${error.message}`;
+          }
+        });
+        ops.append(editButton, toggleButton, testButton, deleteButton);
         body.append(row);
       }
       list.append(table);
@@ -3480,16 +3490,7 @@ import "vditor/dist/index.css";
 
     document.querySelector("#notify-bot-cancel").addEventListener("click", resetNotifyEditor);
 
-    document.querySelector("#test-notify").addEventListener("click", async () => {
-      notifyAdminStatus.textContent = "发送中...";
-      try {
-        const data = await api("/notify-test", { method: "POST", body: "{}" });
-        const sent = (data.data?.results || []).filter((item) => item.sent).length;
-        notifyAdminStatus.textContent = `测试卡片已发送：${sent} 个机器人成功。`;
-      } catch (error) {
-        notifyAdminStatus.textContent = error.message;
-      }
-    });
+
 
     document.querySelector("#mp-users-search").addEventListener("input", (event) => {
       mpUsersKeyword = event.target.value;

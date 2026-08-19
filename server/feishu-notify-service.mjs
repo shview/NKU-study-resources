@@ -165,6 +165,13 @@ export class FeishuNotifyService {
     }
   }
 
+  async sendToBot(botId, { title, lines, template }) {
+    const { settings, secrets } = await this.#state();
+    const bot = settings.bots.find((item) => item.id === String(botId || ""));
+    if (!bot) return { sent: false, reason: "bot-not-found" };
+    return this.#sendToBot(bot, secrets.bots[bot.id] || "", { title, lines, template });
+  }
+
   async broadcast({ title, lines, template }, { includeDisabled = false, purpose = "moderation" } = {}) {
     const { settings, secrets } = await this.#state();
     const pool = includeDisabled ? settings.bots : settings.bots.filter((bot) => bot.enabled);

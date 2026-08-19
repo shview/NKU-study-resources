@@ -2334,13 +2334,16 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/admin-api/notify-test") {
       if (!requirePermission(req, account, "backup.manage", res)) return;
-      const result = await feishuNotify.broadcast({ title: "NKUStudy 通知测试", lines: ["这是一条测试卡片。", "收到即说明该机器人配置成功。", `**触发人**：${account.username}`] }, { includeDisabled: false });
-      const failures = (result.results || []).filter((item) => !item.sent).length;
-      json(res, result.sent ? 200 : 400, {
-        ok: result.sent,
-        data: { results: result.results },
-        ...(result.sent ? {} : { error: `发送失败：${failures} 个机器人失败` }),
-      });
+      const body = await readBody(req).catch(() => ({}));
+      const described = await feishuNotify.describe();
+      const bots = described.bots || [];
+      const target = body.botId ? bots.find((bot) => bot.id === body.botId) : bots.find((bot) => bot.enabled);
+      if (!target) {
+        json(res, 400, { ok: false, error: "没有可测试的机器人。" });
+        return;
+      }
+      const result = await feishuNotify.sendToBot(target.id, { title: "NKUStudy 通知测试", lines: [`**机器人**：${target.name}`, "这是一条测试卡片，仅发送给该机器人。", `**触发人**：${account.username}`] });
+      json(res, result.sent ? 200 : 400, { ok: result.sent, ...(result.sent ? { data: { bot: target.name } } : { error: `发送失败：${result.reason}` }) });
       return;
     }
 
