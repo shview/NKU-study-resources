@@ -2307,7 +2307,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/notify-settings") {
-      if (!requirePermission(req, account, "content.read", res)) return;
+      if (!requirePermission(req, account, "backup.manage", res)) return;
       json(res, 200, { ok: true, data: await feishuNotify.describe() });
       return;
     }

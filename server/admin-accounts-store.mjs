@@ -215,9 +215,9 @@ export class AdminAccountsStore {
       return null;
     }
     if (!row.enabled) return null;
-    this.markLogin.run(row.id, positiveSafeInteger(now, "now"));
+    this.markLogin.run(positiveSafeInteger(now, "now"), row.id);
     this.#secureDatabaseFiles();
-    return rowToAccount(row);
+    return rowToAccount(this.selectById.get(row.id));
   }
 
   updateSettings(id, { permissions, enabled, mustChangePassword }) {

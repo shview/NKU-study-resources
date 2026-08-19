@@ -136,7 +136,13 @@ export class PublicApiService {
       .map(([name, count]) => {
         const course = courses.find((item) => String(item.title) === name || String(item.id) === name);
         if (!course) return null;
-        return { id: course.uid, title: String(course.title || "").slice(0, 120), visits: count };
+        return {
+          id: course.uid,
+          title: String(course.title || "").slice(0, 120),
+          visits: count,
+          resource_count: (course.sections || []).reduce((sum, section) => sum + (section.files || []).length, 0),
+          review_count: Number(course.reviewCount || course.review_count || 0),
+        };
       })
       .filter(Boolean)
       .sort((left, right) => right.visits - left.visits)

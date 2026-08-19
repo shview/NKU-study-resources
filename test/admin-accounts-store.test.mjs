@@ -20,6 +20,8 @@ test("create and verify accounts with scrypt hashes", () => {
   assert.equal(store.verify("Shview", "wrong-password-1"), null);
   const verified = store.verify("Shview", "super-password-123");
   assert.equal(verified.username, "Shview");
+  assert.equal(typeof verified.lastLoginAt, "number", "verify must stamp last_login_at");
+  assert.equal(verified.lastLoginAt > 0, true);
   assert.equal(store.list().length, 1);
   assert.equal(JSON.stringify(store.list()).includes("super-password-123"), false, "plaintext passwords must never be returned");
 });

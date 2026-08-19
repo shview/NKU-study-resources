@@ -664,7 +664,7 @@ import "vditor/dist/index.css";
       "accounts.manage": "账号管理",
       "audit.read": "审计查看",
     };
-    const rolePresets = {
+    const rolePresetFallback = {
       super_admin: ["accounts.manage", "audit.read", "backup.manage", "content.edit", "content.moderate", "content.read", "storage.delete", "storage.manage"],
       content_admin: ["content.read", "content.edit", "content.moderate"],
       reviewer: ["content.read", "content.moderate"],
@@ -983,6 +983,10 @@ import "vditor/dist/index.css";
       renderEditorSettingsAdmin();
     }
 
+    function serverRolePresets() {
+      return accountsState?.rolePresets && Object.keys(accountsState.rolePresets).length ? accountsState.rolePresets : rolePresetFallback;
+    }
+
     function renderPermissionEditor(container, checked) {
       container.innerHTML = "";
       for (const [permission, label] of Object.entries(permissionLabels)) {
@@ -1000,6 +1004,11 @@ import "vditor/dist/index.css";
     async function loadAccountsAdmin() {
       const data = await api("/accounts");
       accountsState = data.data;
+      const presets = serverRolePresets();
+      const roleSelect = document.querySelector("#new-account-role");
+      const current = roleSelect.value;
+      roleSelect.innerHTML = `<option value="">自定义（手动勾选）</option>${Object.keys(presets).map((role) => `<option value="${role}">${role}</option>`).join("")}`;
+      if (current) roleSelect.value = current;
       renderAccountsAdmin();
     }
 
@@ -1084,9 +1093,10 @@ import "vditor/dist/index.css";
       cell.colSpan = 5;
       const roleSelect = document.createElement("select");
       roleSelect.className = "searchbar";
-      roleSelect.innerHTML = `<option value="">自定义</option>${Object.keys(rolePresets).map((role) => `<option value="${role}">${role}</option>`).join("")}`;
+      const presets = serverRolePresets();
+      roleSelect.innerHTML = `<option value="">自定义</option>${Object.keys(presets).map((role) => `<option value="${role}">${role}</option>`).join("")}`;
       roleSelect.addEventListener("change", () => {
-        if (roleSelect.value) renderPermissionEditor(permBox, rolePresets[roleSelect.value]);
+        if (roleSelect.value) renderPermissionEditor(permBox, presets[roleSelect.value]);
       });
       const permBox = document.createElement("div");
       permBox.className = "filter-row";
@@ -1190,6 +1200,7 @@ import "vditor/dist/index.css";
         const ops = document.createElement("div");
         ops.className = "ops-row";
         row.querySelector("td:last-child").append(ops);
+        if (!hasPerm("content.moderate")) { body.append(row); continue; }
         const blockButton = document.createElement("button");
         blockButton.type = "button";
         blockButton.className = "button secondary";
@@ -1244,11 +1255,15 @@ import "vditor/dist/index.css";
       ["POST /admin-api/backup-test-webdav", "测试 WebDAV"],
       ["POST /admin-api/accounts", "创建账号"],
       ["POST /admin-api/me/password", "修改自己密码"],
+      ["POST /admin-api/notify-bots", "保存通知机器人"],
+      ["POST /admin-api/notify-test", "发送通知测试"],
     ];
     const auditActionLabel = (action) => {
       if (/^PATCH \/admin-api\/accounts\//.test(action)) return "修改账号权限";
       if (/^POST \/admin-api\/accounts\/.+\/password$/.test(action)) return "重置账号密码";
       if (/^DELETE \/admin-api\/accounts\//.test(action)) return "删除账号";
+      if (/^POST \/admin-api\/mp-users\/.+\/blocked$/.test(action)) return "封禁/解禁小程序用户";
+      if (/^DELETE \/admin-api\/notify-bots\//.test(action)) return "删除通知机器人";
       return auditActionLabels.find(([key]) => action === key)?.[1] || action;
     };
 
@@ -3295,7 +3310,7 @@ import "vditor/dist/index.css";
 
     document.querySelector("#new-account-role").addEventListener("change", (event) => {
       const role = event.target.value;
-      if (role) renderPermissionEditor(document.querySelector("#new-account-permissions"), rolePresets[role]);
+      if (role) renderPermissionEditor(document.querySelector("#new-account-permissions"), serverRolePresets()[role]);
     });
     renderPermissionEditor(document.querySelector("#new-account-permissions"), []);
 
