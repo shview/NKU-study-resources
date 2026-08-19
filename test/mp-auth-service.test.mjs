@@ -145,3 +145,31 @@ test("requireUser raises AUTH_REQUIRED when missing", async () => {
   });
   service.close();
 });
+
+test("blocked users cannot log in and their sessions die", async () => {
+  const { service } = tempService();
+  const first = await service.loginWithCode("good-code-1");
+  const blocked = service.setUserBlocked(first.user.id, true);
+  assert.equal(blocked.blocked, 1);
+  await assert.rejects(() => service.loginWithCode("good-code-1"), (error) => {
+    assert.ok(error instanceof PublicApiError);
+    assert.equal(error.statusCode, 403);
+    assert.equal(error.code, "AUTH_USER_BLOCKED");
+    return true;
+  });
+  assert.equal(service.verifyToken(`Bearer ${first.token}`), null, "existing sessions are revoked by the block");
+  service.setUserBlocked(first.user.id, false);
+  const again = await service.loginWithCode("good-code-1");
+  assert.equal(again.user.id, first.user.id);
+  assert.throws(() => service.setUserBlocked(9999, true), (error) => error.statusCode === 404);
+  service.close();
+});
+
+test("admin overview includes blocked flag", async () => {
+  const { service } = tempService();
+  const { user } = await service.loginWithCode("good-code-1");
+  service.setUserBlocked(user.id, true);
+  const overview = service.adminOverview();
+  assert.equal(overview.users[0].blocked, true);
+  service.close();
+});

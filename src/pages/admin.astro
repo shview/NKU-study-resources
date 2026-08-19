@@ -393,6 +393,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button secondary" id="reload-mp-users" type="button">重新加载</button>
+              <input class="searchbar" id="mp-users-search" type="search" placeholder="按昵称/OpenID 搜索" autocomplete="off" style="max-width: 200px;" />
               <select class="searchbar" id="mp-users-sort" style="max-width: 160px;">
                 <option value="recent">按最近登录</option>
                 <option value="logins">按登录次数</option>
@@ -419,25 +420,37 @@ import "vditor/dist/index.css";
             <h2>通知设置（飞书群机器人）</h2>
           </div>
           <div class="panel-body">
-            <div class="admin-form">
-              <div class="filter-row">
-                <label class="perm-check perm-check-inline"><input id="notify-enabled" type="checkbox" /> 启用待审通知</label>
+            <div id="notify-bot-list" style="margin-bottom: 14px;"></div>
+            <details class="card admin-collapsible-card" id="notify-bot-editor-card">
+              <summary>新增 / 编辑机器人</summary>
+              <div class="admin-form" style="margin-top: 14px;">
+                <div class="filter-row">
+                  <label class="admin-field" style="max-width: 280px;">
+                    <span>名称</span>
+                    <input id="notify-bot-name" type="text" autocomplete="off" placeholder="如：技术群机器人" />
+                  </label>
+                  <label class="perm-check perm-check-inline" style="padding-top: 18px;"><input id="notify-bot-enabled" type="checkbox" checked /> 启用</label>
+                </div>
+                <label class="admin-field" style="max-width: 640px;">
+                  <span>Webhook 地址</span>
+                  <input id="notify-webhook" type="text" autocomplete="off" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
+                </label>
+                <label class="admin-field" style="max-width: 640px;">
+                  <span>签名密钥（编辑已配置的机器人时留空不变）</span>
+                  <input id="notify-secret" type="password" autocomplete="new-password" placeholder="仅填写时更新" />
+                </label>
+                <div class="filter-row">
+                  <input type="hidden" id="notify-bot-id" value="" />
+                  <button class="button" id="save-notify" type="button">保存机器人</button>
+                  <button class="button secondary" id="notify-bot-cancel" type="button" hidden>取消编辑</button>
+                  <span class="muted" id="notify-admin-status"></span>
+                </div>
               </div>
-              <label class="admin-field" style="max-width: 640px;">
-                <span>Webhook 地址</span>
-                <input id="notify-webhook" type="text" autocomplete="off" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
-              </label>
-              <label class="admin-field" style="max-width: 640px;">
-                <span>签名密钥（已配置则留空不变）</span>
-                <input id="notify-secret" type="password" autocomplete="new-password" placeholder="仅填写时更新" />
-              </label>
-              <div class="filter-row">
-                <button class="button" id="save-notify" type="button">保存设置</button>
-                <button class="button secondary" id="test-notify" type="button">发送测试卡片</button>
-                <span class="muted" id="notify-admin-status"></span>
-              </div>
+            </details>
+            <div class="filter-row" style="margin-top: 14px;">
+              <button class="button secondary" id="test-notify" type="button">向所有启用机器人发送测试卡片</button>
             </div>
-            <p class="muted" style="margin-top: 14px;">触发时机：新评价进入待审、新反馈提交（含资源失效反馈）。发送失败只记录日志，不影响提交。</p>
+            <p class="muted" style="margin-top: 14px;">触发时机：新评价进入待审、新反馈提交（含资源失效反馈）。所有启用机器人都会收到；发送失败只记录日志，不影响提交。</p>
           </div>
         </div>
       </div>
@@ -632,7 +645,8 @@ import "vditor/dist/index.css";
     let mpUsersState = null;
     let mpUsersSort = "recent";
     let mpUsersDays = 0;
-    let notifyState = { enabled: false, webhookUrl: "", signSecretConfigured: false };
+    let mpUsersKeyword = "";
+    let notifyState = { bots: [], updated: "", loaded: false };
     const auditAdminPanel = document.querySelector("#audit-admin-panel");
     const auditAdminStatus = document.querySelector("#audit-admin-status");
     const auditAdminList = document.querySelector("#audit-admin-list");
@@ -1142,8 +1156,10 @@ import "vditor/dist/index.css";
         return;
       }
       const cutoff = mpUsersDays > 0 ? Date.now() - mpUsersDays * 86_400_000 : 0;
+      const keyword = mpUsersKeyword.trim().toLowerCase();
       const users = mpUsersState.users
         .filter((user) => !cutoff || Number(user.last_login_at || 0) >= cutoff)
+        .filter((user) => !keyword || String(user.nickname || "").toLowerCase().includes(keyword) || String(user.openid_masked || "").toLowerCase().includes(keyword) || String(user.id) === keyword)
         .sort((a, b) => {
           if (mpUsersSort === "logins") return (b.login_count || 0) - (a.login_count || 0);
           if (mpUsersSort === "newest") return (b.created_at || 0) - (a.created_at || 0);
@@ -1156,19 +1172,36 @@ import "vditor/dist/index.css";
       const table = document.createElement("table");
       table.className = "admin-table";
       table.innerHTML = `
-        <thead><tr><th>昵称</th><th>OpenID</th><th>登录次数</th><th>最近登录</th><th>注册时间</th></tr></thead>
+        <thead><tr><th>昵称</th><th>OpenID</th><th>登录次数</th><th>最近登录</th><th>注册时间</th><th>操作</th></tr></thead>
         <tbody></tbody>
       `;
       const body = table.querySelector("tbody");
       for (const user of users) {
         const row = document.createElement("tr");
         row.innerHTML = `
-          <td style="width: 26%;">${escapeHtml(user.nickname || "未设置")}${user.avatar_url ? `<br /><span class="muted" style="font-size:0.8em;">已设置头像</span>` : ""}</td>
-          <td style="width: 18%;">${escapeHtml(user.openid_masked)}</td>
-          <td style="width: 12%;">${escapeHtml(String(user.login_count ?? 0))}</td>
-          <td style="width: 22%;">${user.last_login_at ? escapeHtml(beijingDateTime(new Date(user.last_login_at))) : "-"}</td>
-          <td style="width: 22%;">${escapeHtml(beijingDateTime(new Date(user.created_at)))}</td>
+          <td style="width: 22%;">${escapeHtml(user.nickname || "未设置")}${user.avatar_url ? `<br /><span class="muted" style="font-size:0.8em;">已设置头像</span>` : ""}${user.blocked ? '<br /><span class="pill">已封禁</span>' : ""}</td>
+          <td style="width: 15%;">${escapeHtml(user.openid_masked)}</td>
+          <td style="width: 10%;">${escapeHtml(String(user.login_count ?? 0))}</td>
+          <td style="width: 19%;">${user.last_login_at ? escapeHtml(beijingDateTime(new Date(user.last_login_at))) : "-"}</td>
+          <td style="width: 19%;">${escapeHtml(beijingDateTime(new Date(user.created_at)))}</td>
+          <td style="width: 15%;" class="admin-table-ops"></td>
         `;
+        const ops = row.querySelector("td:last-child");
+        const blockButton = document.createElement("button");
+        blockButton.type = "button";
+        blockButton.className = "button secondary";
+        blockButton.textContent = user.blocked ? "解除封禁" : "加入黑名单";
+        blockButton.addEventListener("click", async () => {
+          const verb = user.blocked ? "解除封禁" : "封禁";
+          if (!window.confirm(`确定${verb}用户「${user.nickname || user.openid_masked}」？${user.blocked ? "" : "封禁后该用户将无法登录，现有会话立即失效。"}`)) return;
+          try {
+            await api(`/mp-users/${user.id}/blocked`, { method: "POST", body: JSON.stringify({ blocked: !user.blocked }) });
+            await loadMpUsersAdmin();
+          } catch (error) {
+            mpUsersAdminStatus.textContent = error.message;
+          }
+        });
+        ops.append(blockButton);
         body.append(row);
       }
       mpUsersList.append(table);
@@ -3285,34 +3318,123 @@ import "vditor/dist/index.css";
       }
     });
 
+    async function loadNotifyAdmin() {
+      const data = await api("/notify-settings");
+      notifyState = { ...data.data, loaded: true };
+      renderNotifyBots();
+    }
+
+    function resetNotifyEditor() {
+      document.querySelector("#notify-bot-id").value = "";
+      document.querySelector("#notify-bot-name").value = "";
+      document.querySelector("#notify-webhook").value = "";
+      document.querySelector("#notify-secret").value = "";
+      document.querySelector("#notify-bot-enabled").checked = true;
+      document.querySelector("#notify-bot-cancel").hidden = true;
+    }
+
+    function renderNotifyBots() {
+      const list = document.querySelector("#notify-bot-list");
+      list.innerHTML = "";
+      if (!notifyState.bots?.length) {
+        list.innerHTML = `<p class="empty">还没有配置机器人，展开下方表单新增。</p>`;
+        return;
+      }
+      const table = document.createElement("table");
+      table.className = "admin-table";
+      table.innerHTML = `
+        <thead><tr><th>名称</th><th>状态</th><th>签名</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      `;
+      const body = table.querySelector("tbody");
+      for (const bot of notifyState.bots) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td style="width: 30%;">${escapeHtml(bot.name)}<br /><span class="muted" style="font-size:0.78em;">${escapeHtml(bot.webhookUrl.slice(0, 46))}…</span></td>
+          <td style="width: 14%;">${bot.enabled ? "启用" : "停用"}</td>
+          <td style="width: 14%;">${bot.signSecretConfigured ? "已配置" : "未配置"}</td>
+          <td style="width: 42%;" class="admin-table-ops"></td>
+        `;
+        const ops = row.querySelector("td:last-child");
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.className = "button secondary";
+        editButton.textContent = "编辑";
+        editButton.addEventListener("click", () => {
+          document.querySelector("#notify-bot-id").value = bot.id;
+          document.querySelector("#notify-bot-name").value = bot.name;
+          document.querySelector("#notify-webhook").value = bot.webhookUrl;
+          document.querySelector("#notify-secret").value = "";
+          document.querySelector("#notify-bot-enabled").checked = bot.enabled;
+          document.querySelector("#notify-bot-cancel").hidden = false;
+          document.querySelector("#notify-bot-editor-card").open = true;
+        });
+        const toggleButton = document.createElement("button");
+        toggleButton.type = "button";
+        toggleButton.className = "button secondary";
+        toggleButton.textContent = bot.enabled ? "停用" : "启用";
+        toggleButton.addEventListener("click", async () => {
+          try {
+            await api("/notify-bots", { method: "POST", body: JSON.stringify({ id: bot.id, name: bot.name, webhookUrl: bot.webhookUrl, enabled: !bot.enabled }) });
+            await loadNotifyAdmin();
+          } catch (error) { notifyAdminStatus.textContent = error.message; }
+        });
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "button secondary";
+        deleteButton.textContent = "删除";
+        deleteButton.addEventListener("click", async () => {
+          if (!window.confirm(`确定删除机器人「${bot.name}」？`)) return;
+          try {
+            await api(`/notify-bots/${encodeURIComponent(bot.id)}`, { method: "DELETE" });
+            await loadNotifyAdmin();
+          } catch (error) { notifyAdminStatus.textContent = error.message; }
+        });
+        ops.append(editButton, toggleButton, deleteButton);
+        body.append(row);
+      }
+      list.append(table);
+    }
+
     document.querySelector("#save-notify").addEventListener("click", async () => {
       notifyAdminStatus.textContent = "保存中...";
       const secret = document.querySelector("#notify-secret").value;
       try {
-        const data = await api("/notify-settings", {
+        await api("/notify-bots", {
           method: "POST",
           body: JSON.stringify({
-            enabled: document.querySelector("#notify-enabled").checked,
+            id: document.querySelector("#notify-bot-id").value || undefined,
+            name: document.querySelector("#notify-bot-name").value.trim(),
             webhookUrl: document.querySelector("#notify-webhook").value.trim(),
+            enabled: document.querySelector("#notify-bot-enabled").checked,
             ...(secret ? { signSecret: secret } : {}),
           }),
         });
-        notifyState = data.data;
         document.querySelector("#notify-secret").value = "";
-        notifyAdminStatus.textContent = notifyState.signSecretConfigured ? "已保存（签名密钥已配置）" : "已保存（未配置签名密钥）";
+        notifyAdminStatus.textContent = "已保存";
+        resetNotifyEditor();
+        await loadNotifyAdmin();
       } catch (error) {
         notifyAdminStatus.textContent = error.message;
       }
     });
 
+    document.querySelector("#notify-bot-cancel").addEventListener("click", resetNotifyEditor);
+
     document.querySelector("#test-notify").addEventListener("click", async () => {
       notifyAdminStatus.textContent = "发送中...";
       try {
-        await api("/notify-test", { method: "POST", body: "{}" });
-        notifyAdminStatus.textContent = "测试卡片已发送，请在群里查收。";
+        const data = await api("/notify-test", { method: "POST", body: "{}" });
+        const sent = (data.data?.results || []).filter((item) => item.sent).length;
+        notifyAdminStatus.textContent = `测试卡片已发送：${sent} 个机器人成功。`;
       } catch (error) {
         notifyAdminStatus.textContent = error.message;
       }
+    });
+
+    document.querySelector("#mp-users-search").addEventListener("input", (event) => {
+      mpUsersKeyword = event.target.value;
+      if (mpUsersState) renderMpUsersAdmin();
     });
 
     document.querySelector("#mp-users-sort").addEventListener("change", () => {
@@ -3389,13 +3511,10 @@ import "vditor/dist/index.css";
         mpUsersAdminPanel.hidden = tab !== "mp-users";
         notifyAdminPanel.hidden = tab !== "notify";
         auditAdminPanel.hidden = tab !== "audit";
-        if (tab === "notify" && !notifyState.webhookUrl) {
+        if (tab === "notify" && !notifyState.loaded) {
           notifyAdminStatus.textContent = "加载中...";
           try {
-            const data = await api("/notify-settings");
-            notifyState = data.data;
-            document.querySelector("#notify-enabled").checked = notifyState.enabled;
-            document.querySelector("#notify-webhook").value = notifyState.webhookUrl || "";
+            await loadNotifyAdmin();
             notifyAdminStatus.textContent = "";
           } catch (error) {
             notifyAdminStatus.textContent = error.message;

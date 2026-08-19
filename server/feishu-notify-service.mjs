@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 
 const FEISHU_WEBHOOK_PATTERN = /^https:\/\/open\.feishu\.cn\/open-apis\/bot\/v2\/hook\/[0-9a-f-]{8,64}$/i;
 
@@ -6,10 +6,12 @@ export function isValidFeishuWebhookUrl(url) {
   return FEISHU_WEBHOOK_PATTERN.test(String(url || "").trim());
 }
 
-export function feishuSign(timestamp, secret) {
+function feishuSign(timestamp, secret) {
   const stringToSign = `${timestamp}\n${String(secret || "")}`;
   return createHmac("sha256", stringToSign).update("").digest("base64");
 }
+
+export { feishuSign };
 
 export function buildFeishuCard({ title, lines, url, template = "blue" } = {}) {
   const elements = (lines || []).map((line) => ({
@@ -36,6 +38,40 @@ export function buildFeishuCard({ title, lines, url, template = "blue" } = {}) {
   };
 }
 
+function normalizeSettings(raw) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  if (Array.isArray(data.bots)) {
+    return {
+      version: 2,
+      updated: data.updated || "",
+      bots: data.bots.filter((bot) => bot && isValidFeishuWebhookUrl(bot.webhookUrl)).map((bot) => ({
+        id: String(bot.id || `bot-${randomBytes(4).toString("hex")}`),
+        name: String(bot.name || "机器人").slice(0, 40),
+        webhookUrl: String(bot.webhookUrl),
+        enabled: bot.enabled !== false,
+      })),
+    };
+  }
+  // 旧单机器人配置自动迁移为列表。
+  if (isValidFeishuWebhookUrl(data.webhookUrl)) {
+    return {
+      version: 2,
+      updated: data.updated || "",
+      bots: [{ id: "default", name: "默认机器人", webhookUrl: String(data.webhookUrl), enabled: data.enabled === true }],
+    };
+  }
+  return { version: 2, updated: data.updated || "", bots: [] };
+}
+
+function normalizeSecrets(raw) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  const bots = data.bots && typeof data.bots === "object" ? data.bots : {};
+  if (!Object.keys(bots).length && typeof data.signSecret === "string" && data.signSecret) {
+    return { bots: { default: data.signSecret } };
+  }
+  return { bots };
+}
+
 export class FeishuNotifyService {
   constructor({ readSettings, writeSettings, readSecrets, writeSecrets, fetchImpl = globalThis.fetch, adminUrl = "https://nkustudy.top/admin/" } = {}) {
     for (const [name, fn] of [["readSettings", readSettings], ["writeSettings", writeSettings], ["readSecrets", readSecrets], ["writeSecrets", writeSecrets]]) {
@@ -49,58 +85,61 @@ export class FeishuNotifyService {
     this.adminUrl = adminUrl;
   }
 
-  async #effectiveConfig() {
-    const settings = (await this.readSettings()) || {};
-    const secrets = (await this.readSecrets()) || {};
-    const enabled = settings.enabled === true;
-    const webhook = String(settings.webhookUrl || "").trim();
-    const secret = String(secrets.signSecret || "").trim();
-    if (!enabled || !isValidFeishuWebhookUrl(webhook)) return null;
-    return { webhook, secret };
-  }
-
-  async updateConfig({ enabled, webhookUrl, signSecret }) {
-    const settings = { ...((await this.readSettings()) || {}) };
-    const secrets = JSON.parse(JSON.stringify((await this.readSecrets()) || {}));
-    if (enabled !== undefined) settings.enabled = enabled === true;
-    if (webhookUrl !== undefined) {
-      const url = String(webhookUrl || "").trim();
-      if (url && !isValidFeishuWebhookUrl(url)) throw new Error("Webhook 地址格式不正确。");
-      settings.webhookUrl = url;
-    }
-    if (signSecret !== undefined) {
-      const value = String(signSecret || "").trim();
-      if (value && !/^[\x21-\x7e]{8,64}$/.test(value)) throw new Error("签名密钥格式不正确。");
-      secrets.signSecret = value;
-    }
-    settings.updated = new Date().toISOString();
-    await this.writeSettings(settings);
-    await this.writeSecrets(secrets);
-    return this.describe();
+  async #state() {
+    return { settings: normalizeSettings(await this.readSettings()), secrets: normalizeSecrets(await this.readSecrets()) };
   }
 
   async describe() {
-    const settings = (await this.readSettings()) || {};
-    const secrets = (await this.readSecrets()) || {};
+    const { settings, secrets } = await this.#state();
     return {
-      enabled: settings.enabled === true,
-      webhookUrl: settings.webhookUrl || "",
-      signSecretConfigured: Boolean(secrets.signSecret),
-      updated: settings.updated || "",
+      bots: settings.bots.map((bot) => ({ ...bot, signSecretConfigured: Boolean(secrets.bots[bot.id]) })),
+      updated: settings.updated,
     };
   }
 
-  async send({ title, lines, template, force = false } = {}) {
-    const config = force ? { webhook: String((await this.readSettings()).webhookUrl || "").trim(), secret: String((await this.readSecrets()).signSecret || "").trim() } : await this.#effectiveConfig();
-    if (!config || !isValidFeishuWebhookUrl(config.webhook)) return { sent: false, reason: "disabled-or-invalid" };
+  async upsertBot({ id, name, webhookUrl, signSecret, enabled = true }) {
+    const { settings, secrets } = await this.#state();
+    const url = String(webhookUrl || "").trim();
+    if (!isValidFeishuWebhookUrl(url)) throw new Error("Webhook 地址格式不正确。");
+    let secretValue;
+    if (signSecret !== undefined && String(signSecret || "") !== "") {
+      secretValue = String(signSecret).trim();
+      if (!/^[\x21-\x7e]{8,64}$/.test(secretValue)) throw new Error("签名密钥格式不正确。");
+    }
+    const botId = id ? String(id) : `bot-${randomBytes(4).toString("hex")}`;
+    const existing = settings.bots.find((bot) => bot.id === botId);
+    const next = {
+      id: botId,
+      name: String(name || existing?.name || "机器人").slice(0, 40),
+      webhookUrl: url,
+      enabled: enabled !== false,
+    };
+    const others = settings.bots.filter((bot) => bot.id !== botId);
+    if (secretValue) secrets.bots[botId] = secretValue;
+    await this.writeSettings({ version: 2, updated: new Date().toISOString(), bots: [...others, next] });
+    await this.writeSecrets({ bots: secrets.bots });
+    return { ...next, signSecretConfigured: Boolean(secrets.bots[botId]) };
+  }
+
+  async removeBot(id) {
+    const { settings, secrets } = await this.#state();
+    const botId = String(id || "");
+    const bots = settings.bots.filter((bot) => bot.id !== botId);
+    delete secrets.bots[botId];
+    await this.writeSettings({ version: 2, updated: new Date().toISOString(), bots });
+    await this.writeSecrets({ bots: secrets.bots });
+    return { removed: bots.length !== settings.bots.length };
+  }
+
+  async #sendToBot(bot, secret, { title, lines, template }) {
     const body = buildFeishuCard({ title, lines, url: this.adminUrl, template });
-    if (config.secret) {
+    if (secret) {
       const timestamp = Math.floor(Date.now() / 1000);
       body.timestamp = String(timestamp);
-      body.sign = feishuSign(timestamp, config.secret);
+      body.sign = feishuSign(timestamp, secret);
     }
     try {
-      const response = await this.fetchImpl(config.webhook, {
+      const response = await this.fetchImpl(bot.webhookUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -108,11 +147,22 @@ export class FeishuNotifyService {
       });
       const payload = await response.json().catch(() => ({}));
       if (payload?.code !== 0 && payload?.StatusCode !== 0) {
-        return { sent: false, reason: `feishu-${payload?.code ?? response.status}` };
+        return { bot: bot.id, sent: false, reason: `feishu-${payload?.code ?? response.status}` };
       }
-      return { sent: true };
+      return { bot: bot.id, sent: true };
     } catch (error) {
-      return { sent: false, reason: error.name === "TimeoutError" ? "timeout" : "network" };
+      return { bot: bot.id, sent: false, reason: error.name === "TimeoutError" ? "timeout" : "network" };
     }
+  }
+
+  async broadcast({ title, lines, template }, { includeDisabled = false } = {}) {
+    const { settings, secrets } = await this.#state();
+    const targets = includeDisabled ? settings.bots : settings.bots.filter((bot) => bot.enabled);
+    if (!targets.length) return { sent: false, results: [], reason: "no-enabled-bots" };
+    const results = [];
+    for (const bot of targets) {
+      results.push(await this.#sendToBot(bot, secrets.bots[bot.id] || "", { title, lines, template }));
+    }
+    return { sent: results.some((result) => result.sent), results };
   }
 }

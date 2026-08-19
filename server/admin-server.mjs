@@ -194,8 +194,8 @@ async function notifyModerators(payload = {}) {
   } else {
     lines.push(...(payload.lines || ["请登录后台查看。"]));
   }
-  const result = await feishuNotify.send({ title, lines });
-  if (!result.sent) console.warn(`Feishu notify skipped: ${result.reason}`);
+  const result = await feishuNotify.broadcast({ title, lines });
+  if (!result.sent) console.warn(`Feishu notify skipped: ${result.reason || "all bots failed"}`);
   return result;
 }
 const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
@@ -2265,11 +2265,11 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "POST" && url.pathname === "/admin-api/notify-settings") {
+    if (req.method === "POST" && url.pathname === "/admin-api/notify-bots") {
       if (!requirePermission(req, account, "backup.manage", res)) return;
       const body = await readBody(req);
       try {
-        const data = await feishuNotify.updateConfig(body);
+        const data = await feishuNotify.upsertBot(body);
         json(res, 200, { ok: true, data });
       } catch (error) {
         json(res, 400, { ok: false, error: error.message });
@@ -2277,10 +2277,36 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    const notifyBotMatch = url.pathname.match(/^\/admin-api\/notify-bots\/([^/]+)$/);
+    if (req.method === "DELETE" && notifyBotMatch) {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
+      const result = await feishuNotify.removeBot(decodePathPart(notifyBotMatch[1]));
+      json(res, 200, { ok: true, data: result });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/admin-api/notify-test") {
       if (!requirePermission(req, account, "backup.manage", res)) return;
-      const result = await feishuNotify.send({ force: true, title: "NKUStudy 通知测试", lines: ["这是一条测试卡片。", "收到即说明通知配置成功。", `**触发人**：${account.username}`] });
-      json(res, result.sent ? 200 : 400, { ok: result.sent, ...(result.sent ? {} : { error: `发送失败：${result.reason}` }) });
+      const result = await feishuNotify.broadcast({ title: "NKUStudy 通知测试", lines: ["这是一条测试卡片。", "收到即说明该机器人配置成功。", `**触发人**：${account.username}`] }, { includeDisabled: false });
+      const failures = (result.results || []).filter((item) => !item.sent).length;
+      json(res, result.sent ? 200 : 400, {
+        ok: result.sent,
+        data: { results: result.results },
+        ...(result.sent ? {} : { error: `发送失败：${failures} 个机器人失败` }),
+      });
+      return;
+    }
+
+    const mpUserBlockMatch = url.pathname.match(/^\/admin-api\/mp-users\/([^/]+)\/blocked$/);
+    if (req.method === "POST" && mpUserBlockMatch) {
+      if (!requirePermission(req, account, "content.moderate", res)) return;
+      const body = await readBody(req);
+      try {
+        const data = mpAuthService.setUserBlocked(decodePathPart(mpUserBlockMatch[1]), body.blocked === true);
+        json(res, 200, { ok: true, data: { id: data.id, blocked: data.blocked === 1 } });
+      } catch (error) {
+        json(res, Number(error.statusCode) || 400, { ok: false, error: error.message });
+      }
       return;
     }
 

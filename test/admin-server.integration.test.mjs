@@ -316,7 +316,8 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const notifyState = await (await fetch(`http://127.0.0.1:${port}/admin-api/notify-settings`, { headers: { cookie } })).json();
   assert.equal(notifyState.ok, true);
-  assert.equal(notifyState.data.enabled, false);
+  assert.equal(Array.isArray(notifyState.data.bots), true);
+  assert.equal(notifyState.data.bots.length, 0);
 
   const publicReviewResponse = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",

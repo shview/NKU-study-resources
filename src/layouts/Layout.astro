@@ -132,7 +132,10 @@ const footer = {
         themeToggle?.setAttribute("aria-label", dark ? "切换为亮色" : "切换为暗色");
         themeToggle?.setAttribute("title", dark ? "切换为亮色" : "切换为暗色");
       };
-      const collapsed = localStorage.getItem("nkustudy-sidebar-collapsed") === "true";
+      const isNarrowScreen = window.matchMedia?.("(max-width: 900px)").matches;
+      const storedCollapsed = localStorage.getItem("nkustudy-sidebar-collapsed");
+      // 窄屏默认收起，用户点开过才展开；宽屏保持记忆、默认展开。
+      const collapsed = isNarrowScreen ? storedCollapsed !== "false" : storedCollapsed === "true";
       if (collapsed) {
         shell?.setAttribute("data-sidebar-collapsed", "true");
         sidebarToggle?.setAttribute("aria-label", "展开侧边栏");

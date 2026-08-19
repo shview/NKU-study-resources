@@ -94,26 +94,51 @@ function tempNotify(sendResult = { json: async () => ({ code: 0 }) }) {
   return { service, state };
 }
 
-test("notify config update validates and masks secrets", async () => {
+const HOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/59679e7e-2226-484d-b949-12b7610ae06d";
+const HOOK2 = "https://open.feishu.cn/open-apis/bot/v2/hook/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+test("notify bots CRUD validates and masks secrets", async () => {
   const { service, state } = tempNotify();
-  await assert.rejects(() => service.updateConfig({ webhookUrl: "https://bad.example/x" }), /格式不正确/);
-  await service.updateConfig({ enabled: true, webhookUrl: "https://open.feishu.cn/open-apis/bot/v2/hook/59679e7e-2226-484d-b949-12b7610ae06d", signSecret: "aIINp7NYmAJjjK6wpbAKoh" });
+  await assert.rejects(() => service.upsertBot({ webhookUrl: "https://bad.example/x" }), /格式不正确/);
+  const bot = await service.upsertBot({ name: "技术群", webhookUrl: HOOK, signSecret: "aIINp7NYmAJjjK6wpbAKoh" });
+  assert.equal(bot.signSecretConfigured, true);
   const described = await service.describe();
-  assert.equal(described.enabled, true);
-  assert.equal(described.signSecretConfigured, true);
-  assert.equal("signSecret" in described, false, "describe must not expose the secret");
-  const result = await service.send({ title: "测试", lines: ["内容"] });
-  assert.equal(result.sent, true);
-  assert.equal(state.sent.length, 1);
-  assert.equal(state.sent[0].body.sign.length > 0, true, "signed when secret configured");
+  assert.equal(described.bots.length, 1);
+  assert.equal("signSecret" in described.bots[0], false, "describe must not expose secrets");
+  const second = await service.upsertBot({ name: "运营群", webhookUrl: HOOK2 });
+  assert.equal((await service.describe()).bots.length, 2);
+  const broadcast = await service.broadcast({ title: "测试", lines: ["内容"] });
+  assert.equal(broadcast.sent, true);
+  assert.equal(state.sent.length, 2, "both enabled bots receive the card");
+  assert.equal(state.sent.some((item) => item.body.sign?.length > 0), true, "signed when secret configured");
+  const removal = await service.removeBot(second.id);
+  assert.equal(removal.removed, true);
+  assert.equal((await service.describe()).bots.length, 1);
 });
 
-test("notify skips when disabled and reports upstream failures", async () => {
+test("legacy single-bot config migrates to the bot list", async () => {
+  const state = { settings: { enabled: true, webhookUrl: HOOK }, secrets: { signSecret: "legacy-secret-value" } };
+  const service = new FeishuNotifyService({
+    readSettings: async () => state.settings,
+    writeSettings: async (data) => { state.settings = data; },
+    readSecrets: async () => state.secrets,
+    writeSecrets: async (data) => { state.secrets = data; },
+  });
+  const described = await service.describe();
+  assert.equal(described.bots.length, 1);
+  assert.equal(described.bots[0].id, "default");
+  assert.equal(described.bots[0].enabled, true);
+  assert.equal(described.bots[0].signSecretConfigured, true);
+});
+
+test("notify skips disabled bots and reports upstream failures", async () => {
   const { service } = tempNotify();
-  assert.deepEqual(await service.send({ title: "x", lines: [] }), { sent: false, reason: "disabled-or-invalid" });
+  assert.deepEqual(await service.broadcast({ title: "x", lines: [] }), { sent: false, results: [], reason: "no-enabled-bots" });
   const failing = tempNotify({ json: async () => ({ code: 19021, msg: "sign match fail" }) });
-  await failing.service.updateConfig({ enabled: true, webhookUrl: "https://open.feishu.cn/open-apis/bot/v2/hook/59679e7e-2226-484d-b949-12b7610ae06d" });
-  const failed = await failing.service.send({ title: "x", lines: [] });
+  await failing.service.upsertBot({ webhookUrl: HOOK, enabled: true });
+  const failed = await failing.service.broadcast({ title: "x", lines: [] });
   assert.equal(failed.sent, false);
-  assert.match(failed.reason, /feishu-19021/);
+  assert.match(failed.results[0].reason, /feishu-19021/);
+  await failing.service.upsertBot({ id: (await failing.service.describe()).bots[0].id, webhookUrl: HOOK, enabled: false });
+  assert.equal((await failing.service.broadcast({ title: "x", lines: [] })).results.length, 0);
 });

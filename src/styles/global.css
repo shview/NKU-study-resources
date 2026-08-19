@@ -49,6 +49,23 @@ a {
   grid-template-columns: 72px minmax(0, 1fr);
 }
 
+@media (max-width: 900px) {
+  .app-shell,
+  .app-shell[data-sidebar-collapsed="true"] {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+  .app-shell:not([data-sidebar-collapsed="true"]) {
+    grid-template-columns: min(58vw, 248px) minmax(0, 1fr);
+  }
+  .sidebar {
+    padding: 16px 10px;
+    overflow-x: hidden;
+  }
+  .sidebar-toggle {
+    right: -12px;
+  }
+}
+
 .sidebar {
   position: sticky;
   top: 0;
@@ -2299,10 +2316,22 @@ details.resource-subsection summary::-webkit-details-marker {
 .perm-role-field {
   min-width: 260px;
 }
-.admin-table .admin-table-ops .button {
+.admin-table td.admin-table-ops {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: flex-start;
+  gap: 4px 6px;
+}
+.admin-table td.admin-table-ops > * {
+  flex: 0 0 auto;
   margin: 0;
-  padding: 2px 8px;
+}
+.admin-table td.admin-table-ops .button {
+  padding: 3px 10px;
   font-size: 0.8em;
-  line-height: 1.5;
+  line-height: 1.6;
   white-space: nowrap;
+  box-sizing: border-box;
 }

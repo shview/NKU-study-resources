@@ -81,7 +81,8 @@ export class MpAuthService {
         avatar_url TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL,
         last_login_at INTEGER,
-        login_count INTEGER NOT NULL DEFAULT 0
+        login_count INTEGER NOT NULL DEFAULT 0,
+        blocked INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS mp_auth_tokens (
         token_hash TEXT PRIMARY KEY,
@@ -93,11 +94,14 @@ export class MpAuthService {
       CREATE INDEX IF NOT EXISTS mp_auth_tokens_user_idx ON mp_auth_tokens(user_id);
       CREATE INDEX IF NOT EXISTS mp_auth_tokens_expiry_idx ON mp_auth_tokens(expires_at);
     `);
+    const userColumns = this.db.pragma("table_info(mp_users)").map((column) => column.name);
+    if (!userColumns.includes("blocked")) this.db.exec("ALTER TABLE mp_users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0");
     this.insertUser = this.db.prepare("INSERT INTO mp_users(openid, created_at) VALUES (?, ?)");
     this.selectUserByOpenid = this.db.prepare("SELECT * FROM mp_users WHERE openid = ?");
     this.selectUserById = this.db.prepare("SELECT * FROM mp_users WHERE id = ?");
     this.markLogin = this.db.prepare("UPDATE mp_users SET last_login_at = ?, login_count = login_count + 1 WHERE id = ?");
     this.updateProfileStmt = this.db.prepare("UPDATE mp_users SET nickname = ?, avatar_url = ? WHERE id = ?");
+    this.setBlockedStmt = this.db.prepare("UPDATE mp_users SET blocked = ? WHERE id = ?");
     this.listUsers = this.db.prepare("SELECT * FROM mp_users ORDER BY created_at DESC, id DESC");
     this.countUsers = this.db.prepare("SELECT COUNT(*) AS count FROM mp_users");
     this.countLoginsSince = this.db.prepare("SELECT COUNT(*) AS count FROM mp_users WHERE last_login_at >= ?");
@@ -155,8 +159,12 @@ export class MpAuthService {
     }
     const { openid } = await this.#exchangeCode(code);
     const timestamp = positiveSafeInteger(now, "now");
+    const existingRow = this.selectUserByOpenid.get(openid);
+    if (existingRow?.blocked) {
+      throw new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED");
+    }
     const user = this.db.transaction(() => {
-      let row = this.selectUserByOpenid.get(openid);
+      let row = existingRow;
       if (!row) {
         const result = this.insertUser.run(openid, timestamp);
         row = this.selectUserById.get(result.lastInsertRowid);
@@ -182,8 +190,10 @@ export class MpAuthService {
     const timestamp = positiveSafeInteger(now, "now");
     const row = this.selectToken.get(tokenHash(match[1]));
     if (!row || row.expires_at <= timestamp) return null;
+    const user = this.selectUserById.get(row.user_id);
+    if (!user || user.blocked) return null;
     this.touchToken.run(timestamp, row.token_hash);
-    return this.selectUserById.get(row.user_id) || null;
+    return user;
   }
 
   requireUser(authorizationHeader) {
@@ -209,10 +219,18 @@ export class MpAuthService {
     return this.removeToken.run(tokenHash(match[1])).changes > 0;
   }
 
+  setUserBlocked(id, blocked) {
+    const account = this.selectUserById.get(Number(id));
+    if (!account) throw new PublicApiError(404, "用户不存在。", "USER_NOT_FOUND");
+    this.setBlockedStmt.run(blocked ? 1 : 0, account.id);
+    return this.selectUserById.get(account.id);
+  }
+
   adminOverview({ dayStartMs } = {}) {
     const users = this.listUsers.all().map((row) => ({
       ...publicUser(row),
       login_count: row.login_count,
+      blocked: row.blocked === 1,
       openid_masked: maskOpenid(row.openid),
     }));
     const timestamp = positiveSafeInteger(dayStartMs ?? this.now(), "dayStartMs");
