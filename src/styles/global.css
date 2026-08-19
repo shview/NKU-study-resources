@@ -2317,21 +2317,37 @@ details.resource-subsection summary::-webkit-details-marker {
   min-width: 260px;
 }
 .admin-table td.admin-table-ops {
+  /* 保持普通 table-cell（与审计表一致），按钮行放在内层 div 上。 */
+}
+.admin-table .ops-row {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  align-items: flex-start;
-  align-content: flex-start;
+  align-items: center;
   gap: 4px 6px;
+  min-width: 0;
 }
-.admin-table td.admin-table-ops > * {
+.admin-table .ops-row > * {
   flex: 0 0 auto;
   margin: 0;
 }
-.admin-table td.admin-table-ops .button {
+.admin-table .ops-row .button {
   padding: 3px 10px;
   font-size: 0.8em;
   line-height: 1.6;
   white-space: nowrap;
   box-sizing: border-box;
+}
+.pending-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 18px;
+  text-align: center;
+  vertical-align: middle;
 }

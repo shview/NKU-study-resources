@@ -49,6 +49,7 @@ function normalizeSettings(raw) {
         name: String(bot.name || "机器人").slice(0, 40),
         webhookUrl: String(bot.webhookUrl),
         enabled: bot.enabled !== false,
+        purposes: normalizePurposes(bot.purposes),
       })),
     };
   }
@@ -57,10 +58,18 @@ function normalizeSettings(raw) {
     return {
       version: 2,
       updated: data.updated || "",
-      bots: [{ id: "default", name: "默认机器人", webhookUrl: String(data.webhookUrl), enabled: data.enabled === true }],
+      bots: [{ id: "default", name: "默认机器人", webhookUrl: String(data.webhookUrl), enabled: data.enabled === true, purposes: ["moderation"] }],
     };
   }
   return { version: 2, updated: data.updated || "", bots: [] };
+}
+
+const KNOWN_PURPOSES = new Set(["moderation", "digest"]);
+
+function normalizePurposes(value) {
+  const list = Array.isArray(value) ? value : ["moderation"];
+  const filtered = list.map((item) => String(item)).filter((item) => KNOWN_PURPOSES.has(item));
+  return filtered.length ? [...new Set(filtered)] : ["moderation"];
 }
 
 function normalizeSecrets(raw) {
@@ -97,7 +106,7 @@ export class FeishuNotifyService {
     };
   }
 
-  async upsertBot({ id, name, webhookUrl, signSecret, enabled = true }) {
+  async upsertBot({ id, name, webhookUrl, signSecret, enabled = true, purposes }) {
     const { settings, secrets } = await this.#state();
     const url = String(webhookUrl || "").trim();
     if (!isValidFeishuWebhookUrl(url)) throw new Error("Webhook 地址格式不正确。");
@@ -113,6 +122,7 @@ export class FeishuNotifyService {
       name: String(name || existing?.name || "机器人").slice(0, 40),
       webhookUrl: url,
       enabled: enabled !== false,
+      purposes: normalizePurposes(purposes ?? existing?.purposes),
     };
     const others = settings.bots.filter((bot) => bot.id !== botId);
     if (secretValue) secrets.bots[botId] = secretValue;
@@ -155,9 +165,10 @@ export class FeishuNotifyService {
     }
   }
 
-  async broadcast({ title, lines, template }, { includeDisabled = false } = {}) {
+  async broadcast({ title, lines, template }, { includeDisabled = false, purpose = "moderation" } = {}) {
     const { settings, secrets } = await this.#state();
-    const targets = includeDisabled ? settings.bots : settings.bots.filter((bot) => bot.enabled);
+    const pool = includeDisabled ? settings.bots : settings.bots.filter((bot) => bot.enabled);
+    const targets = pool.filter((bot) => !purpose || (bot.purposes || ["moderation"]).includes(purpose));
     if (!targets.length) return { sent: false, results: [], reason: "no-enabled-bots" };
     const results = [];
     for (const bot of targets) {

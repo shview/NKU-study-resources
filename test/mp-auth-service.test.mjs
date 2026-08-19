@@ -173,3 +173,14 @@ test("admin overview includes blocked flag", async () => {
   assert.equal(overview.users[0].blocked, true);
   service.close();
 });
+
+test("keyword flagged reviews are forced pending with a hit record", async () => {
+  const { reviewKeywordMatch } = await import("../server/review-keyword-filter.mjs");
+  assert.equal(reviewKeywordMatch("这老师电话 13812345678 人很好").length > 0, true);
+  assert.equal(reviewKeywordMatch("加微信 nkustudy2026 拿资料").length > 0, true);
+  assert.equal(reviewKeywordMatch("邮箱 a.b@nankai.edu.cn").length > 0, true);
+  assert.equal(reviewKeywordMatch("课程内容扎实，考核合理，推荐。").length, 0);
+  assert.equal(reviewKeywordMatch("这个老师真的 傻逼 吧").length > 0, true);
+  assert.equal(reviewKeywordMatch("正常评价", ["代写", "刷分"]).length, 0);
+  assert.equal(reviewKeywordMatch("可以代写作业", ["代写"]).length > 0, true);
+});

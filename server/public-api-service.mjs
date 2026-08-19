@@ -55,7 +55,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true } = {}) {
+  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -63,6 +63,7 @@ export class PublicApiService {
     this.readReviews = readReviews;
     this.readHome = readHome;
     this.readGuides = readGuides;
+    this.readVisitStats = readVisitStats;
     this.reviewSubmissionService = reviewSubmissionService;
     this.publicResourceOrigin = publicResourceOrigin;
     this.guideCorrectionUrl = guideCorrectionUrl;
@@ -103,7 +104,43 @@ export class PublicApiService {
       announcement: String(home.announcement || "").trim().slice(0, 2000),
       hot_courses: hotCourses,
       latest_updates: latestUpdates,
+      trending: this.trending(manifest),
     };
+  }
+
+  // 按最近 30 天课程详情页访问量取 TOP10，无访问数据时回退为空列表。
+  trending(manifest) {
+    const stats = this.readVisitStats ? this.readVisitStats() : null;
+    const pages = stats?.pages;
+    if (!pages || typeof pages !== "object") return [];
+    const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    const visits = new Map();
+    for (const [path, item] of Object.entries(pages)) {
+      const name = (() => {
+        try {
+          return decodeURIComponent(String(path)).replace(/\/+$/, "").split("/")[2];
+        } catch {
+          return "";
+        }
+      })();
+      if (!name) continue;
+      let count = 0;
+      for (const [day, value] of Object.entries(item?.days || {})) {
+        if (day >= cutoff) count += Number(value || 0);
+      }
+      if (count > 0) visits.set(name, (visits.get(name) || 0) + count);
+    }
+    if (!visits.size) return [];
+    const courses = [...manifest.courses];
+    return [...visits.entries()]
+      .map(([name, count]) => {
+        const course = courses.find((item) => String(item.title) === name || String(item.id) === name);
+        if (!course) return null;
+        return { id: course.uid, title: String(course.title || "").slice(0, 120), visits: count };
+      })
+      .filter(Boolean)
+      .sort((left, right) => right.visits - left.visits)
+      .slice(0, 10);
   }
 
   courses(searchParams) {

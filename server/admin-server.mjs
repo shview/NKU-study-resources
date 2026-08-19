@@ -154,6 +154,7 @@ const publicApiService = new PublicApiService({
   readReviews,
   readHome,
   readGuides,
+  readVisitStats: readVisitStats,
   reviewSubmissionService,
   publicResourceOrigin: process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top",
   guideCorrectionUrl: process.env.PUBLIC_GUIDE_CORRECTION_URL || "https://nkustudy.top/feedback",
@@ -698,6 +699,44 @@ async function uploadPendingAuditArchive() {
       break;
     }
   }
+}
+
+let lastDigestDate = "";
+
+async function runDailyDigest() {
+  const beijingDay = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const beijingMinute = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(11, 16);
+  if (lastDigestDate === beijingDay || beijingMinute < "21:00") return;
+  const described = await feishuNotify.describe().catch(() => ({ bots: [] }));
+  const digestBots = (described.bots || []).filter((bot) => bot.enabled && (bot.purposes || []).includes("digest"));
+  if (!digestBots.length) {
+    lastDigestDate = beijingDay;
+    return;
+  }
+  const reviewData = readReviews();
+  const feedbackData = readFeedback();
+  const day = beijingDay;
+  const newReviews = (reviewData.reviews || []).filter((review) => String(review.createdAt || "").slice(0, 10) === day).length;
+  const pendingReviews = (reviewData.reviews || []).filter((review) => String(review.status || "pending") === "pending" && !review.hidden).length;
+  const newFeedback = (feedbackData.items || []).filter((item) => String(item.createdAt || "").slice(0, 10) === day).length;
+  const openFeedback = (feedbackData.items || []).filter((item) => !item.hidden && String(item.status || "open") === "open").length;
+  const mpOverview = mpAuthService.adminOverview({ dayStartMs: Date.parse(`${day}T00:00:00+08:00`) });
+  lastDigestDate = beijingDay;
+  await feishuNotify.broadcast({
+    title: "NKUStudy 每日汇总",
+    lines: [
+      `**日期**：${day}`,
+      `**今日新增评价**：${newReviews} 条（待审累计 ${pendingReviews}）`,
+      `**今日新增反馈**：${newFeedback} 条（待处理累计 ${openFeedback}）`,
+      `**今日登录用户**：${mpOverview.logins_since} 次（总用户 ${mpOverview.total}）`,
+    ],
+  }, { purpose: "digest" }).catch(() => {});
+}
+
+function startDigestScheduler() {
+  setInterval(() => {
+    runDailyDigest().catch(() => {});
+  }, 5 * 60 * 1000).unref();
 }
 
 function startBackupScheduler() {
@@ -2233,7 +2272,15 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/session") {
-      json(res, 200, { ok: true, data: { username: account.username, permissions: account.permissions, mustChangePassword: account.mustChangePassword } });
+      const reviewData = readReviews();
+      const feedbackData = readFeedback();
+      json(res, 200, { ok: true, data: {
+        username: account.username,
+        permissions: account.permissions,
+        mustChangePassword: account.mustChangePassword,
+        pendingReviews: (reviewData.reviews || []).filter((review) => String(review.status || "pending") === "pending" && !review.hidden).length,
+        openFeedback: (feedbackData.items || []).filter((item) => !item.hidden && String(item.status || "open") === "open").length,
+      } });
       return;
     }
 
@@ -2428,6 +2475,7 @@ const server = createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`NKUStudy admin API listening on http://${host}:${port}`);
   startBackupScheduler();
+  startDigestScheduler();
   uploadPendingAuditArchive().catch(() => {});
 });
 

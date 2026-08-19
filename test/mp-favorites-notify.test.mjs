@@ -142,3 +142,16 @@ test("notify skips disabled bots and reports upstream failures", async () => {
   await failing.service.upsertBot({ id: (await failing.service.describe()).bots[0].id, webhookUrl: HOOK, enabled: false });
   assert.equal((await failing.service.broadcast({ title: "x", lines: [] })).results.length, 0);
 });
+
+test("bot purposes filter which bots receive which cards", async () => {
+  const { service, state } = tempNotify();
+  await service.upsertBot({ name: "审核群", webhookUrl: HOOK, purposes: ["moderation"] });
+  await service.upsertBot({ name: "日报群", webhookUrl: HOOK2, purposes: ["digest"] });
+  state.sent.length = 0;
+  const moderation = await service.broadcast({ title: "待审", lines: [] });
+  assert.equal(moderation.results.length, 1, "only moderation bots get moderation cards");
+  const digest = await service.broadcast({ title: "日报", lines: [] }, { purpose: "digest" });
+  assert.equal(digest.results.length, 1, "only digest bots get digests");
+  assert.deepEqual(await service.broadcast({ title: "无", lines: [] }, { purpose: "none" }), { sent: false, results: [], reason: "no-enabled-bots" });
+  service && 1;
+});

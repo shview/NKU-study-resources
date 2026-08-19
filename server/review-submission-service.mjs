@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { PublicApiError } from "./public-api-errors.mjs";
+import { reviewKeywordMatch } from "./review-keyword-filter.mjs";
 
 function cleanText(value, max) {
   return String(value ?? "").trim().slice(0, max);
@@ -68,6 +69,10 @@ export class ReviewSubmissionService {
       throw new PublicApiError(429, "提交太频繁，请稍后再试。", "RATE_LIMITED");
     }
 
+    const keywordFilter = rules.keywordFilter || {};
+    const keywordHits = keywordFilter.enabled === true
+      ? reviewKeywordMatch(content, Array.isArray(keywordFilter.words) ? keywordFilter.words : [])
+      : [];
     const now = this.nowIso();
     const review = {
       id: this.createId(),
@@ -76,8 +81,9 @@ export class ReviewSubmissionService {
       rating,
       ...(tags.length ? { tags } : {}),
       content,
-      status: rules.moderationRequired ? "pending" : "approved",
+      status: rules.moderationRequired || keywordHits.length ? "pending" : "approved",
       hidden: false,
+      ...(keywordHits.length ? { flagged: keywordHits.join("|").slice(0, 80) } : {}),
       createdAt: now,
       updatedAt: now,
       ipHash: this.actorHash(clientIp),

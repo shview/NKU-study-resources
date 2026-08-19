@@ -430,6 +430,8 @@ import "vditor/dist/index.css";
                     <input id="notify-bot-name" type="text" autocomplete="off" placeholder="如：技术群机器人" />
                   </label>
                   <label class="perm-check perm-check-inline" style="padding-top: 18px;"><input id="notify-bot-enabled" type="checkbox" checked /> 启用</label>
+                  <label class="perm-check perm-check-inline" style="padding-top: 18px;"><input id="notify-purpose-moderation" type="checkbox" checked /> 待审通知</label>
+                  <label class="perm-check perm-check-inline" style="padding-top: 18px;"><input id="notify-purpose-digest" type="checkbox" /> 每日汇总</label>
                 </div>
                 <label class="admin-field" style="max-width: 640px;">
                   <span>Webhook 地址</span>
@@ -1023,7 +1025,9 @@ import "vditor/dist/index.css";
           <td style="width: 16%;">${account.lastLoginAt ? escapeHtml(beijingDateTime(new Date(account.lastLoginAt))) : "从未"}</td>
           <td style="width: 28%;" class="admin-table-ops"></td>
         `;
-        const ops = row.querySelector("td:last-child");
+        const ops = document.createElement("div");
+        ops.className = "ops-row";
+        row.querySelector("td:last-child").append(ops);
 
         const editButton = document.createElement("button");
         editButton.type = "button";
@@ -1186,7 +1190,9 @@ import "vditor/dist/index.css";
           <td style="width: 19%;">${escapeHtml(beijingDateTime(new Date(user.created_at)))}</td>
           <td style="width: 15%;" class="admin-table-ops"></td>
         `;
-        const ops = row.querySelector("td:last-child");
+        const ops = document.createElement("div");
+        ops.className = "ops-row";
+        row.querySelector("td:last-child").append(ops);
         const blockButton = document.createElement("button");
         blockButton.type = "button";
         blockButton.className = "button secondary";
@@ -1294,7 +1300,32 @@ import "vditor/dist/index.css";
         const required = tabPermissions[button.dataset.adminTab];
         button.hidden = Boolean(required) && !hasPerm(required);
       }
+      renderPendingBadges();
       mustChangeBanner.hidden = !sessionState.mustChangePassword;
+    }
+
+    let pendingCounts = { reviews: 0, feedback: 0 };
+
+    async function refreshPendingCounts() {
+      try {
+        const data = await api("/session");
+        pendingCounts = { reviews: data.data?.pendingReviews ?? 0, feedback: data.data?.openFeedback ?? 0 };
+        renderPendingBadges();
+      } catch {}
+    }
+
+    function renderPendingBadges() {
+      for (const [tab, count] of [["reviews", pendingCounts.reviews], ["feedback", pendingCounts.feedback]]) {
+        const button = document.querySelector(`[data-admin-tab="${tab}"]`);
+        if (!button) continue;
+        button.querySelector(".pending-badge")?.remove();
+        if (count > 0) {
+          const badge = document.createElement("span");
+          badge.className = "pending-badge";
+          badge.textContent = count > 99 ? "99+" : String(count);
+          button.append(badge);
+        }
+      }
     }
 
     function showFirstAllowedTab() {
@@ -1669,6 +1700,7 @@ import "vditor/dist/index.css";
     }
 
     async function saveReviewState(message = "已保存") {
+      refreshPendingCounts();
       reviewAdminStatus.textContent = "保存中...";
       const data = await api("/reviews", {
         method: "POST",
@@ -1726,6 +1758,22 @@ import "vditor/dist/index.css";
         markdownField("评价公告栏（支持 Markdown）", rules.announcement ?? "", (value) => { rules.announcement = value; }),
         markdownField("规则备注", rules.notes ?? "", (value) => { rules.notes = value; }, { height: 150 })
       );
+
+      const keywordFilter = rules.keywordFilter ??= { enabled: false, words: [] };
+      const keywordWrap = document.createElement("div");
+      keywordWrap.className = "admin-form";
+      keywordWrap.style.marginTop = "12px";
+      const keywordToggle = checkboxField("启用关键词过滤（命中联系方式/敏感词的评价强制待审）", keywordFilter.enabled === true, (value) => { keywordFilter.enabled = value; });
+      keywordToggle.style.gridColumn = "1 / -1";
+      const wordsField = document.createElement("label");
+      wordsField.className = "admin-field";
+      wordsField.style.gridColumn = "1 / -1";
+      wordsField.innerHTML = `<span>自定义敏感词（每行一个，选填）</span><textarea rows="4" placeholder="例如：\n代写\n刷分">${escapeHtml((keywordFilter.words || []).join("\n"))}</textarea>`;
+      wordsField.querySelector("textarea").addEventListener("input", (event) => {
+        keywordFilter.words = event.target.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 200);
+      });
+      keywordWrap.append(keywordToggle, wordsField);
+      reviewRulesEditor.append(keywordWrap);
 
       const keyword = reviewAdminSearch.value.trim().toLowerCase();
       const statusFilter = reviewStatusFilter.value;
@@ -1872,6 +1920,7 @@ import "vditor/dist/index.css";
     }
 
     async function saveFeedbackState(message = "已保存") {
+      refreshPendingCounts();
       feedbackAdminStatus.textContent = "保存中...";
       const data = await api("/feedback", {
         method: "POST",
@@ -3330,6 +3379,8 @@ import "vditor/dist/index.css";
       document.querySelector("#notify-webhook").value = "";
       document.querySelector("#notify-secret").value = "";
       document.querySelector("#notify-bot-enabled").checked = true;
+      document.querySelector("#notify-purpose-moderation").checked = true;
+      document.querySelector("#notify-purpose-digest").checked = false;
       document.querySelector("#notify-bot-cancel").hidden = true;
     }
 
@@ -3352,10 +3403,12 @@ import "vditor/dist/index.css";
         row.innerHTML = `
           <td style="width: 30%;">${escapeHtml(bot.name)}<br /><span class="muted" style="font-size:0.78em;">${escapeHtml(bot.webhookUrl.slice(0, 46))}…</span></td>
           <td style="width: 14%;">${bot.enabled ? "启用" : "停用"}</td>
-          <td style="width: 14%;">${bot.signSecretConfigured ? "已配置" : "未配置"}</td>
+          <td style="width: 20%;">${(bot.purposes || ["moderation"]).map((purpose) => purpose === "moderation" ? "待审通知" : "每日汇总").join(" + ")}</td>
           <td style="width: 42%;" class="admin-table-ops"></td>
         `;
-        const ops = row.querySelector("td:last-child");
+        const ops = document.createElement("div");
+        ops.className = "ops-row";
+        row.querySelector("td:last-child").append(ops);
         const editButton = document.createElement("button");
         editButton.type = "button";
         editButton.className = "button secondary";
@@ -3366,6 +3419,8 @@ import "vditor/dist/index.css";
           document.querySelector("#notify-webhook").value = bot.webhookUrl;
           document.querySelector("#notify-secret").value = "";
           document.querySelector("#notify-bot-enabled").checked = bot.enabled;
+          document.querySelector("#notify-purpose-moderation").checked = (bot.purposes || ["moderation"]).includes("moderation");
+          document.querySelector("#notify-purpose-digest").checked = (bot.purposes || []).includes("digest");
           document.querySelector("#notify-bot-cancel").hidden = false;
           document.querySelector("#notify-bot-editor-card").open = true;
         });
@@ -3408,6 +3463,10 @@ import "vditor/dist/index.css";
             webhookUrl: document.querySelector("#notify-webhook").value.trim(),
             enabled: document.querySelector("#notify-bot-enabled").checked,
             ...(secret ? { signSecret: secret } : {}),
+            purposes: [
+              ...(document.querySelector("#notify-purpose-moderation").checked ? ["moderation"] : []),
+              ...(document.querySelector("#notify-purpose-digest").checked ? ["digest"] : []),
+            ],
           }),
         });
         document.querySelector("#notify-secret").value = "";
