@@ -108,7 +108,19 @@ const sessionStore = new AdminSessionStore({
   idleTtlMs: Number(process.env.ADMIN_SESSION_IDLE_TTL_MS || 30 * 60 * 1000),
 });
 const auditArchiveDir = path.join(dataDir, "audit-archive");
-const accountsStore = new AdminAccountsStore({ dbPath: runtime.stateDbPath, archiveDir: auditArchiveDir });
+let auditArchiveUploadStarted = false;
+const accountsStore = new AdminAccountsStore({
+  dbPath: runtime.stateDbPath,
+  archiveDir: auditArchiveDir,
+  onArchive: () => {
+    if (auditArchiveUploadStarted) return;
+    auditArchiveUploadStarted = true;
+    setTimeout(() => {
+      auditArchiveUploadStarted = false;
+      uploadPendingAuditArchive().catch(() => {});
+    }, 2_000).unref();
+  },
+});
 seedInitialAdminAccount();
 
 function seedInitialAdminAccount() {
@@ -686,12 +698,6 @@ async function uploadPendingAuditArchive() {
       break;
     }
   }
-}
-
-function startAuditArchiveUploader() {
-  setInterval(() => {
-    uploadPendingAuditArchive().catch(() => {});
-  }, 5 * 60 * 1000).unref();
 }
 
 function startBackupScheduler() {
@@ -2396,7 +2402,7 @@ const server = createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`NKUStudy admin API listening on http://${host}:${port}`);
   startBackupScheduler();
-  startAuditArchiveUploader();
+  uploadPendingAuditArchive().catch(() => {});
 });
 
 let shuttingDown = false;

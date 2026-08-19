@@ -95,11 +95,13 @@ function rowToAccount(row) {
 }
 
 export class AdminAccountsStore {
-  constructor({ dbPath, maxAuditRows = 100_000, archiveDir = null } = {}) {
+  constructor({ dbPath, keepAuditRows = 10_000, archiveThreshold = 20_000, archiveDir = null, onArchive = null } = {}) {
     if (!dbPath) throw new Error("AdminAccountsStore requires dbPath.");
     this.dbPath = path.resolve(dbPath);
-    this.maxAuditRows = positiveSafeInteger(maxAuditRows, "maxAuditRows");
+    this.keepAuditRows = positiveSafeInteger(keepAuditRows, "keepAuditRows");
+    this.archiveThreshold = Math.max(positiveSafeInteger(archiveThreshold, "archiveThreshold"), this.keepAuditRows * 2);
     this.archiveDir = archiveDir ? path.resolve(archiveDir) : null;
+    this.onArchive = typeof onArchive === "function" ? onArchive : null;
     if (this.archiveDir) fs.mkdirSync(this.archiveDir, { recursive: true, mode: 0o700 });
     const directory = path.dirname(this.dbPath);
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -285,19 +287,26 @@ export class AdminAccountsStore {
       String(ip || "").slice(0, 64),
       String(userAgent || "").slice(0, 256),
     );
-    const overflow = Number(this.countAudit.get().count) - this.maxAuditRows;
-    if (overflow > 0) {
-      if (this.archiveDir) {
-        const spilled = this.db.prepare("SELECT * FROM admin_audit_log ORDER BY id ASC LIMIT ?").all(overflow);
-        if (spilled.length) {
-          const first = spilled[0].id;
-          const last = spilled[spilled.length - 1].id;
-          const filePath = path.join(this.archiveDir, `audit-${first}-${last}-${positiveSafeInteger(now, "now")}.json`);
-          fs.writeFileSync(filePath, JSON.stringify({ archived_at: positiveSafeInteger(now, "now"), rows: spilled }, null, 2), { mode: 0o600 });
-          fs.chmodSync(filePath, 0o600);
-        }
+    const count = Number(this.countAudit.get().count);
+    if (count < this.archiveThreshold) return;
+    // 达到阈值后按批归档：只保留最新 keepAuditRows 条，更早的一批落盘等待上传 R2。
+    const overflow = count - this.keepAuditRows;
+    const spilled = this.db.prepare("SELECT * FROM admin_audit_log ORDER BY id ASC LIMIT ?").all(overflow);
+    if (!spilled.length) return;
+    if (this.archiveDir) {
+      const first = spilled[0].id;
+      const last = spilled[spilled.length - 1].id;
+      const filePath = path.join(this.archiveDir, `audit-${first}-${last}-${positiveSafeInteger(now, "now")}.json`);
+      fs.writeFileSync(filePath, JSON.stringify({ archived_at: positiveSafeInteger(now, "now"), rows: spilled }, null, 2), { mode: 0o600 });
+      fs.chmodSync(filePath, 0o600);
+    }
+    this.db.prepare("DELETE FROM admin_audit_log WHERE id <= ?").run(spilled[spilled.length - 1].id);
+    if (this.onArchive) {
+      try {
+        this.onArchive();
+      } catch {
+        // 归档回调失败不影响审计写入；待传文件会在下次归档或重启时重试。
       }
-      this.trimAudit.run(this.maxAuditRows);
     }
   }
 

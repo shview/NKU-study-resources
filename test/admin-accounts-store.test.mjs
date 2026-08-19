@@ -101,3 +101,30 @@ test("normalizeAdminPermissions drops unknown points and hasAdminPermission resp
   store.updateSettings(account.id, { enabled: false });
   assert.equal(hasAdminPermission(store.getById(account.id), "content.read"), false, "disabled accounts hold no permissions");
 });
+
+test("audit batches archive only at threshold and keeps the newest rows", () => {
+  const { store } = tempStore();
+  store.close();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nkustudy-accounts-batch-"));
+  const archiveDir = path.join(dir, "archive");
+  let archiveCalls = 0;
+  const batched = new AdminAccountsStore({ dbPath: path.join(dir, "b.sqlite"), keepAuditRows: 3, archiveThreshold: 6, archiveDir, onArchive: () => { archiveCalls += 1; } });
+  for (let index = 1; index <= 5; index += 1) {
+    batched.audit({ username: `u${index}`, action: `act-${index}`, now: 1787000000000 + index });
+  }
+  assert.equal(batched.queryAudit({ pageSize: 50 }).total, 5, "below threshold nothing is archived");
+  assert.equal(fs.existsSync(archiveDir) ? fs.readdirSync(archiveDir).length : 0, 0);
+  assert.equal(archiveCalls, 0);
+  batched.audit({ username: "u6", action: "act-6", now: 1787000006000 });
+  const remaining = batched.queryAudit({ pageSize: 50 });
+  assert.equal(remaining.total, 3, "threshold keeps only the newest rows");
+  assert.equal(remaining.items[0].action, "act-6");
+  const files = fs.readdirSync(archiveDir);
+  assert.equal(files.length, 1, "one batch file per threshold crossing");
+  const payload = JSON.parse(fs.readFileSync(path.join(archiveDir, files[0]), "utf8"));
+  assert.equal(payload.rows.length, 3);
+  assert.deepEqual(payload.rows.map((row) => row.action), ["act-1", "act-2", "act-3"], "oldest batch is archived");
+  assert.equal(archiveCalls, 1, "archive callback fires once per batch");
+  batched.close();
+  store.close();
+});
