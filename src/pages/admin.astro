@@ -67,6 +67,34 @@ import "vditor/dist/index.css";
               <span class="muted" id="publish-status"></span>
             </div>
             <div class="admin-form admin-toolbar-settings" id="manifest-settings" style="margin-top: 14px;"></div>
+
+            <details class="card admin-collapsible-card" id="batch-tags-card" style="margin-top: 14px;">
+              <summary>批量标签管理（多选课程）</summary>
+              <div class="panel-body" style="margin-top: 14px;">
+                <div class="admin-form">
+                  <div class="filter-row">
+                    <label class="admin-field" style="flex:1;">
+                      <span>筛选课程（按名称/学期/分类）</span>
+                      <input id="batch-tags-filter" type="search" placeholder="输入关键词筛选，留空显示全部" autocomplete="off" />
+                    </label>
+                    <button class="button secondary" id="batch-tags-select-all" type="button">全选</button>
+                    <button class="button secondary" id="batch-tags-deselect-all" type="button">取消全选</button>
+                  </div>
+                  <div class="filter-row" style="margin-top: 8px;">
+                    <label class="admin-field" style="flex:1;">
+                      <span>要操作的标签（逗号分隔，如：推荐, 给分好）</span>
+                      <input id="batch-tags-input" type="text" placeholder="标签1, 标签2, …" autocomplete="off" />
+                    </label>
+                  </div>
+                  <div class="filter-row" style="margin-top: 8px;">
+                    <button class="button" id="batch-tags-add" type="button">添加标签到选中课程</button>
+                    <button class="button secondary" id="batch-tags-remove" type="button">从选中课程移除标签</button>
+                    <span class="muted" id="batch-tags-status"></span>
+                  </div>
+                  <div id="batch-tags-list" style="margin-top: 10px; max-height: 300px; overflow-y: auto;"></div>
+                </div>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -852,6 +880,98 @@ import "vditor/dist/index.css";
       originalCourseUids = new Set(state.courses.map((course) => course.uid).filter(Boolean));
     }
 
+    // === 批量标签管理 ===
+    const batchTagsFilter = document.querySelector("#batch-tags-filter");
+    const batchTagsInput = document.querySelector("#batch-tags-input");
+    const batchTagsStatus = document.querySelector("#batch-tags-status");
+    const batchTagsList = document.querySelector("#batch-tags-list");
+    const batchTagsSelection = new Set();
+
+    function renderBatchTagList() {
+      const keyword = batchTagsFilter.value.trim().toLowerCase();
+      const courses = (state?.courses || []).filter((c) => {
+        if (!keyword) return true;
+        const text = `${c.title} ${c.term} ${c.group} ${(c.tags ?? []).join(" ")}`.toLowerCase();
+        return text.includes(keyword);
+      });
+      batchTagsList.innerHTML = "";
+      if (!courses.length) {
+        batchTagsList.innerHTML = '<p class="empty">没有匹配的课程</p>';
+        return;
+      }
+      for (const course of courses) {
+        const row = document.createElement("label");
+        row.className = "perm-check";
+        row.style.cssText = "display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line);cursor:pointer;";
+        const checked = batchTagsSelection.has(course.id);
+        const tagText = (course.tags ?? []).slice(0, 5).join("、") || "无标签";
+        row.innerHTML = `
+          <input type="checkbox" data-course-id="${escapeHtml(course.id)}" ${checked ? "checked" : ""} />
+          <b>${escapeHtml(course.title)}</b>
+          <span class="muted" style="font-size:0.82em;">${escapeHtml(course.term)} · ${escapeHtml(course.group)}</span>
+          <span class="muted" style="font-size:0.78em;margin-left:auto;">${escapeHtml(tagText)}</span>
+        `;
+        row.querySelector("input").addEventListener("change", (event) => {
+          if (event.target.checked) batchTagsSelection.add(course.id);
+          else batchTagsSelection.delete(course.id);
+        });
+        batchTagsList.append(row);
+      }
+    }
+
+    function parseBatchTags() {
+      return batchTagsInput.value.split(/[,，]/).map((t) => t.trim()).filter(Boolean).slice(0, 20);
+    }
+
+    async function runBatchTags(mode) {
+      const tags = parseBatchTags();
+      if (!tags.length) { batchTagsStatus.textContent = "请先填写标签"; return; }
+      if (!batchTagsSelection.size) { batchTagsStatus.textContent = "请先勾选课程"; return; }
+      const affected = [];
+      for (const course of state.courses || []) {
+        if (!batchTagsSelection.has(course.id)) continue;
+        const current = new Set(course.tags ?? []);
+        if (mode === "add") {
+          for (const t of tags) current.add(t);
+        } else {
+          for (const t of tags) current.delete(t);
+        }
+        course.tags = [...current].slice(0, 30);
+        course.updated = new Date().toISOString().slice(0, 10);
+        affected.push(course.title);
+      }
+      batchTagsStatus.textContent = `已${mode === "add" ? "添加" : "移除"} ${tags.join("、")} → ${affected.length} 门课程，正在发布…`;
+      try {
+        const data = await api("/manifest", {
+          method: "POST",
+          body: JSON.stringify(manifestWriteBody()),
+        });
+        acceptManifest(data);
+        renderTree();
+        renderEditor();
+        renderBatchTagList();
+        batchTagsStatus.textContent = `已完成：${affected.length} 门课程已${mode === "add" ? "添加" : "移除"}标签「${tags.join("、")}」并发布。`;
+      } catch (error) {
+        batchTagsStatus.textContent = `发布失败：${error.message}`;
+      }
+    }
+
+    batchTagsFilter?.addEventListener("input", renderBatchTagList);
+    document.querySelector("#batch-tags-select-all")?.addEventListener("click", () => {
+      for (const row of batchTagsList.querySelectorAll("input[type=checkbox]")) {
+        row.checked = true;
+        batchTagsSelection.add(row.dataset.courseId);
+      }
+    });
+    document.querySelector("#batch-tags-deselect-all")?.addEventListener("click", () => {
+      for (const row of batchTagsList.querySelectorAll("input[type=checkbox]")) {
+        row.checked = false;
+        batchTagsSelection.delete(row.dataset.courseId);
+      }
+    });
+    document.querySelector("#batch-tags-add")?.addEventListener("click", () => runBatchTags("add"));
+    document.querySelector("#batch-tags-remove")?.addEventListener("click", () => runBatchTags("remove"));
+
     function manifestWriteBody(extra = {}) {
       return manifestWriteBodyFor(state, extra);
     }
@@ -912,6 +1032,7 @@ import "vditor/dist/index.css";
       loginPanel.hidden = true;
       adminApp.hidden = false;
       renderManifestSettings();
+      if (typeof renderBatchTagList === "function") renderBatchTagList();
       renderTree();
       renderEditor();
     }
