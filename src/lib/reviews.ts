@@ -26,8 +26,16 @@ export type ReviewGroup = {
 
 export const reviews = readBuildData<ReviewStore>("reviews.json").reviews ?? [];
 
+function groupKeyPart(value: string) {
+  return String(value ?? "")
+    .replace(/\s+/g, "")
+    .replace(/[、，,．。：:；;·—\-_/\]/g, "")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")");
+}
+
 export function reviewKey(review: Pick<Review, "courseTitle" | "teacher">) {
-  return `${review.courseTitle}-${review.teacher}`;
+  return `${groupKeyPart(review.courseTitle)}-${groupKeyPart(review.teacher)}`;
 }
 
 export function reviewPath(key: string) {

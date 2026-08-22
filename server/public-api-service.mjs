@@ -110,6 +110,9 @@ export class PublicApiService {
       review_submission: {
         allow_custom_course: submissionOptions.allowCustomCourse === true,
         allow_custom_teacher: submissionOptions.allowCustomTeacher !== false,
+        min_length: Math.max(1, Number(this.reviewSubmissionService.readRules?.().minLength ?? 12)),
+        submission_open: this.reviewSubmissionService.readRules?.().submissionOpen !== false,
+        moderation_required: this.reviewSubmissionService.readRules?.().moderationRequired === true,
       },
     };
   }
