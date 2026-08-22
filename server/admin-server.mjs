@@ -16,6 +16,7 @@ import { manifestRevision, ManifestConflictError, ManifestService } from "./mani
 import { validateManifest } from "./manifest-schema.mjs";
 import { PersistentRateLimiter } from "./persistent-rate-limiter.mjs";
 import { createPublicApiHandler } from "./public-api-router.mjs";
+import { PublicApiError } from "./public-api-errors.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
 import { MpFavoritesService } from "./mp-favorites-service.mjs";
@@ -149,6 +150,22 @@ const reviewSubmissionService = new ReviewSubmissionService({
   actorHash: ipHash,
   nowIso,
   today,
+  validateCourseTitle: (courseTitle) => {
+    const manifestTitles = new Set((jsonStore.readSync(manifestPath).courses || []).map((course) => String(course.title)));
+    if (manifestTitles.has(courseTitle) || courseCatalog.find(courseTitle)) return;
+    throw new PublicApiError(400, "请从已有课程中选择（课程目录未收录该课程名）。", "COURSE_NOT_IN_CATALOG");
+  },
+  validateTeacher: (courseTitle, teacher) => {
+    const entry = courseCatalog.find(courseTitle);
+    if (!entry) {
+      throw new PublicApiError(400, "该课程不在课程目录中，请先从已有课程选择。", "COURSE_NOT_IN_CATALOG");
+    }
+    if (!entry.teachers.length) return;
+    const wanted = String(teacher || "").replace(/\s+/g, "");
+    if (!entry.teachers.some((name) => String(name).replace(/\s+/g, "") === wanted)) {
+      throw new PublicApiError(400, `请从该课程的授课教师中选择（${entry.teachers.slice(0, 30).join("、")}）。`, "TEACHER_NOT_IN_CATALOG");
+    }
+  },
 });
 const courseCatalog = new CourseCatalogService({ catalogPath: path.join(dataDir, "catalog.json") });
 const publicApiService = new PublicApiService({
@@ -989,6 +1006,7 @@ function defaultReviews() {
       hourlyLimit: 3,
       dailyLimit: 10,
       minLength: 12,
+      submissionOptions: { allowCustomCourse: false, allowCustomTeacher: true },
       announcement: "评价内容会先进入待审核。请尽量描述授课风格、作业考试情况与适合人群，避免人身攻击或泄露隐私。",
       notes: "",
     },

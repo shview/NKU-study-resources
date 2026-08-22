@@ -1767,6 +1767,8 @@ import "vditor/dist/index.css";
         numberField("每小时提交上限", rules.hourlyLimit ?? 3, (value) => { rules.hourlyLimit = value; }),
         numberField("每日提交上限", rules.dailyLimit ?? 10, (value) => { rules.dailyLimit = value; }),
         numberField("评价最少字数", rules.minLength ?? 12, (value) => { rules.minLength = value; }),
+        checkboxField("允许自定义课程名（关闭后只能从课程库/手册目录选课）", (rules.submissionOptions ??= {}).allowCustomCourse === true, (value) => { rules.submissionOptions.allowCustomCourse = value; }),
+        checkboxField("允许自定义教师名（关闭后只能从手册教师列表选）", (rules.submissionOptions ??= {}).allowCustomTeacher !== false, (value) => { rules.submissionOptions.allowCustomTeacher = value; }),
         markdownField("评价公告栏（支持 Markdown）", rules.announcement ?? "", (value) => { rules.announcement = value; }),
         markdownField("规则备注", rules.notes ?? "", (value) => { rules.notes = value; }, { height: 150 })
       );

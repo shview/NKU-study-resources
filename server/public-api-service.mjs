@@ -101,11 +101,16 @@ export class PublicApiService {
       .sort((left, right) => String(right.updated || "").localeCompare(String(left.updated || "")) || left.title.localeCompare(right.title, "zh-CN"))
       .slice(0, 8)
       .map((course) => ({ id: course.uid, title: String(course.title || "").slice(0, 120), summary: String(course.summary || "").slice(0, 500), updated: String(course.updated || "").slice(0, 80) }));
+    const submissionOptions = (this.reviewSubmissionService.readRules?.().submissionOptions ?? {});
     return {
       announcement: String(home.announcement || "").trim().slice(0, 2000),
       hot_courses: hotCourses,
       latest_updates: latestUpdates,
       trending: this.trending(manifest),
+      review_submission: {
+        allow_custom_course: submissionOptions.allowCustomCourse === true,
+        allow_custom_teacher: submissionOptions.allowCustomTeacher !== false,
+      },
     };
   }
 
@@ -391,7 +396,8 @@ export class PublicApiService {
     } else {
       throw new PublicApiError(404, "课程不存在。", "COURSE_NOT_FOUND");
     }
-    if (catalogCourse) {
+    const allowCustomTeacher = (this.reviewSubmissionService.readRules?.().submissionOptions ?? {}).allowCustomTeacher !== false;
+    if (catalogCourse && !allowCustomTeacher) {
       const teacher = queryText(body?.teacher, 80);
       if (catalogCourse.teachers.length) {
         const wanted = String(teacher || "").replace(/\s+/g, "");

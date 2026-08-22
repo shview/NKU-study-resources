@@ -27,11 +27,15 @@ export class ReviewSubmissionService {
     nowIso = () => new Date().toISOString(),
     today = () => new Date().toISOString().slice(0, 10),
     createId = () => `review-${Date.now()}-${randomBytes(4).toString("hex")}`,
+    validateCourseTitle = null,
+    validateTeacher = null,
   } = {}) {
     if (!store || !reviewsPath || !readReviews || !consumeAttempt || !consumeSubmission || !actorHash) {
       throw new Error("ReviewSubmissionService dependencies are required.");
     }
     this.store = store;
+    this.validateCourseTitle = validateCourseTitle;
+    this.validateTeacher = validateTeacher;
     this.reviewsPath = reviewsPath;
     this.readReviews = readReviews;
     this.consumeAttempt = consumeAttempt;
@@ -46,6 +50,10 @@ export class ReviewSubmissionService {
     if (!this.consumeAttempt(clientIp)) {
       throw new PublicApiError(429, "请求太频繁，请稍后再试。", "RATE_LIMITED");
     }
+  }
+
+  readRules() {
+    return (this.readReviews() || {}).rules || {};
   }
 
   async submit(input, { clientIp, userAgent, userId = null } = {}) {
@@ -67,6 +75,13 @@ export class ReviewSubmissionService {
     }
     if (!this.consumeSubmission(clientIp, rules)) {
       throw new PublicApiError(429, "提交太频繁，请稍后再试。", "RATE_LIMITED");
+    }
+    const options = rules.submissionOptions || {};
+    if (options.allowCustomCourse === false && this.validateCourseTitle) {
+      this.validateCourseTitle(courseTitle);
+    }
+    if (options.allowCustomTeacher === false && this.validateTeacher) {
+      this.validateTeacher(courseTitle, teacher);
     }
 
     const keywordFilter = rules.keywordFilter || {};

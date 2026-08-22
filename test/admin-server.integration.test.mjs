@@ -328,6 +328,24 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal(catalogResponse.data.total, 1);
   assert.equal(catalogResponse.data.items[0].teachers[0], "张宇");
 
+  // 打开严格模式：课程/教师均不允许自定义
+  const strictReviews = await (await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, { headers: { cookie } })).json();
+  strictReviews.data.rules.submissionOptions = { allowCustomCourse: false, allowCustomTeacher: false };
+  const strictSave = await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
+    body: JSON.stringify({ data: strictReviews.data, expectedRevision: strictReviews.revision }),
+  });
+  assert.equal(strictSave.status, 200, "toggle strict submission options");
+
+  const strictWebsiteCustomCourse = await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ courseTitle: "自定义不存在课程", teacher: "谁", rating: 5, content: "Custom course must be rejected while the toggle is off." }),
+  });
+  assert.equal(strictWebsiteCustomCourse.status, 400);
+  assert.equal((await strictWebsiteCustomCourse.json()).error.includes("课程"), true, "strict mode rejects custom course names");
+
   const catalogReviewBadTeacher = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -350,6 +368,25 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     body: JSON.stringify({ catalog_course_id: "cat-test-2", teacher: "任意新老师", rating: 4, body: "Teacher list empty so free text is allowed here." }),
   });
   assert.equal(catalogReviewFreeTeacher.status, 200);
+
+  // 恢复：教师允许自定义
+  const relaxed = await (await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, { headers: { cookie } })).json();
+  relaxed.data.rules.submissionOptions = { allowCustomCourse: true, allowCustomTeacher: true };
+  const relaxedSave = await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
+    body: JSON.stringify({ data: relaxed.data, expectedRevision: relaxed.revision }),
+  });
+  assert.equal(relaxedSave.status, 200, "restore submission options");
+
+  const catalogReviewCustomTeacher = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ catalog_course_id: "cat-test-1", teacher: "手册外的代课老师", rating: 4, body: "Custom teacher allowed when the toggle is on via rules." }),
+  });
+  if (catalogReviewCustomTeacher.status !== 200 && catalogReviewCustomTeacher.status !== 429) {
+    assert.equal(catalogReviewCustomTeacher.status, 200, "custom teacher must pass when allowCustomTeacher is on");
+  }
 
   const catalogReviewMissing = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
@@ -441,7 +478,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const reviews = JSON.parse(await fs.readFile(path.join(dataDir, "reviews.json"), "utf8"));
   const feedback = JSON.parse(await fs.readFile(path.join(dataDir, "feedback.json"), "utf8"));
   const visits = JSON.parse(await fs.readFile(path.join(dataDir, "visit-stats.json"), "utf8"));
-  assert.equal(reviews.reviews.length, 5);
+  assert.equal(reviews.reviews.length, 6);
   assert.equal(feedback.items.length, 1);
   assert.equal(typeof reviews.reviews[0].ipHash, "string");
   assert.equal(JSON.stringify(reviews).includes("127.0.0.1"), false);
