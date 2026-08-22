@@ -48,6 +48,15 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     await fs.copyFile(path.join(fixtureDir, name), path.join(dataDir, name));
   }
   const port = await freePort();
+  await fs.writeFile(path.join(dataDir, "catalog.json"), JSON.stringify({
+    version: 1,
+    updated: "2026-08-22",
+    sources: ["test"],
+    courses: [
+      { id: "cat-test-1", name: "泥人张百年技艺传承与经营实践", aliases: [], categories: ["通识选修课"], modules: ["艺术审美与文化思辨"], teachers: ["张宇"], terms: ["2025-2026-1"] },
+      { id: "cat-test-2", name: "人工智能与创新", aliases: [], categories: ["人工智能学院"], modules: [], teachers: [], terms: ["2025-2026-1"] },
+    ],
+  }), "utf8");
   const wxMock = http.createServer((req, res) => {
     const code = new URL(req.url || "/", "http://127.0.0.1").searchParams.get("js_code");
     res.setHeader("content-type", "application/json");
@@ -314,6 +323,42 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal(myReviews.data.items[0].teacher_name, "Fixture bound teacher");
   assert.equal(JSON.stringify(myReviews.data.items[0]).includes("ipHash"), false);
 
+  const catalogResponse = await (await fetch(`http://127.0.0.1:${port}/api/v1/catalog?q=泥人张`)).json();
+  assert.equal(catalogResponse.code, 0);
+  assert.equal(catalogResponse.data.total, 1);
+  assert.equal(catalogResponse.data.items[0].teachers[0], "张宇");
+
+  const catalogReviewBadTeacher = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ catalog_course_id: "cat-test-1", teacher: "不存在老师", rating: 5, body: "Catalog validation test content long enough." }),
+  });
+  assert.equal(catalogReviewBadTeacher.status, 400);
+  assert.equal((await catalogReviewBadTeacher.json()).code, "TEACHER_NOT_IN_CATALOG");
+
+  const catalogReviewOk = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ catalog_course_id: "cat-test-1", teacher: "张宇", rating: 5, body: "Catalog course review content long enough for validation." }),
+  });
+  assert.equal(catalogReviewOk.status, 200);
+  assert.equal((await catalogReviewOk.json()).data.pending, true);
+
+  const catalogReviewFreeTeacher = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ catalog_course_id: "cat-test-2", teacher: "任意新老师", rating: 4, body: "Teacher list empty so free text is allowed here." }),
+  });
+  assert.equal(catalogReviewFreeTeacher.status, 200);
+
+  const catalogReviewMissing = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ catalog_course_id: "cat-nope", teacher: "张宇", rating: 5, body: "Missing catalog course must be rejected." }),
+  });
+  assert.equal(catalogReviewMissing.status, 404);
+  assert.equal((await catalogReviewMissing.json()).code, "CATALOG_COURSE_NOT_FOUND");
+
   const notifyState = await (await fetch(`http://127.0.0.1:${port}/admin-api/notify-settings`, { headers: { cookie } })).json();
   assert.equal(notifyState.ok, true);
   assert.equal(Array.isArray(notifyState.data.bots), true);
@@ -396,7 +441,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const reviews = JSON.parse(await fs.readFile(path.join(dataDir, "reviews.json"), "utf8"));
   const feedback = JSON.parse(await fs.readFile(path.join(dataDir, "feedback.json"), "utf8"));
   const visits = JSON.parse(await fs.readFile(path.join(dataDir, "visit-stats.json"), "utf8"));
-  assert.equal(reviews.reviews.length, 3);
+  assert.equal(reviews.reviews.length, 5);
   assert.equal(feedback.items.length, 1);
   assert.equal(typeof reviews.reviews[0].ipHash, "string");
   assert.equal(JSON.stringify(reviews).includes("127.0.0.1"), false);

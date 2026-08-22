@@ -19,6 +19,7 @@ import { createPublicApiHandler } from "./public-api-router.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
 import { MpFavoritesService } from "./mp-favorites-service.mjs";
+import { CourseCatalogService } from "./course-catalog-service.mjs";
 import { FeishuNotifyService } from "./feishu-notify-service.mjs";
 import { readJsonBody } from "./read-json-body.mjs";
 import { mergeCourseR2Discovery, mergeR2Discoveries } from "./r2-sync-merge.mjs";
@@ -149,12 +150,14 @@ const reviewSubmissionService = new ReviewSubmissionService({
   nowIso,
   today,
 });
+const courseCatalog = new CourseCatalogService({ catalogPath: path.join(dataDir, "catalog.json") });
 const publicApiService = new PublicApiService({
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
   readHome,
   readGuides,
   readVisitStats: readVisitStats,
+  courseCatalog,
   reviewSubmissionService,
   publicResourceOrigin: process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top",
   guideCorrectionUrl: process.env.PUBLIC_GUIDE_CORRECTION_URL || "https://nkustudy.top/feedback",

@@ -17,6 +17,7 @@
 | `GET` | `/api/v1/health` | 公开 | 运行时数据健康检查 |
 | `GET` | `/api/v1/home` | 公开 | 小程序首页数据 |
 | `GET` | `/api/v1/search-index` | 公开 | 完整、版本化的四类搜索快照 |
+| `GET` | `/api/v1/catalog` | 公开 | 选课手册课程目录（课程+教师，支持 q 搜索与分页） |
 | `GET` | `/api/v1/guides` | 公开 | 指南列表、分类和分页 |
 | `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情、相关课程和纠错入口 |
 | `GET` | `/api/v1/courses` | 公开 | 搜索、筛选和分页课程 |
@@ -117,6 +118,13 @@
 6. 错误码：`AUTH_INVALID_CODE`（401，code 无效/过期）、`AUTH_RATE_LIMITED`（429）、
    `MP_AUTH_NOT_CONFIGURED`（503，服务端未配置微信密钥）、`MP_AUTH_UPSTREAM`（502，微信接口异常）。
 7. 登录接口限流：每 IP 每分钟 10 次、全局每分钟 240 次。
+
+### 课程目录与评价选课
+
+- `GET /api/v1/catalog?q=<关键词>&page=&page_size=`：来自教务选课手册的课程目录（课程名/开课单位/归属模块/授课教师/开设学期）；关键词同时匹配课程名与教师名。
+- `POST /api/v1/reviews` 支持两种课程定位：
+  - `course_id`：课程库（manifest）课程的 uid，教师为自由文本（兼容现状）；
+  - `catalog_course_id`：课程目录中的课程 id；此时教师必须从该课程的授课教师列表中选择，否则返回 `400 TEACHER_NOT_IN_CATALOG`（教师列表为空的课程允许自由填写）。
 
 ## 通用约定
 

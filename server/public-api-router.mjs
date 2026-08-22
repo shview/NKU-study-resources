@@ -42,6 +42,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       if (req.method === "GET" && url.pathname === "/api/v1/health") data = service.health();
       else if (req.method === "GET" && url.pathname === "/api/v1/home") data = service.home();
       else if (req.method === "GET" && url.pathname === "/api/v1/search-index") data = service.searchIndex();
+      else if (req.method === "GET" && url.pathname === "/api/v1/catalog") data = service.catalog(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);
       else if (req.method === "POST" && url.pathname === "/api/v1/auth/wechat") {

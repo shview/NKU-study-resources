@@ -55,7 +55,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true } = {}) {
+  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -64,6 +64,7 @@ export class PublicApiService {
     this.readHome = readHome;
     this.readGuides = readGuides;
     this.readVisitStats = readVisitStats;
+    this.courseCatalog = courseCatalog;
     this.reviewSubmissionService = reviewSubmissionService;
     this.publicResourceOrigin = publicResourceOrigin;
     this.guideCorrectionUrl = guideCorrectionUrl;
@@ -363,13 +364,45 @@ export class PublicApiService {
     this.reviewSubmissionService.assertAttempt(clientIp);
   }
 
+  catalog(searchParams) {
+    if (!this.courseCatalog?.loaded) throw new PublicApiError(503, "课程目录暂未开放。", "CATALOG_NOT_CONFIGURED");
+    return {
+      summary: this.courseCatalog.summary(),
+      ...this.courseCatalog.search({
+        q: searchParams.get("q") || "",
+        page: searchParams.get("page"),
+        pageSize: searchParams.get("page_size"),
+      }),
+    };
+  }
+
   async submitReview(body, context) {
     const { manifest } = this.snapshot();
     const courseUid = queryText(body?.course_id, 80);
-    const course = manifest.courses.find((item) => item.uid === courseUid);
-    if (!course) throw new PublicApiError(404, "课程不存在。", "COURSE_NOT_FOUND");
+    let course = manifest.courses.find((item) => item.uid === courseUid);
+    let courseTitle;
+    let catalogCourse = null;
+    if (!course && this.courseCatalog?.loaded && body?.catalog_course_id) {
+      catalogCourse = this.courseCatalog.find(queryText(body.catalog_course_id, 80));
+      if (!catalogCourse) throw new PublicApiError(404, "课程目录中不存在该课程。", "CATALOG_COURSE_NOT_FOUND");
+      courseTitle = catalogCourse.name;
+    } else if (course) {
+      courseTitle = course.title;
+    } else {
+      throw new PublicApiError(404, "课程不存在。", "COURSE_NOT_FOUND");
+    }
+    if (catalogCourse) {
+      const teacher = queryText(body?.teacher, 80);
+      if (catalogCourse.teachers.length) {
+        const wanted = String(teacher || "").replace(/\s+/g, "");
+        const hit = catalogCourse.teachers.find((t) => String(t).replace(/\s+/g, "") === wanted);
+        if (!hit) {
+          throw new PublicApiError(400, `请从该课程的授课教师中选择（${catalogCourse.teachers.slice(0, 30).join("、")}）。`, "TEACHER_NOT_IN_CATALOG");
+        }
+      }
+    }
     const result = await this.reviewSubmissionService.submit({
-      courseTitle: course.title,
+      courseTitle,
       teacher: body?.teacher,
       rating: body?.rating,
       tags: body?.tags,

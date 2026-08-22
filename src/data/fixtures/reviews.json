@@ -1,3 +1,7 @@
 {
-  "reviews": []
+  "reviews": [],
+  "rules": {
+    "hourlyLimit": 10,
+    "dailyLimit": 20
+  }
 }
