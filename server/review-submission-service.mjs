@@ -56,6 +56,15 @@ export class ReviewSubmissionService {
     return (this.readReviews() || {}).rules || {};
   }
 
+  submissionHint() {
+    const rules = this.readRules();
+    const options = rules.submissionOptions || {};
+    if (options.allowCustomCourse === false) {
+      return "课程需从已有课程中选择；如发现课程或教师信息有误、缺失，请到「问题反馈」页提交，我们会尽快补充。";
+    }
+    return "课程与教师名称可直接填写，不存在时会自动创建新的评价条目。";
+  }
+
   async submit(input, { clientIp, userAgent, userId = null } = {}) {
     const data = this.readReviews();
     const rules = data.rules || {};

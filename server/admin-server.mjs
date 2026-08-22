@@ -204,8 +204,16 @@ const feishuNotify = new FeishuNotifyService({
   readSecrets: async () => (fs.existsSync(notifySecretsPath) ? notifySecretStore.readSync(notifySecretsPath) : {}),
   writeSecrets: async (data) => notifySecretStore.write(notifySecretsPath, data, { mode: 0o600 }),
 });
+function submissionHint(rules) {
+  const options = (rules || {}).submissionOptions || {};
+  if (options.allowCustomCourse === false) {
+    return "课程需从已有课程中选择；如发现课程或教师信息有误、缺失，请到「问题反馈」页提交，我们会尽快补充。";
+  }
+  return "课程与教师名称可直接填写，不存在时会自动创建新的评价条目。";
+}
+
 async function notifyModerators(payload = {}) {
-  const typeLabels = { "review.pending": "新评价待审", "feedback.pending": "新反馈待处理", "resource-report": "资源失效反馈" };
+  const typeLabels = { "review.pending": payload.pending === false ? "新评价（免审已公开）" : "新评价待审", "feedback.pending": "新反馈待处理", "resource-report": "资源失效反馈" };
   const title = typeLabels[payload.type] || "待处理通知";
   const lines = [];
   if (payload.type === "review.pending") {
@@ -1347,6 +1355,16 @@ async function handleReviewSubmit(req, res) {
   const ip = clientIp(req);
   reviewSubmissionService.assertAttempt(ip);
   const result = await reviewSubmissionService.submit(await readPublicBody(req), { clientIp: ip, userAgent: req.headers["user-agent"] });
+  if (result.notify) {
+    Promise.resolve(notifyModerators({
+      type: "review.pending",
+      title: result.notify.title,
+      teacher: result.notify.teacher,
+      rating: result.notify.rating,
+      content: result.notify.content,
+      pending: result.pending,
+    })).catch(() => {});
+  }
   json(res, 200, { ok: true, pending: result.pending });
 }
 
@@ -1978,7 +1996,8 @@ const server = createServer(async (req, res) => {
     if (await handlePublicApi(req, res, url)) return;
     if (url.pathname.startsWith("/review-api/")) {
       if (req.method === "GET" && url.pathname === "/review-api/reviews") {
-        json(res, 200, { ok: true, reviews: approvedReviews(), rules: readReviews().rules });
+        const publicRules = readReviews().rules;
+        json(res, 200, { ok: true, reviews: approvedReviews(), rules: { ...publicRules, submission_hint: submissionHint(publicRules) } });
         return;
       }
       if (req.method === "POST" && url.pathname === "/review-api/submit") {

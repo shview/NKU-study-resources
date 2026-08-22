@@ -39,6 +39,7 @@ import "vditor/dist/index.css";
       </div>
       <div class="panel-body">
         <div class="review-announcement" id="review-announcement"></div>
+        <p class="muted review-submission-hint" id="review-submission-hint" hidden></p>
         <form class="review-form" id="review-form">
           <label class="admin-field">
             <span>课程</span>
@@ -398,6 +399,12 @@ import "vditor/dist/index.css";
         if (contentHint) contentHint.textContent = `最短允许 ${minLength} 字；内容会先进入审核。`;
         announcement.innerHTML = markdownToHtml(announcementText);
         announcement.hidden = !announcementText;
+        const hint = data.rules?.submission_hint || "";
+        const hintEl = document.querySelector("#review-submission-hint");
+        if (hintEl) {
+          hintEl.textContent = hint;
+          hintEl.hidden = !hint;
+        }
         const dismissed = localStorage.getItem("nkustudy-review-announcement-dismissed") === announcementText;
         publicAnnouncement.innerHTML = markdownToHtml(announcementText);
         publicAnnouncementPanel.dataset.announcement = announcementText;
