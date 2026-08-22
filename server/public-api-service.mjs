@@ -75,7 +75,7 @@ export class PublicApiService {
     const manifest = this.readManifest();
     const reviewData = this.readReviews();
     if (!manifest || !Array.isArray(manifest.courses)) throw new Error("Runtime course data is unavailable.");
-    const groups = buildReviewGroups(manifest, reviewData);
+    const groups = buildReviewGroups(manifest, reviewData, this.courseCatalog);
     const normalizedGuides = normalizeGuideData(this.readGuides(), {
       courseIds: new Set(manifest.courses.map((course) => course.uid)),
       fallbackCorrectionUrl: this.guideCorrectionUrl,

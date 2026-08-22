@@ -200,3 +200,28 @@ test("mini-program review body maps into the shared submission service", async (
   assert.equal(submissions[1].input.content, "足够长的课程评价正文内容。");
   assert.equal(Object.hasOwn(submissions[1].input, "anonymous"), false);
 });
+
+test("review groups merge punctuation variants and resolve catalog aliases", async () => {
+  const { buildReviewGroups } = await import("../server/public-api-dto.mjs");
+  const manifest = { courses: [{ id: "c1", uid: "u1", title: "光、视觉与艺术" }] };
+  const reviewData = {
+    reviews: [
+      { id: "r1", courseTitle: "光、视觉与艺术", teacher: "张三", rating: 5, content: "a", status: "approved", createdAt: "2026-01-01" },
+      { id: "r2", courseTitle: "光，视觉与艺术", teacher: "张三", rating: 4, content: "b", status: "approved", createdAt: "2026-01-02" },
+      { id: "r3", courseTitle: "人工智能与创新 （C++）", teacher: "李四", rating: 5, content: "c", status: "approved", createdAt: "2026-01-03" },
+      { id: "r4", courseTitle: "人工智能与创新（C++）", teacher: "李四", rating: 3, content: "d", status: "approved", createdAt: "2026-01-04" },
+    ],
+  };
+  const groups = buildReviewGroups(manifest, reviewData);
+  assert.equal(groups.length, 2, "punctuation variants merge into one group each");
+  const guang = groups.find((g) => g.courseTitle === "光、视觉与艺术");
+  assert.equal(guang.reviews.length, 2);
+  assert.equal(guang.course?.id, "c1", "direct title attaches the course");
+
+  // 目录别名解析挂接
+  const fakeCatalog = { find: (name) => (name.includes("视觉") ? { name: "光、视觉与艺术", aliases: [] } : null) };
+  const manifest2 = { courses: [{ id: "c2", uid: "u2", title: "光、视觉与艺术" }] };
+  const reviewData2 = { reviews: [{ id: "r5", courseTitle: "光，视觉与艺术", teacher: "王五", rating: 5, content: "e", status: "approved", createdAt: "2026-01-05" }] };
+  const groups2 = buildReviewGroups(manifest2, reviewData2, fakeCatalog);
+  assert.equal(groups2[0].course?.id, "c2", "catalog alias resolution attaches unmatched titles");
+});

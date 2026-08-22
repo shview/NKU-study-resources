@@ -31,9 +31,19 @@ export function normalizeReviewKeyPart(value) {
   return text(value, 120);
 }
 
+// 分组键专用：抹平空格与顿号/逗号/中点等符号差异，
+// 避免同一门课因「、/，」「多一个空格」被拆成两个评价组。
+function groupKeyPart(value) {
+  return normalizeReviewKeyPart(value)
+    .replace(/\s+/g, "")
+    .replace(/[、，,．。：:；;·—\-_/\\]/g, "")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")");
+}
+
 export function reviewGroupKey(courseTitle, teacher) {
   return createHash("sha256")
-    .update(`${normalizeReviewKeyPart(courseTitle)}\0${normalizeReviewKeyPart(teacher)}`, "utf8")
+    .update(`${groupKeyPart(courseTitle)}\0${groupKeyPart(teacher)}`, "utf8")
     .digest("base64url")
     .slice(0, 24);
 }
@@ -100,12 +110,24 @@ export function publicReviewDto(review) {
   };
 }
 
-export function buildReviewGroups(manifest, reviewData) {
+export function buildReviewGroups(manifest, reviewData, courseCatalog = null) {
   const coursesByTitle = new Map();
   for (const course of manifest.courses || []) {
     const title = normalizeReviewKeyPart(course.title);
     if (!coursesByTitle.has(title)) coursesByTitle.set(title, course);
   }
+  const resolveCourse = (courseTitle) => {
+    const direct = coursesByTitle.get(courseTitle);
+    if (direct) return direct;
+    // 经课程目录解析：评价课程名 -> 目录条目（含别名） -> 再尝试其规范名与别名匹配课程库
+    const entry = courseCatalog?.find?.(courseTitle);
+    if (!entry) return null;
+    for (const candidate of [entry.name, ...(entry.aliases || [])]) {
+      const hit = coursesByTitle.get(normalizeReviewKeyPart(candidate));
+      if (hit) return hit;
+    }
+    return null;
+  };
   const groups = new Map();
   for (const review of reviewData?.reviews || []) {
     if (!approvedReview(review)) continue;
@@ -113,7 +135,7 @@ export function buildReviewGroups(manifest, reviewData) {
     const teacher = normalizeReviewKeyPart(review.teacher);
     if (!courseTitle || !teacher) continue;
     const key = reviewGroupKey(courseTitle, teacher);
-    const course = coursesByTitle.get(courseTitle) || null;
+    const course = resolveCourse(courseTitle);
     if (!groups.has(key)) {
       groups.set(key, { key, courseTitle, teacher, course, reviews: [] });
     }
