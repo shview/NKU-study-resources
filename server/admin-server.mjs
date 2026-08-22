@@ -1252,7 +1252,7 @@ function publicReview(review) {
 }
 
 function publicFeedback(item) {
-  const { ipHash: _ipHash, userAgent: _userAgent, contact: _contact, resourceRef: _resourceRef, ...safe } = item;
+  const { ipHash: _ipHash, userAgent: _userAgent, contact: _contact, resourceRef: _resourceRef, user_id: _userId, ...safe } = item;
   return safe;
 }
 
@@ -1295,6 +1295,7 @@ function approvedReviews() {
 
 async function handleFeedbackSubmit(req, res) {
   const ip = clientIp(req);
+  const authUser = mpAuthService.verifyToken(req.headers.authorization);
   if (!consumeLayeredAttempt("feedback-attempt", ip, { perIp: 30, global: 1_000 })) {
     json(res, 429, { ok: false, error: "请求太频繁，请稍后再试。" });
     req.resume();
@@ -1337,6 +1338,7 @@ async function handleFeedbackSubmit(req, res) {
       type,
       contact,
       ...(resourceRef ? { resourceRef } : {}),
+      ...(authUser ? { user_id: authUser.id } : {}),
       status: "open",
       hidden: false,
       createdAt: nowIso(),
