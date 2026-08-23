@@ -89,8 +89,12 @@ export function planR2ManifestMutation(currentManifest, nextManifest, {
     if (!uid || movedUids.has(uid)) throw badPath("R2 moves", "must contain each changed course UID exactly once.");
     const expected = changed.get(uid);
     if (!expected) throw badPath("R2 move", `for ${uid} does not correspond to a basePath change.`);
-    const oldBasePath = strictR2Path(move.oldBasePath, `Move source for ${uid}`);
-    const newBasePath = strictR2Path(move.newBasePath, `Move target for ${uid}`);
+    // Course basePath values carry one trailing slash; accept that spelling for
+    // move sources/targets and normalize before the strict canonical check.
+    const moveSource = typeof move?.oldBasePath === "string" && move.oldBasePath.endsWith("/") ? move.oldBasePath.slice(0, -1) : move?.oldBasePath;
+    const moveTarget = typeof move?.newBasePath === "string" && move.newBasePath.endsWith("/") ? move.newBasePath.slice(0, -1) : move?.newBasePath;
+    const oldBasePath = strictR2Path(moveSource, `Move source for ${uid}`);
+    const newBasePath = strictR2Path(moveTarget, `Move target for ${uid}`);
     if (oldBasePath !== expected.oldBasePath || newBasePath !== expected.newBasePath) {
       throw badPath("R2 move", `for ${uid} must exactly match the loaded and proposed basePath.`);
     }

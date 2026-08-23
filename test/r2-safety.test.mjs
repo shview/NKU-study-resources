@@ -116,6 +116,13 @@ test("R2 mutation plan requires a one-to-one move for every basePath change", ()
   assert.deepEqual(plan.moves.map(({ sourcePrefix, targetPrefix }) => ({ sourcePrefix, targetPrefix })), [
     { sourcePrefix: "resources/web/only", targetPrefix: "resources/moved/only" },
   ]);
+  // 管理端 basePath 带尾斜杠的写法同样接受（归一化后仍需与库内 basePath 精确对应）
+  const trailingSlashPlan = planR2ManifestMutation(current, next, {
+    moves: [{ courseUid: existing.uid, oldBasePath: "web/only/", newBasePath: "moved/only/" }],
+  });
+  assert.deepEqual(trailingSlashPlan.moves.map(({ sourcePrefix, targetPrefix }) => ({ sourcePrefix, targetPrefix })), [
+    { sourcePrefix: "resources/web/only", targetPrefix: "resources/moved/only" },
+  ]);
   assert.throws(() => planR2ManifestMutation(current, next, {
     moves: [
       { courseUid: existing.uid, oldBasePath: "web/only", newBasePath: "moved/only" },

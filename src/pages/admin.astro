@@ -87,8 +87,15 @@ import "vditor/dist/index.css";
                     </label>
                   </div>
                   <div class="filter-row" style="margin-top: 8px;">
+                    <label class="admin-field" style="flex:1;">
+                      <span>重命名：把左侧「原标签」换成上方填写的标签（仅勾选课程）</span>
+                      <input id="batch-tags-rename-from" type="text" placeholder="原标签，如：给分 一般" autocomplete="off" />
+                    </label>
+                  </div>
+                  <div class="filter-row" style="margin-top: 8px;">
                     <button class="button" id="batch-tags-add" type="button">添加标签到选中课程</button>
                     <button class="button secondary" id="batch-tags-remove" type="button">从选中课程移除标签</button>
+                    <button class="button secondary" id="batch-tags-rename" type="button">把原标签改成新标签</button>
                     <span class="muted" id="batch-tags-status"></span>
                   </div>
                   <div id="batch-tags-list" style="margin-top: 10px; max-height: 300px; overflow-y: auto;"></div>
@@ -162,7 +169,24 @@ import "vditor/dist/index.css";
                         <label class="perm-check"><input id="review-select-all" type="checkbox" /> 全选本页</label>
                         <button class="button secondary" id="review-batch-approve" type="button">批量通过</button>
                         <button class="button secondary" id="review-batch-hide" type="button">批量隐藏</button>
+                        <button class="button secondary" id="review-batch-merge" type="button">归并选中到…</button>
                         <span class="muted" id="review-batch-status"></span>
+                      </div>
+                      <div class="admin-form" id="review-merge-panel" hidden style="margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px;">
+                        <label class="admin-field" style="flex:1;">
+                          <span>目标课程名（从课程库选择即可绑定到该课程）</span>
+                          <input id="review-merge-course" list="manifest-course-titles" placeholder="如：高等数学A（上）" autocomplete="off" />
+                        </label>
+                        <label class="admin-field" style="flex:1;">
+                          <span>目标老师</span>
+                          <input id="review-merge-teacher" list="review-teacher-options" placeholder="如：赵红梅" autocomplete="off" />
+                        </label>
+                        <small class="muted" style="grid-column: 1 / -1;">归并会把勾选评价的课程名和老师改成上面的目标值；目标已存在时会并入同一评价组。</small>
+                        <div class="filter-row" style="grid-column: 1 / -1;">
+                          <button class="button" id="review-merge-confirm" type="button">确认归并</button>
+                          <button class="button secondary" id="review-merge-cancel" type="button">取消</button>
+                          <span class="muted" id="review-merge-status"></span>
+                        </div>
                       </div>
                       <div class="review-admin-list" id="review-admin-list" style="margin-top: 14px;"></div>
                     </div>
@@ -925,22 +949,41 @@ import "vditor/dist/index.css";
 
     async function runBatchTags(mode) {
       const tags = parseBatchTags();
-      if (!tags.length) { batchTagsStatus.textContent = "请先填写标签"; return; }
+      const renameFromInput = document.querySelector("#batch-tags-rename-from");
+      const sourceTags = mode === "rename"
+        ? (renameFromInput?.value || "").split(/[,，]/).map((t) => t.trim()).filter(Boolean).slice(0, 20)
+        : [];
+      if (!tags.length) { batchTagsStatus.textContent = mode === "rename" ? "请先在上方填写新标签" : "请先填写标签"; return; }
+      if (mode === "rename" && !sourceTags.length) { batchTagsStatus.textContent = "请先填写要替换的原标签"; return; }
       if (!batchTagsSelection.size) { batchTagsStatus.textContent = "请先勾选课程"; return; }
       const affected = [];
+      let touchedCount = 0;
       for (const course of state.courses || []) {
         if (!batchTagsSelection.has(course.id)) continue;
         const current = new Set(course.tags ?? []);
         if (mode === "add") {
           for (const t of tags) current.add(t);
-        } else {
+          touchedCount += 1;
+        } else if (mode === "remove") {
           for (const t of tags) current.delete(t);
+          touchedCount += 1;
+        } else {
+          const present = sourceTags.filter((t) => current.has(t));
+          if (!present.length) continue;
+          for (const t of present) current.delete(t);
+          for (const t of tags) current.add(t);
+          touchedCount += 1;
         }
         course.tags = [...current].slice(0, 30);
         course.updated = new Date().toISOString().slice(0, 10);
         affected.push(course.title);
       }
-      batchTagsStatus.textContent = `已${mode === "add" ? "添加" : "移除"} ${tags.join("、")} → ${affected.length} 门课程，正在发布…`;
+      if (mode === "rename" && !touchedCount) {
+        batchTagsStatus.textContent = `勾选的课程都没有标签「${sourceTags.join("、")}」，未做修改。`;
+        return;
+      }
+      const actionLabel = mode === "add" ? "添加" : mode === "remove" ? "移除" : `把「${sourceTags.join("、")}」改成`;
+      batchTagsStatus.textContent = `已${actionLabel} ${tags.join("、")} → ${touchedCount} 门课程，正在发布…`;
       try {
         const data = await api("/manifest", {
           method: "POST",
@@ -950,7 +993,10 @@ import "vditor/dist/index.css";
         renderTree();
         renderEditor();
         renderBatchTagList();
-        batchTagsStatus.textContent = `已完成：${affected.length} 门课程已${mode === "add" ? "添加" : "移除"}标签「${tags.join("、")}」并发布。`;
+        const doneLabel = mode === "rename"
+          ? `已完成：${touchedCount}/${batchTagsSelection.size} 门课程把「${sourceTags.join("、")}」改成「${tags.join("、")}」并发布。`
+          : `已完成：${touchedCount} 门课程已${mode === "add" ? "添加" : "移除"}标签「${tags.join("、")}」并发布。`;
+        batchTagsStatus.textContent = doneLabel;
       } catch (error) {
         batchTagsStatus.textContent = `发布失败：${error.message}`;
       }
@@ -971,6 +1017,7 @@ import "vditor/dist/index.css";
     });
     document.querySelector("#batch-tags-add")?.addEventListener("click", () => runBatchTags("add"));
     document.querySelector("#batch-tags-remove")?.addEventListener("click", () => runBatchTags("remove"));
+    document.querySelector("#batch-tags-rename")?.addEventListener("click", () => runBatchTags("rename"));
 
     function manifestWriteBody(extra = {}) {
       return manifestWriteBodyFor(state, extra);
@@ -1877,6 +1924,29 @@ import "vditor/dist/index.css";
       }
     }
 
+    function ensureReviewDatalists(manifestTitleIndex) {
+      let titlesList = document.querySelector("#manifest-course-titles");
+      if (!titlesList) {
+        titlesList = document.createElement("datalist");
+        titlesList.id = "manifest-course-titles";
+        document.body.append(titlesList);
+      }
+      titlesList.innerHTML = [...manifestTitleIndex.keys()]
+        .sort((a, b) => a.localeCompare(b, "zh-CN"))
+        .map((title) => `<option value="${escapeHtml(title)}"></option>`)
+        .join("");
+      let teachersList = document.querySelector("#review-teacher-options");
+      if (!teachersList) {
+        teachersList = document.createElement("datalist");
+        teachersList.id = "review-teacher-options";
+        document.body.append(teachersList);
+      }
+      const teachers = new Set((reviewState?.reviews ?? []).map((review) => String(review.teacher || "").trim()).filter(Boolean));
+      teachersList.innerHTML = [...teachers].sort((a, b) => a.localeCompare(b, "zh-CN"))
+        .map((teacher) => `<option value="${escapeHtml(teacher)}"></option>`)
+        .join("");
+    }
+
     function renderReviewAdmin() {
       if (!reviewState) return;
       const rules = reviewState.rules ??= {};
@@ -1914,6 +1984,14 @@ import "vditor/dist/index.css";
       const statusFilter = reviewStatusFilter.value;
       const sidebarKeyword = reviewAdminSidebarSearch.value.trim().toLowerCase();
       const groupKeyOf = (review) => `${review.courseTitle || "未命名课程"} · ${review.teacher || "未填写老师"}`;
+      // 与服务端 normalizeReviewKeyPart 一致：trim + 截断，用于评价名 -> 课程库的绑定解析
+      const reviewTitleKey = (value) => String(value ?? "").trim().slice(0, 120);
+      const manifestTitleIndex = new Map();
+      for (const course of state?.courses || []) {
+        const key = reviewTitleKey(course.title);
+        if (key && !manifestTitleIndex.has(key)) manifestTitleIndex.set(key, course);
+      }
+      ensureReviewDatalists(manifestTitleIndex);
       const matchesStatus = (review) =>
         statusFilter === "all" ||
         (statusFilter === "hidden" && review.hidden) ||
@@ -1953,6 +2031,7 @@ import "vditor/dist/index.css";
       const pageReviews = reviews.slice((reviewAdminPage - 1) * adminPageSize, reviewAdminPage * adminPageSize);
 
       for (const review of pageReviews) {
+        const boundCourse = manifestTitleIndex.get(reviewTitleKey(review.courseTitle)) || null;
         const item = document.createElement("div");
         item.className = "review-admin-item";
         item.innerHTML = `
@@ -1963,17 +2042,30 @@ import "vditor/dist/index.css";
             <span class="pill">${escapeHtml(review.teacher || "")}</span>
             <span class="pill">${"★".repeat(Number(review.rating || 0))}</span>
             ${review.user_id ? '<span class="pill">已绑定用户</span>' : ""}
+            <span class="pill" title="${boundCourse ? escapeHtml(`${boundCourse.term} · ${boundCourse.group}`) : "评价课程名与课程库标题不一致（精确匹配），公开端不挂在任何课程下"}">${boundCourse ? `绑定课程：${escapeHtml(boundCourse.title)}` : "未绑定课程"}</span>
           </div>
           <p>${escapeHtml(review.content || "")}</p>
           <small class="muted">${escapeHtml(review.createdAt || "")}</small>
         `;
         const editForm = document.createElement("div");
         editForm.className = "admin-form admin-inline-editor";
+        const courseField = field("课程（从课程库选择即可绑定）", review.courseTitle ?? "", (value) => {
+          review.courseTitle = value.trim();
+          review.updatedAt = new Date().toISOString();
+        });
+        const courseInput = courseField.querySelector("input");
+        courseInput?.setAttribute("list", "manifest-course-titles");
+        const bindingHint = document.createElement("small");
+        bindingHint.className = "muted";
+        bindingHint.textContent = boundCourse ? `当前绑定：${boundCourse.term} · ${boundCourse.group} · ${boundCourse.title}` : "当前未绑定课程：课程名与课程库标题不一致。";
+        bindingHint.style.display = "block";
+        courseInput?.addEventListener("input", () => {
+          const hit = manifestTitleIndex.get(reviewTitleKey(courseInput.value));
+          bindingHint.textContent = hit ? `将绑定到：${hit.term} · ${hit.group} · ${hit.title}` : "未匹配到课程库课程（保存后公开端不挂课程）。";
+        });
+        courseField.append(bindingHint);
         editForm.append(
-          field("课程", review.courseTitle ?? "", (value) => {
-            review.courseTitle = value.trim();
-            review.updatedAt = new Date().toISOString();
-          }),
+          courseField,
           field("老师", review.teacher ?? "", (value) => {
             review.teacher = value.trim();
             review.updatedAt = new Date().toISOString();
@@ -2779,10 +2871,15 @@ import "vditor/dist/index.css";
 
     function changedCourseDirectories() {
       const moves = [];
+      const directoryPath = (basePath) => String(basePath || "").replace(/\/+$/, "");
       for (const course of state.courses) {
         const oldBasePath = originalCourseBasePaths.get(course);
         if (!oldBasePath || oldBasePath === course.basePath) continue;
-        moves.push({ courseUid: course.uid, oldBasePath, newBasePath: course.basePath });
+        moves.push({
+          courseUid: course.uid,
+          oldBasePath: directoryPath(oldBasePath),
+          newBasePath: directoryPath(course.basePath),
+        });
       }
       return moves;
     }
@@ -3910,6 +4007,48 @@ import "vditor/dist/index.css";
     }
     document.querySelector("#review-batch-approve").addEventListener("click", () => runReviewBatch("approve"));
     document.querySelector("#review-batch-hide").addEventListener("click", () => runReviewBatch("hide"));
+
+    const reviewMergePanel = document.querySelector("#review-merge-panel");
+    const reviewMergeCourse = document.querySelector("#review-merge-course");
+    const reviewMergeTeacher = document.querySelector("#review-merge-teacher");
+    const reviewMergeStatus = document.querySelector("#review-merge-status");
+    document.querySelector("#review-batch-merge").addEventListener("click", () => {
+      if (!reviewAdminSelection.size) {
+        document.querySelector("#review-batch-status").textContent = "请先勾选要归并的评价。";
+        return;
+      }
+      const [coursePart = "", teacherPart = ""] = (reviewAdminSelected || "").split(" · ");
+      if (reviewAdminSelected && !reviewMergeCourse.value) reviewMergeCourse.value = coursePart;
+      if (reviewAdminSelected && !reviewMergeTeacher.value) reviewMergeTeacher.value = teacherPart;
+      reviewMergeStatus.textContent = `将归并 ${reviewAdminSelection.size} 条评价。`;
+      reviewMergePanel.hidden = false;
+      reviewMergeCourse.focus();
+    });
+    document.querySelector("#review-merge-cancel").addEventListener("click", () => {
+      reviewMergePanel.hidden = true;
+      reviewMergeStatus.textContent = "";
+    });
+    document.querySelector("#review-merge-confirm").addEventListener("click", async () => {
+      const targetCourse = String(reviewMergeCourse.value || "").trim();
+      const targetTeacher = String(reviewMergeTeacher.value || "").trim();
+      if (!targetCourse || !targetTeacher) {
+        reviewMergeStatus.textContent = "请填写目标课程名和老师。";
+        return;
+      }
+      const count = reviewAdminSelection.size;
+      for (const review of reviewState.reviews ?? []) {
+        if (!reviewAdminSelection.has(review.id)) continue;
+        review.courseTitle = targetCourse;
+        review.teacher = targetTeacher;
+        review.updatedAt = new Date().toISOString();
+      }
+      reviewAdminSelection.clear();
+      document.querySelector("#review-select-all").checked = false;
+      reviewMergePanel.hidden = true;
+      reviewMergeStatus.textContent = "";
+      await saveReviewState(`已归并 ${count} 条评价到「${targetCourse} · ${targetTeacher}」`);
+      renderReviewAdmin();
+    });
     feedbackAdminSearch.addEventListener("input", () => {
       feedbackAdminPage = 1;
       renderFeedbackAdmin();
