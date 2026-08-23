@@ -1,0 +1,113 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { markdownToHtml } from "../lib/markdown";
+---
+
+<Layout title="我的" eyebrow="Me">
+  <section class="content">
+    <div id="me-app" style="min-height: 400px; padding: 40px 0;">
+      <div style="text-align: center; padding: 60px 0;">
+        <p class="muted">正在加载…</p>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  async function api(path, options = {}) {
+    const response = await fetch(`/api/v1${path}`, {
+      ...options,
+      headers: { "content-type": "application/json", ...(options.headers || {}) },
+    });
+    const data = await response.json();
+    if (!response.ok || data.code !== 0) throw new Error(data.message || "请求失败");
+    return data.data;
+  }
+
+  async function init() {
+    const app = document.querySelector("#me-app");
+    let user = null;
+    // 尝试恢复登录态（通过 web-login 空请求检查 cookie）
+    try {
+      const d = await api("/auth/web-login", { method: "POST", body: "{}" });
+      if (d?.user?.nickname) user = d.user;
+    } catch {}
+
+    if (!user) {
+      app.innerHTML = `
+        <div style="text-align:center;padding:60px 0;">
+          <p style="margin-bottom:16px;">登录后可查看收藏、评价和反馈</p>
+          <a href="/" style="color:#4B1F6F;font-weight:700;">← 返回首页</a>
+        </div>`;
+      return;
+    }
+
+    const [favorites, reviews, feedback] = await Promise.all([
+      api("/me/favorites?page=1&page_size=50").catch(() => ({ items: [] })),
+      api("/me/reviews?page=1&page_size=50").catch(() => ({ items: [] })),
+      api("/me/feedback?page=1&page_size=50").catch(() => ({ items: [] })),
+    ]);
+
+    const statusLabel = (s) => ({ pending: "待审", approved: "已通过", hidden: "已隐藏", open: "待处理", completed: "已完成", rejected: "不予完成", parked: "搁置" }[s] || s);
+
+    app.innerHTML = `
+      <div style="max-width: 640px; margin: 0 auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+          <div>
+            <h2 style="margin:0;">${user.nickname}</h2>
+            <p class="muted" style="margin:4px 0 0;font-size:0.85em;">${user.email || "未设置邮箱"}</p>
+          </div>
+          <button type="button" id="logout-btn" style="padding:8px 16px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit;cursor:pointer;font-size:0.9em;">退出</button>
+        </div>
+
+        <details open style="margin-bottom:16px;">
+          <summary style="font-weight:700;cursor:pointer;padding:8px 0;">收藏课程（${favorites.total ?? favorites.items.length}）</summary>
+          <div style="padding:8px 0;">
+            ${favorites.items.length ? favorites.items.map(f => `
+              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+                <a href="/courses/${encodeURIComponent(f.name)}/" style="color:inherit;text-decoration:none;font-weight:600;">${f.name}</a>
+                <span class="muted" style="font-size:0.82em;">${f.term || ""} · ${f.resource_count || 0} 份资料</span>
+              </div>`).join("") : '<p class="muted" style="padding:12px 0;">暂无收藏</p>'}
+          </div>
+        </details>
+
+        <details open style="margin-bottom:16px;">
+          <summary style="font-weight:700;cursor:pointer;padding:8px 0;">我的评价（${reviews.total ?? reviews.items.length}）</summary>
+          <div style="padding:8px 0;">
+            ${reviews.items.length ? reviews.items.map(r => `
+              <div style="padding:10px 0;border-bottom:1px solid var(--line);">
+                <div style="display:flex;justify-content:space-between;">
+                  <strong>${r.course_title} · ${r.teacher_name}</strong>
+                  <span style="font-size:0.8em;color:${r.status === "approved" ? "#16a34a" : "#eab308"};">${statusLabel(r.status)}${r.hidden ? " · 已隐藏" : ""}</span>
+                </div>
+                <p style="margin:4px 0 0;font-size:0.85em;color:var(--muted);">${r.body.slice(0, 100)}${r.body.length > 100 ? "…" : ""}</p>
+              </div>`).join("") : '<p class="muted" style="padding:12px 0;">暂无评价</p>'}
+          </div>
+        </details>
+
+        <details open>
+          <summary style="font-weight:700;cursor:pointer;padding:8px 0;">我的反馈（${feedback.total ?? feedback.items.length}）</summary>
+          <div style="padding:8px 0;">
+            ${feedback.items.length ? feedback.items.map(f => `
+              <div style="padding:10px 0;border-bottom:1px solid var(--line);">
+                <div style="display:flex;justify-content:space-between;">
+                  <strong>${f.title}</strong>
+                  <span style="font-size:0.8em;color:${f.status === "completed" ? "#16a34a" : "var(--muted)"};">${statusLabel(f.status)}</span>
+                </div>
+                <p style="margin:4px 0 0;font-size:0.85em;color:var(--muted);">${f.content.slice(0, 100)}${f.content.length > 100 ? "…" : ""}</p>
+                <span class="muted" style="font-size:0.78em;">${f.createdAt}</span>
+              </div>`).join("") : '<p class="muted" style="padding:12px 0;">暂无反馈</p>'}
+          </div>
+        </details>
+      </div>`;
+
+    document.querySelector("#logout-btn")?.addEventListener("click", async () => {
+      await fetch("/api/v1/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => {});
+      location.href = "/";
+    });
+  }
+
+  init().catch(() => {
+    document.querySelector("#me-app").innerHTML = '<p style="text-align:center;padding:40px;">加载失败，请刷新重试。</p>';
+  });
+</script>
