@@ -240,6 +240,12 @@ import "vditor/dist/index.css";
                 <option value="parked">搁置</option>
                 <option value="hidden">已隐藏</option>
               </select>
+              <div class="filter-row" id="feedback-batch-bar" style="margin-top: 12px;">
+                <label class="perm-check"><input id="feedback-select-all" type="checkbox" /> 全选本页</label>
+                <button class="button secondary" id="feedback-batch-complete" type="button">批量标记完成</button>
+                <button class="button secondary" id="feedback-batch-hide" type="button">批量隐藏</button>
+                <span class="muted" id="feedback-batch-status"></span>
+              </div>
               <div class="review-admin-list" id="feedback-admin-list" style="margin-top: 14px;"></div>
             </div>
           </div>
@@ -622,6 +628,7 @@ import "vditor/dist/index.css";
     let reviewAdminSelected = "";
     const reviewAdminSelection = new Set();
     let feedbackAdminPage = 1;
+    const feedbackAdminSelection = new Set();
     const selectedAdminFiles = new WeakSet();
 
     const loginPanel = document.querySelector("#login-panel");
@@ -1620,13 +1627,21 @@ import "vditor/dist/index.css";
 
     let markdownEditors = [];
 
-    function destroyMarkdownEditors() {
-      for (const editor of markdownEditors) {
-        try {
-          editor?.destroy?.();
-        } catch {}
+    function destroyMarkdownEditors(root = null) {
+      const remaining = [];
+      for (const entry of markdownEditors) {
+        const node = entry?.node;
+        const stale = !node?.isConnected || (root && root.contains(node));
+        if (stale) {
+          try {
+            entry.editor?.destroy?.();
+          } catch {}
+          if (node) delete node.dataset.markdownMounted;
+        } else {
+          remaining.push(entry);
+        }
       }
-      markdownEditors = [];
+      markdownEditors = remaining;
     }
 
     function markdownField(label, value, onInput, options = {}) {
@@ -1702,9 +1717,12 @@ import "vditor/dist/index.css";
     }
 
     function mountMarkdownEditors(root, mode = "admin") {
-      destroyMarkdownEditors();
+      destroyMarkdownEditors(root);
       const editors = Array.from(root?.querySelectorAll?.("[data-markdown-editor]") ?? []);
       for (const node of editors) {
+        if (node.dataset.markdownMounted === "1") continue;
+        // 折叠/隐藏的编辑表单不预挂载，等展开时再挂，避免搜索过滤时批量重建编辑器
+        if (node.closest("[hidden]")) continue;
         const shell = node.closest(".markdown-shell");
         const fallback = shell?.querySelector(".markdown-fallback");
         try {
@@ -1731,7 +1749,9 @@ import "vditor/dist/index.css";
               shell?.classList.add("is-mounted");
               requestAnimationFrame(() => {
                 node.querySelector(".vditor-toolbar button")?.blur?.();
-                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                // 只收回本编辑器内部的焦点，避免正在输入的搜索框被抢焦点
+                const active = document.activeElement;
+                if (active instanceof HTMLElement && shell?.contains(active)) active.blur();
               });
             },
             input(value) {
@@ -1739,7 +1759,8 @@ import "vditor/dist/index.css";
               node.__markdownOnInput?.(value);
             },
           });
-          markdownEditors.push(editor);
+          node.dataset.markdownMounted = "1";
+          markdownEditors.push({ editor, node });
         } catch {
           shell?.classList.remove("is-mounted");
         }
@@ -1903,7 +1924,7 @@ import "vditor/dist/index.css";
       allButton.addEventListener("click", () => {
         reviewAdminSelected = "";
         reviewAdminPage = 1;
-        renderReviewAdmin();
+        renderReviewAdmin({ rebuildRules: false });
       });
       reviewAdminSidebar.append(allButton);
       for (const entry of groups) {
@@ -1918,7 +1939,7 @@ import "vditor/dist/index.css";
         button.addEventListener("click", () => {
           reviewAdminSelected = entry.key;
           reviewAdminPage = 1;
-          renderReviewAdmin();
+          renderReviewAdmin({ rebuildRules: false });
         });
         reviewAdminSidebar.append(button);
       }
@@ -1947,10 +1968,12 @@ import "vditor/dist/index.css";
         .join("");
     }
 
-    function renderReviewAdmin() {
+    function renderReviewAdmin({ rebuildRules = true } = {}) {
       if (!reviewState) return;
       const rules = reviewState.rules ??= {};
-      reviewRulesEditor.innerHTML = "";
+      // 搜索/翻页等过滤操作不重建规则编辑器，避免输入过程被编辑器重建打断
+      if (rebuildRules) {
+        reviewRulesEditor.innerHTML = "";
       reviewRulesEditor.append(
         checkboxField("开放用户提交", rules.submissionOpen, (value) => { rules.submissionOpen = value; }),
         checkboxField("提交后需要审核", rules.moderationRequired, (value) => { rules.moderationRequired = value; }),
@@ -1979,6 +2002,7 @@ import "vditor/dist/index.css";
       });
       keywordWrap.append(keywordToggle, wordsField);
       reviewRulesEditor.append(keywordWrap);
+      }
 
       const keyword = reviewAdminSearch.value.trim().toLowerCase();
       const statusFilter = reviewStatusFilter.value;
@@ -2097,6 +2121,7 @@ import "vditor/dist/index.css";
         edit.addEventListener("click", () => {
           editForm.hidden = !editForm.hidden;
           edit.textContent = editForm.hidden ? "编辑" : "收起编辑";
+          if (!editForm.hidden) mountMarkdownEditors(editForm);
         });
         const approve = document.createElement("button");
         approve.type = "button";
@@ -2159,19 +2184,20 @@ import "vditor/dist/index.css";
       renderFeedbackAdmin();
     }
 
-    function renderFeedbackAdmin() {
+    function renderFeedbackAdmin({ rebuildRules = true } = {}) {
       if (!feedbackState) return;
       feedbackState.rules ??= {};
-      feedbackSettingsEditor.innerHTML = "";
-      feedbackSettingsEditor.append(
-        field("反馈页标题", feedbackState.title ?? "问题与建议", (value) => {
-          feedbackState.title = value;
-        }),
-        markdownField("反馈页公告（支持 Markdown）", feedbackState.announcement ?? "", (value) => {
-          feedbackState.announcement = value;
-        })
-      );
-      feedbackRulesEditor.innerHTML = "";
+      if (rebuildRules) {
+        feedbackSettingsEditor.innerHTML = "";
+        feedbackSettingsEditor.append(
+          field("反馈页标题", feedbackState.title ?? "问题与建议", (value) => {
+            feedbackState.title = value;
+          }),
+          markdownField("反馈页公告（支持 Markdown）", feedbackState.announcement ?? "", (value) => {
+            feedbackState.announcement = value;
+          })
+        );
+        feedbackRulesEditor.innerHTML = "";
       feedbackRulesEditor.append(
         checkboxField("开放用户提交", feedbackState.rules.submissionOpen !== false, (value) => {
           feedbackState.rules.submissionOpen = value;
@@ -2189,6 +2215,7 @@ import "vditor/dist/index.css";
           feedbackState.rules.notes = value;
         }, { height: 150 })
       );
+      }
       const keyword = feedbackAdminSearch.value.trim().toLowerCase();
       const statusFilter = feedbackStatusFilter.value;
       const items = (feedbackState.items ?? []).filter((item) => {
@@ -2261,10 +2288,10 @@ import "vditor/dist/index.css";
         actions.className = "filter-row";
         const selector = document.createElement("label");
         selector.className = "perm-check";
-        selector.innerHTML = `<input type="checkbox" data-review-id="${escapeHtml(review.id)}" ${reviewAdminSelection.has(review.id) ? "checked" : ""} /> 选择`;
+        selector.innerHTML = `<input type="checkbox" data-feedback-id="${escapeHtml(item.id)}" ${feedbackAdminSelection.has(item.id) ? "checked" : ""} /> 选择`;
         selector.querySelector("input").addEventListener("change", (event) => {
-          if (event.target.checked) reviewAdminSelection.add(review.id);
-          else reviewAdminSelection.delete(review.id);
+          if (event.target.checked) feedbackAdminSelection.add(item.id);
+          else feedbackAdminSelection.delete(item.id);
         });
         actions.append(selector);
         const edit = document.createElement("button");
@@ -2274,6 +2301,7 @@ import "vditor/dist/index.css";
         edit.addEventListener("click", () => {
           editForm.hidden = !editForm.hidden;
           edit.textContent = editForm.hidden ? "编辑" : "收起编辑";
+          if (!editForm.hidden) mountMarkdownEditors(editForm);
         });
         const select = document.createElement("select");
         select.className = "searchbar";
@@ -3967,14 +3995,14 @@ import "vditor/dist/index.css";
 
     reviewAdminSearch.addEventListener("input", () => {
       reviewAdminPage = 1;
-      renderReviewAdmin();
+      renderReviewAdmin({ rebuildRules: false });
     });
     reviewStatusFilter.addEventListener("change", () => {
       reviewAdminPage = 1;
-      renderReviewAdmin();
+      renderReviewAdmin({ rebuildRules: false });
     });
     reviewAdminSidebarSearch.addEventListener("input", () => {
-      renderReviewAdmin();
+      renderReviewAdmin({ rebuildRules: false });
     });
     document.querySelector("#review-select-all").addEventListener("change", (event) => {
       const checked = event.target.checked;
@@ -4051,12 +4079,46 @@ import "vditor/dist/index.css";
     });
     feedbackAdminSearch.addEventListener("input", () => {
       feedbackAdminPage = 1;
-      renderFeedbackAdmin();
+      renderFeedbackAdmin({ rebuildRules: false });
     });
     feedbackStatusFilter.addEventListener("change", () => {
       feedbackAdminPage = 1;
-      renderFeedbackAdmin();
+      renderFeedbackAdmin({ rebuildRules: false });
     });
+
+    document.querySelector("#feedback-select-all").addEventListener("change", (event) => {
+      const checked = event.target.checked;
+      for (const box of feedbackAdminList.querySelectorAll("input[data-feedback-id]")) {
+        box.checked = checked;
+        if (checked) feedbackAdminSelection.add(box.dataset.feedbackId);
+        else feedbackAdminSelection.delete(box.dataset.feedbackId);
+      }
+    });
+    async function runFeedbackBatch(mode) {
+      const statusEl = document.querySelector("#feedback-batch-status");
+      if (!feedbackAdminSelection.size) {
+        statusEl.textContent = "请先勾选要操作的反馈。";
+        return;
+      }
+      const count = feedbackAdminSelection.size;
+      for (const item of feedbackState.items ?? []) {
+        if (!feedbackAdminSelection.has(item.id)) continue;
+        if (mode === "complete") {
+          item.status = "completed";
+          item.hidden = false;
+        } else {
+          item.hidden = true;
+          item.status = "hidden";
+        }
+        item.updatedAt = new Date().toISOString();
+      }
+      feedbackAdminSelection.clear();
+      document.querySelector("#feedback-select-all").checked = false;
+      await saveFeedbackState(mode === "complete" ? `已批量完成 ${count} 条` : `已批量隐藏 ${count} 条`);
+      renderFeedbackAdmin();
+    }
+    document.querySelector("#feedback-batch-complete").addEventListener("click", () => runFeedbackBatch("complete"));
+    document.querySelector("#feedback-batch-hide").addEventListener("click", () => runFeedbackBatch("hide"));
 
     document.querySelector("#reload-feedback").addEventListener("click", async () => {
       feedbackAdminStatus.textContent = "加载中...";
