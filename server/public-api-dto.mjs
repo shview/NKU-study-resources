@@ -217,6 +217,7 @@ export function publicCourseDto(course, reviewGroups, manifest) {
     review_count: ratings.count,
     offering_count: teacherGroups.length,
     ratings,
+    contributors: stringList(course.contributors, 20, 40),
     updated: text(course.updated, 80),
   };
 }
