@@ -260,6 +260,17 @@ export class MpAuthService {
     return this.selectUserById.get(row.id);
   }
 
+  deleteAccount(userId) {
+    const account = this.selectUserById.get(Number(userId));
+    if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    // 删除所有会话 token
+    this.db.prepare("DELETE FROM mp_auth_tokens WHERE user_id = ?").run(account.id);
+    // 清除绑定信息（保留评价/反馈内容，解除关联）
+    this.db.prepare("UPDATE mp_users SET openid = NULL, web_password_hash = NULL, nickname = nickname || '_已注销', avatar_url = '', email = '' WHERE id = ?").run(account.id);
+    this.#secureDatabaseFiles();
+    return true;
+  }
+
   setWebPassword(userId, password) {
     const account = this.selectUserById.get(Number(userId));
     if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");

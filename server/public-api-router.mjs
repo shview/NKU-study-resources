@@ -92,6 +92,16 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const user = mpAuthService.requireUser(req.headers.authorization);
         data = service.getMyFeedback(user.id, { page: url.searchParams.get("page"), pageSize: url.searchParams.get("page_size") });
+      } else if (req.method === "POST" && url.pathname === "/api/v1/me/delete-account") {
+        if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(req.headers.authorization);
+        if (user.blocked) {
+          throw new PublicApiError(403, "该账号已被封禁，无法自行注销。请联系管理员处理。", "AUTH_USER_BLOCKED");
+        }
+        mpAuthService.deleteAccount(user.id);
+        mpAuthService.revoke(req.headers.authorization);
+        if (mpFavoritesService) mpFavoritesService.deleteAllForUser(user.id);
+        data = { deleted: true, note: "账号绑定关系已删除，已发布内容保留。" };
       } else if (req.method === "POST" && url.pathname === "/api/v1/me/web-password") {
         if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const user = mpAuthService.requireUser(req.headers.authorization);

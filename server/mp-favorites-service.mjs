@@ -114,6 +114,12 @@ export class MpFavoritesService {
     }
   }
 
+  deleteAllForUser(userId) {
+    this.db.prepare("DELETE FROM mp_favorites WHERE user_id = ?").run(Number(userId));
+    this.#secureDatabaseFiles();
+    return true;
+  }
+
   close() {
     if (this.db?.open) {
       this.db.pragma("wal_checkpoint(PASSIVE)");

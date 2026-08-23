@@ -36,6 +36,7 @@
 | `DELETE` | `/api/v1/favorites/:param` | Bearer Token | 取消收藏课程 |
 | `POST` | `/api/v1/me/profile` | Bearer Token | 更新昵称与头像 |
 | `POST` | `/api/v1/me/web-password` | Bearer Token | 设置/修改网页登录密码 |
+| `POST` | `/api/v1/me/delete-account` | Bearer Token | 注销账号（删绑定关系、保留内容；封禁账号需联系管理员） |
 | `GET` | `/api/v1/me/feedback` | Bearer Token | 我的反馈列表（含审核状态） |
 | `POST` | `/api/v1/reviews` | 公开、限流 | 小程序提交评价 |
 | `GET` | `/review-api/reviews` | 公开 | 网站读取已通过评价及规则 |
