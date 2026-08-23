@@ -26,6 +26,8 @@
 | `GET` | `/api/v1/review-groups` | 公开 | 评价分组列表 |
 | `GET` | `/api/v1/review-groups/:groupKey` | 公开 | 某评价分组及评价明细 |
 | `POST` | `/api/v1/auth/wechat` | 公开、限流 | 小程序微信登录（code 换 token） |
+| `POST` | `/api/v1/auth/web-register` | 公开、限流 | 网页注册（昵称+密码） |
+| `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码） |
 | `POST` | `/api/v1/auth/logout` | Bearer Token | 注销小程序登录令牌 |
 | `GET` | `/api/v1/me` | Bearer Token | 当前小程序用户信息 |
 | `GET` | `/api/v1/me/favorites` | Bearer Token | 我的收藏课程列表（分页） |
@@ -33,6 +35,8 @@
 | `POST` | `/api/v1/favorites` | Bearer Token | 收藏课程（body：course_id） |
 | `DELETE` | `/api/v1/favorites/:param` | Bearer Token | 取消收藏课程 |
 | `POST` | `/api/v1/me/profile` | Bearer Token | 更新昵称与头像 |
+| `POST` | `/api/v1/me/web-password` | Bearer Token | 设置/修改网页登录密码 |
+| `GET` | `/api/v1/me/feedback` | Bearer Token | 我的反馈列表（含审核状态） |
 | `POST` | `/api/v1/reviews` | 公开、限流 | 小程序提交评价 |
 | `GET` | `/review-api/reviews` | 公开 | 网站读取已通过评价及规则 |
 | `POST` | `/review-api/submit` | 公开、限流 | 网站提交评价 |

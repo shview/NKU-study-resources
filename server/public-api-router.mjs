@@ -74,6 +74,31 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const revoked = mpAuthService.revoke(req.headers.authorization);
         data = { revoked };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-register") {
+        if (!mpAuthService) throw new PublicApiError(503, "注册暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "注册尝试过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
+        let body;
+        try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
+        const user = mpAuthService.webRegister(body);
+        data = { user: { id: user.id, nickname: user.nickname, email: user.email || "", has_web_password: true } };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-login") {
+        if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "登录尝试过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
+        let body;
+        try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
+        const user = mpAuthService.webLogin(body);
+        data = { user: { id: user.id, nickname: user.nickname, email: user.email || "", has_web_password: true } };
+      } else if (req.method === "GET" && url.pathname === "/api/v1/me/feedback") {
+        if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(req.headers.authorization);
+        data = service.getMyFeedback(user.id, { page: url.searchParams.get("page"), pageSize: url.searchParams.get("page_size") });
+      } else if (req.method === "POST" && url.pathname === "/api/v1/me/web-password") {
+        if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(req.headers.authorization);
+        let body;
+        try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
+        mpAuthService.setWebPassword(user.id, body.password);
+        data = { ok: true };
       } else if (req.method === "GET" && url.pathname === "/api/v1/me/favorites") {
         if (!mpAuthService || !mpFavoritesService) throw new PublicApiError(503, "收藏暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const user = mpAuthService.requireUser(req.headers.authorization);

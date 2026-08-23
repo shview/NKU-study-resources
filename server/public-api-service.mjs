@@ -55,7 +55,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true } = {}) {
+  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -64,6 +64,7 @@ export class PublicApiService {
     this.readHome = readHome;
     this.readGuides = readGuides;
     this.readVisitStats = readVisitStats;
+    this.readFeedback = readFeedback || (() => ({ items: [] }));
     this.courseCatalog = courseCatalog;
     this.reviewSubmissionService = reviewSubmissionService;
     this.publicResourceOrigin = publicResourceOrigin;
@@ -371,6 +372,23 @@ export class PublicApiService {
 
   assertReviewAttempt(clientIp) {
     this.reviewSubmissionService.assertAttempt(clientIp);
+  }
+
+  getMyFeedback(userId, { page = 1, pageSize = 20 } = {}) {
+    const feedback = this.readFeedbackData();
+    const safePage = Math.max(1, Number(page) || 1);
+    const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
+    const items = (feedback.items || [])
+      .filter((item) => Number(item.user_id) === Number(userId))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    return {
+      items: items.slice((safePage - 1) * safePageSize, safePage * safePageSize).map((item) => ({
+        id: item.id, title: item.title, content: item.content, type: item.type,
+        status: String(item.status || "open"), hidden: item.hidden === true,
+        resourceRef: item.resourceRef || "", createdAt: item.createdAt || "", updatedAt: item.updatedAt || "",
+      })),
+      total: items.length, page: safePage, page_size: safePageSize,
+    };
   }
 
   catalog(searchParams) {

@@ -174,6 +174,7 @@ const publicApiService = new PublicApiService({
   readHome,
   readGuides,
   readVisitStats: readVisitStats,
+  readFeedback: () => readFeedback(),
   courseCatalog,
   reviewSubmissionService,
   publicResourceOrigin: process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top",

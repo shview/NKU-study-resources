@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -44,9 +44,38 @@ function publicUser(row) {
     id: row.id,
     nickname: row.nickname || "",
     avatar_url: row.avatar_url || "",
+    email: row.email || "",
+    has_web_password: Boolean(row.web_password_hash),
     created_at: row.created_at,
     last_login_at: row.last_login_at || null,
   };
+}
+
+const WEB_PASSWORD_MIN = 8;
+
+function validateWebPassword(password) {
+  const value = String(password ?? "");
+  if (value.length < WEB_PASSWORD_MIN || value.length > 128) {
+    throw new PublicApiError(400, `密码长度需在 ${WEB_PASSWORD_MIN}-128 位之间。`, "INVALID_PASSWORD");
+  }
+  return value;
+}
+
+function hashWebPassword(password) {
+  const salt = randomBytes(16);
+  const derived = scryptSync(password, salt, 32, { N: 16384 });
+  return `scrypt$16384$${salt.toString("base64url")}$${derived.toString("base64url")}`;
+}
+
+function verifyWebPassword(password, stored) {
+  const parts = String(stored || "").split("$");
+  if (parts.length !== 4 || parts[0] !== "scrypt") return false;
+  try {
+    const salt = Buffer.from(parts[2], "base64url");
+    const expected = Buffer.from(parts[3], "base64url");
+    const actual = scryptSync(password, salt, expected.length, { N: Number(parts[1]) || 16384 });
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch { return false; }
 }
 
 export class MpAuthService {
@@ -76,7 +105,7 @@ export class MpAuthService {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS mp_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        openid TEXT NOT NULL UNIQUE,
+        openid TEXT UNIQUE,
         nickname TEXT NOT NULL DEFAULT '',
         avatar_url TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL,
@@ -96,11 +125,17 @@ export class MpAuthService {
     `);
     const userColumns = this.db.pragma("table_info(mp_users)").map((column) => column.name);
     if (!userColumns.includes("blocked")) this.db.exec("ALTER TABLE mp_users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0");
+    if (!userColumns.includes("web_password_hash")) this.db.exec("ALTER TABLE mp_users ADD COLUMN web_password_hash TEXT");
+    if (!userColumns.includes("email")) this.db.exec("ALTER TABLE mp_users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
     this.insertUser = this.db.prepare("INSERT INTO mp_users(openid, created_at) VALUES (?, ?)");
     this.selectUserByOpenid = this.db.prepare("SELECT * FROM mp_users WHERE openid = ?");
     this.selectUserById = this.db.prepare("SELECT * FROM mp_users WHERE id = ?");
     this.markLogin = this.db.prepare("UPDATE mp_users SET last_login_at = ?, login_count = login_count + 1 WHERE id = ?");
     this.updateProfileStmt = this.db.prepare("UPDATE mp_users SET nickname = ?, avatar_url = ? WHERE id = ?");
+    this.selectByNickname = this.db.prepare("SELECT * FROM mp_users WHERE nickname = ? COLLATE NOCASE");
+    this.updateNickname = this.db.prepare("UPDATE mp_users SET nickname = ? WHERE id = ?");
+    this.updateWebPassword = this.db.prepare("UPDATE mp_users SET web_password_hash = ? WHERE id = ?");
+    this.bindOpenid = this.db.prepare("UPDATE mp_users SET openid = ? WHERE id = ?");
     this.setBlockedStmt = this.db.prepare("UPDATE mp_users SET blocked = ? WHERE id = ?");
     this.listUsers = this.db.prepare("SELECT * FROM mp_users ORDER BY created_at DESC, id DESC");
     this.countUsers = this.db.prepare("SELECT COUNT(*) AS count FROM mp_users");
@@ -163,24 +198,86 @@ export class MpAuthService {
     if (existingRow?.blocked) {
       throw new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED");
     }
-    const user = this.db.transaction(() => {
-      let row = existingRow;
-      if (!row) {
+    if (!existingRow) {
+      const created = this.db.transaction(() => {
         const result = this.insertUser.run(openid, timestamp);
-        row = this.selectUserById.get(result.lastInsertRowid);
-      }
-      this.markLogin.run(timestamp, row.id);
-      return this.selectUserById.get(row.id);
+        const row = this.selectUserById.get(result.lastInsertRowid);
+        this.markLogin.run(timestamp, row.id);
+        return row;
+      })();
+      return this.#issueToken(created, timestamp);
+    }
+    const user = this.db.transaction(() => {
+      this.markLogin.run(timestamp, existingRow.id);
+      return this.selectUserById.get(existingRow.id);
     })();
+    return this.#issueToken(user, timestamp);
+  }
+
+  #issueToken(user, timestamp) {
     this.removeExpiredTokens.run(timestamp);
     const token = randomBytes(32).toString("base64url");
     this.insertToken.run(tokenHash(token), user.id, timestamp, timestamp, timestamp + this.tokenTtlMs);
     this.#secureDatabaseFiles();
-    return {
-      token,
-      expires_in: Math.floor(this.tokenTtlMs / 1000),
-      user: publicUser(user),
-    };
+    return { token, expires_in: Math.floor(this.tokenTtlMs / 1000), user: publicUser(user) };
+  }
+
+  webRegister({ nickname, password, email = "" }, { now = this.now() } = {}) {
+    const name = cleanNickname(nickname);
+    const secret = validateWebPassword(password);
+    if (!name) throw new PublicApiError(400, "请填写昵称。", "INVALID_NICKNAME");
+    const timestamp = positiveSafeInteger(now, "now");
+    const clash = this.selectByNickname.get(name);
+    if (clash) throw new PublicApiError(409, `昵称「${name}」已被使用，请换一个。`, "NICKNAME_TAKEN");
+    const row = this.db.transaction(() => {
+      const result = this.insertUser.run(null, timestamp);
+      const created = this.selectUserById.get(result.lastInsertRowid);
+      this.updateNickname.run(name, created.id);
+      this.updateWebPassword.run(hashWebPassword(secret), created.id);
+      if (email) this.db.prepare("UPDATE mp_users SET email = ? WHERE id = ?").run(email.slice(0, 200), created.id);
+      this.markLogin.run(timestamp, created.id);
+      return this.selectUserById.get(created.id);
+    })();
+    this.#secureDatabaseFiles();
+    return row;
+  }
+
+  webLogin({ nickname, password }, { now = this.now() } = {}) {
+    const name = cleanNickname(nickname);
+    if (!name || !password) throw new PublicApiError(400, "请填写昵称和密码。", "INVALID_CREDENTIALS");
+    const row = this.selectByNickname.get(name);
+    if (!row || !row.web_password_hash) {
+      throw new PublicApiError(401, "昵称或密码不正确。", "AUTH_INVALID_CREDENTIALS");
+    }
+    if (!verifyWebPassword(String(password ?? ""), row.web_password_hash)) {
+      throw new PublicApiError(401, "昵称或密码不正确。", "AUTH_INVALID_CREDENTIALS");
+    }
+    if (row.blocked) {
+      throw new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED");
+    }
+    const timestamp = positiveSafeInteger(now, "now");
+    this.markLogin.run(timestamp, row.id);
+    return this.selectUserById.get(row.id);
+  }
+
+  setWebPassword(userId, password) {
+    const account = this.selectUserById.get(Number(userId));
+    if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    const secret = validateWebPassword(password);
+    this.updateWebPassword.run(hashWebPassword(secret), account.id);
+    this.#secureDatabaseFiles();
+    return true;
+  }
+
+  bindOpenidToUser(userId, openid) {
+    const account = this.selectUserById.get(Number(userId));
+    if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    if (account.openid) throw new PublicApiError(409, "该账号已绑定微信，无法重复绑定。", "ALREADY_BOUND");
+    const existing = this.selectUserByOpenid.get(openid);
+    if (existing) throw new PublicApiError(409, "该微信已绑定其他账号。", "OPENID_TAKEN");
+    this.bindOpenid.run(openid, account.id);
+    this.#secureDatabaseFiles();
+    return this.selectUserById.get(account.id);
   }
 
   verifyToken(authorizationHeader, { now = this.now() } = {}) {
