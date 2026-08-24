@@ -66,11 +66,14 @@ function serviceFixture() {
 test("service keys are created once, verified by hash, and revocable", async () => {
   const dir = tempDir();
   const store = new ServiceAuthStore({ store: fakeStore(dir), filePath: "service-keys.json" });
-  const created = await store.create({ name: "guide-bot", note: "邵游堃的指南服务" });
+  const created = await store.create({ name: "guide-bot", note: "邵游堃的指南服务", dailyQuota: 123 });
   assert.match(created.key, /^nkusvc_[A-Za-z0-9_-]{32}$/);
 
   const caller = await store.verify(created.key);
   assert.equal(caller.name, "guide-bot");
+  assert.equal(caller.limits.daily_quota, 123, "创建时指定的每日额度生效");
+  await store.setDailyQuota(created.id, 456);
+  assert.equal((await store.verify(created.key)).limits.daily_quota, 456, "额度可修改");
   assert.equal(await store.verify("nkusvc_wrong-key-value"), null);
   assert.equal(await store.verify(""), null);
 
@@ -110,24 +113,54 @@ test("blacklist bulk check caps input and reports blocked state", () => {
 
 test("service rate limit namespaces scopes, counts down and resets", () => {
   const { service } = serviceFixture();
-  const first = service.serviceRateLimit("svc-test", { scope: "chat", key: "user-7", limit: 2, window_ms: 60_000 });
+  const svcTest = { id: "svc-test", settings: { max_limit: 10_000, max_window_ms: 86_400_000, default_daily_quota: 50_000 }, limits: { daily_quota: 1000 } };
+  const svcOther = { id: "svc-other", settings: svcTest.settings, limits: svcTest.limits };
+  const call = (caller, body) => service.serviceRateLimit(caller, body);
+  const first = call(svcTest, { scope: "chat", key: "user-7", limit: 2, window_ms: 60_000 });
   assert.equal(first.allowed, true);
   assert.equal(first.remaining, 1);
-  const second = service.serviceRateLimit("svc-test", { scope: "chat", key: "user-7", limit: 2, window_ms: 60_000 });
+  const second = call(svcTest, { scope: "chat", key: "user-7", limit: 2, window_ms: 60_000 });
   assert.equal(second.allowed, true);
   assert.equal(second.remaining, 0);
-  const third = service.serviceRateLimit("svc-test", { scope: "chat", key: "user-7", limit: 2, window_ms: 60_000 });
+  const third = call(svcTest, { scope: "chat", key: "user-7", limit: 2, window_ms: 60_000 });
   assert.equal(third.allowed, false);
   assert.ok(third.retry_after_ms > 0);
 
-  const otherKey = service.serviceRateLimit("svc-test", { scope: "chat", key: "user-8", limit: 2, window_ms: 60_000 });
+  const otherKey = call(svcTest, { scope: "chat", key: "user-8", limit: 2, window_ms: 60_000 });
   assert.equal(otherKey.allowed, true, "不同 key 互不影响");
-  const otherService = service.serviceRateLimit("svc-other", { scope: "chat", key: "user-7", limit: 2, window_ms: 60_000 });
+  const otherService = call(svcOther, { scope: "chat", key: "user-7", limit: 2, window_ms: 60_000 });
   assert.equal(otherService.allowed, true, "不同服务命名空间互不影响");
 
-  assert.throws(() => service.serviceRateLimit("svc-test", { scope: "x", key: "y", limit: 0, window_ms: 1000 }), PublicApiError);
-  assert.throws(() => service.serviceRateLimit("svc-test", { scope: "x", key: "y", limit: 5, window_ms: 10 }), PublicApiError);
-  assert.throws(() => service.serviceRateLimit("svc-test", { scope: "", key: "y", limit: 5, window_ms: 1000 }), PublicApiError);
+  assert.throws(() => call(svcTest, { scope: "x", key: "y", limit: 0, window_ms: 1000 }), PublicApiError);
+  assert.throws(() => call(svcTest, { scope: "x", key: "y", limit: 5, window_ms: 10 }), PublicApiError);
+  assert.throws(() => call(svcTest, { scope: "", key: "y", limit: 5, window_ms: 1000 }), PublicApiError);
+});
+
+test("settings caps are persisted and shrink rate-limit validation", async () => {
+  const dir = tempDir();
+  const store = new ServiceAuthStore({ store: fakeStore(dir), filePath: "service-keys.json" });
+  await store.writeSettings({ max_limit: 5, max_window_ms: 10_000, default_daily_quota: 999 });
+  const listed = await store.list();
+  assert.equal(listed.settings.max_limit, 5);
+  assert.equal(listed.settings.max_window_ms, 10_000);
+  assert.equal(listed.settings.default_daily_quota, 999);
+  const created = await store.create({ name: "capped" });
+  assert.equal(created.limits.daily_quota, 999, "新服务使用默认每日额度");
+  const verified = await store.verify(created.key);
+  assert.equal(verified.settings.max_limit, 5, "verify 携带 settings 供限额校验");
+
+  const limiter = new PersistentRateLimiter({ dbPath: path.join(dir, "l.sqlite") });
+  const reviewSubmissionService = { assertAttempt() { return true; }, readRules() { return { submissionOptions: {} }; }, async submit() { return { pending: true }; } };
+  const service = new PublicApiService({
+    readManifest: () => ({ courses: [] }), readReviews: () => ({ reviews: [] }), readHome: () => ({}),
+    reviewSubmissionService,
+    mpAuthService: { introspectToken: () => ({ active: false }), blacklistStatus: () => [] },
+    serviceRateLimiter: limiter,
+  });
+  assert.throws(() => service.serviceRateLimit(verified, { scope: "s", key: "k", limit: 6, window_ms: 10_000 }), /limit 需在 1-5/, "超过配置上限被拒");
+  assert.throws(() => service.serviceRateLimit(verified, { scope: "s", key: "k", limit: 5, window_ms: 20_000 }), /window_ms 需在/, "超过窗口上限被拒");
+  const ok = service.serviceRateLimit(verified, { scope: "s", key: "k", limit: 5, window_ms: 10_000 });
+  assert.equal(ok.allowed, true);
 });
 
 test("rate limiter peek is read-only", () => {

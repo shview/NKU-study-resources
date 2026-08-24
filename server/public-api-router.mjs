@@ -32,12 +32,15 @@ function decodePathPart(value) {
   }
 }
 
-export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, notify = null, readBody, clientIp } = {}) {
+export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp } = {}) {
   if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
   async function requireService(req) {
     if (!serviceAuthStore) throw new PublicApiError(503, "服务间接口暂未开放。", "SERVICE_AUTH_NOT_CONFIGURED");
     const caller = await serviceAuthStore.verify(req.headers["x-service-key"]);
     if (!caller) throw new PublicApiError(401, "服务密钥无效。", "SERVICE_KEY_REQUIRED");
+    if (consumeServiceQuota && !consumeServiceQuota(caller)) {
+      throw new PublicApiError(429, "该服务今日调用额度已用完。", "SERVICE_QUOTA_EXCEEDED");
+    }
     return caller;
   }
   async function readJsonBody(req) {
@@ -65,7 +68,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       } else if (req.method === "POST" && url.pathname === "/api/v1/service/rate-limit") {
         const caller = await requireService(req);
         const body = await readJsonBody(req);
-        data = service.serviceRateLimit(caller.id, body);
+        data = service.serviceRateLimit(caller, body);
       } else if (req.method === "GET" && url.pathname === "/api/v1/search-index") data = service.searchIndex();
       else if (req.method === "GET" && url.pathname === "/api/v1/catalog") data = service.catalog(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);

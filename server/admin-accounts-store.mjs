@@ -10,12 +10,14 @@ export const ADMIN_PERMISSION_POINTS = Object.freeze([
   "content.edit",
   "content.moderate",
   "content.read",
+  "services.manage",
   "storage.delete",
   "storage.manage",
 ]);
 
 export const ADMIN_ROLE_PRESETS = Object.freeze({
   super_admin: ADMIN_PERMISSION_POINTS.slice(),
+  service_admin: ["services.manage"],
   content_admin: ["content.read", "content.edit", "content.moderate"],
   reviewer: ["content.read", "content.moderate"],
   viewer: ["content.read"],

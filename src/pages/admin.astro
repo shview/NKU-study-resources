@@ -45,6 +45,7 @@ import "vditor/dist/index.css";
         <button class="button secondary" type="button" data-admin-tab="about">关于页面</button>
         <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
         <button class="button secondary" type="button" data-admin-tab="accounts">账号管理</button>
+        <button class="button secondary" type="button" data-admin-tab="service-keys">服务密钥</button>
         <button class="button secondary" type="button" data-admin-tab="mp-users">小程序用户</button>
         <button class="button secondary" type="button" data-admin-tab="notify">通知设置</button>
         <button class="button secondary" type="button" data-admin-tab="audit">审计日志</button>
@@ -443,6 +444,65 @@ import "vditor/dist/index.css";
         </div>
       </div>
 
+      <div id="service-keys-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>服务密钥</h2>
+          </div>
+          <div class="panel-body">
+            <p class="muted">供团队其他服务调用本站登录校验、黑名单与限流接口。密钥只在创建时完整显示一次，请立即复制并安全转交。</p>
+            <div class="admin-form">
+              <div class="filter-row">
+                <label class="admin-field" style="flex:1;">
+                  <span>服务名称（唯一）</span>
+                  <input id="service-key-name" type="text" placeholder="如 guide-bot" autocomplete="off" />
+                </label>
+                <label class="admin-field" style="flex:1;">
+                  <span>备注（选填）</span>
+                  <input id="service-key-note" type="text" placeholder="负责人 / 用途" autocomplete="off" />
+                </label>
+                <label class="admin-field" style="max-width:160px;">
+                  <span>每日调用额度</span>
+                  <input id="service-key-quota" type="number" min="1" max="10000000" placeholder="默认用全局设置" />
+                </label>
+                <button class="button" id="create-service-key" type="button">创建密钥</button>
+              </div>
+              <div class="filter-row">
+                <span class="muted" id="service-key-status"></span>
+              </div>
+              <div id="service-key-once" hidden style="margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:14px;">
+                <b>新密钥（仅此一次展示）</b>
+                <div class="filter-row" style="margin-top:8px;">
+                  <input class="searchbar" id="service-key-value" readonly style="flex:1;" />
+                  <button class="button secondary" id="copy-service-key" type="button">复制</button>
+                </div>
+              </div>
+            </div>
+            <h3 style="margin-top:18px;">全局限流设置</h3>
+            <div class="admin-form">
+              <div class="filter-row">
+                <label class="admin-field" style="max-width:200px;">
+                  <span>单次请求 limit 上限</span>
+                  <input id="service-cap-limit" type="number" min="1" max="1000000" />
+                </label>
+                <label class="admin-field" style="max-width:220px;">
+                  <span>窗口时长上限（毫秒）</span>
+                  <input id="service-cap-window" type="number" min="1000" max="604800000" />
+                </label>
+                <label class="admin-field" style="max-width:200px;">
+                  <span>新服务默认每日额度</span>
+                  <input id="service-default-quota" type="number" min="1" max="10000000" />
+                </label>
+                <button class="button secondary" id="save-service-settings" type="button">保存设置</button>
+                <span class="muted" id="service-settings-status"></span>
+              </div>
+            </div>
+            <h3 style="margin-top:18px;">已创建的服务</h3>
+            <div id="service-keys-list" style="margin-top:10px;"></div>
+          </div>
+        </div>
+      </div>
+
       <div id="mp-users-admin-panel" hidden>
         <div class="panel">
           <div class="panel-header">
@@ -695,6 +755,7 @@ import "vditor/dist/index.css";
     const accountsAdminStatus = document.querySelector("#accounts-admin-status");
     const accountsAdminList = document.querySelector("#accounts-admin-list");
     const mpUsersAdminPanel = document.querySelector("#mp-users-admin-panel");
+    const serviceKeysAdminPanel = document.querySelector("#service-keys-admin-panel");
     const mpUsersAdminStatus = document.querySelector("#mp-users-admin-status");
     const mpUsersSummary = document.querySelector("#mp-users-summary");
     const mpUsersList = document.querySelector("#mp-users-list");
@@ -742,6 +803,7 @@ import "vditor/dist/index.css";
       "editor-settings": "content.edit",
       backup: "backup.manage",
       accounts: "accounts.manage",
+      "service-keys": "services.manage",
       "mp-users": "content.read",
       notify: "backup.manage",
       audit: "audit.read",
@@ -1313,7 +1375,140 @@ import "vditor/dist/index.css";
       row.after(editorRow);
     }
 
-    async function loadMpUsersAdmin() {
+    let serviceKeysState = { settings: null, services: [] };
+
+async function loadServiceKeysAdmin() {
+  const data = await api("/service-keys");
+  serviceKeysState = { settings: data.data.settings, services: data.data.services };
+  document.querySelector("#service-cap-limit").value = serviceKeysState.settings.max_limit;
+  document.querySelector("#service-cap-window").value = serviceKeysState.settings.max_window_ms;
+  document.querySelector("#service-default-quota").value = serviceKeysState.settings.default_daily_quota;
+  renderServiceKeysList();
+}
+
+function renderServiceKeysList() {
+  const listEl = document.querySelector("#service-keys-list");
+  listEl.innerHTML = "";
+  if (!serviceKeysState.services.length) {
+    listEl.innerHTML = '<p class="empty">还没有服务密钥。</p>';
+    return;
+  }
+  for (const service of serviceKeysState.services) {
+    const wrap = document.createElement("div");
+    wrap.className = "review-admin-item";
+    wrap.innerHTML = `
+      <div class="course-meta">
+        <span class="pill">${escapeHtml(service.name)}</span>
+        <span class="pill">${escapeHtml(service.key_prefix)}…</span>
+        <span class="pill">${service.enabled ? "启用中" : "已停用"}</span>
+        <span class="pill">每日额度 ${Number(service.limits.daily_quota).toLocaleString("zh-CN")}</span>
+        ${service.note ? `<span class="pill">${escapeHtml(service.note)}</span>` : ""}
+      </div>
+      <small class="muted">创建于 ${escapeHtml(service.created_at || "")}</small>
+    `;
+    const actions = document.createElement("div");
+    actions.className = "filter-row";
+    actions.style.marginTop = "8px";
+    const quotaInput = document.createElement("input");
+    quotaInput.type = "number";
+    quotaInput.className = "searchbar";
+    quotaInput.style.maxWidth = "180px";
+    quotaInput.min = 1;
+    quotaInput.value = service.limits.daily_quota;
+    quotaInput.title = "每日调用额度";
+    const saveQuota = document.createElement("button");
+    saveQuota.type = "button";
+    saveQuota.className = "button secondary";
+    saveQuota.textContent = "保存额度";
+    saveQuota.addEventListener("click", async () => {
+      try {
+        const data = await api(`/service-keys/${encodeURIComponent(service.id)}/daily-quota`, { method: "POST", body: JSON.stringify({ daily_quota: Number(quotaInput.value) }) });
+        serviceKeysState.services = data.data.services;
+        renderServiceKeysList();
+        document.querySelector("#service-key-status").textContent = `已更新 ${service.name} 的每日额度。`;
+      } catch (error) { document.querySelector("#service-key-status").textContent = error.message; }
+    });
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "button secondary";
+    toggle.textContent = service.enabled ? "停用" : "启用";
+    toggle.addEventListener("click", async () => {
+      try {
+        const data = await api(`/service-keys/${encodeURIComponent(service.id)}/enabled`, { method: "POST", body: JSON.stringify({ enabled: !service.enabled }) });
+        serviceKeysState.services = data.data.services;
+        renderServiceKeysList();
+      } catch (error) { document.querySelector("#service-key-status").textContent = error.message; }
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "button secondary";
+    remove.textContent = "删除";
+    remove.addEventListener("click", async () => {
+      if (!confirm(`删除服务「${service.name}」？对应服务的所有调用会立即失效。`)) return;
+      try {
+        const data = await api(`/service-keys/${encodeURIComponent(service.id)}`, { method: "DELETE" });
+        serviceKeysState.services = data.data.services;
+        renderServiceKeysList();
+      } catch (error) { document.querySelector("#service-key-status").textContent = error.message; }
+    });
+    actions.append(quotaInput, saveQuota, toggle, remove);
+    wrap.append(actions);
+    listEl.append(wrap);
+  }
+}
+
+document.querySelector("#create-service-key").addEventListener("click", async () => {
+  const statusEl = document.querySelector("#service-key-status");
+  const name = document.querySelector("#service-key-name").value.trim();
+  if (!name) { statusEl.textContent = "请填写服务名称。"; return; }
+  statusEl.textContent = "创建中...";
+  try {
+    const data = await api("/service-keys", {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        note: document.querySelector("#service-key-note").value.trim(),
+        daily_quota: Number(document.querySelector("#service-key-quota").value) || null,
+      }),
+    });
+    document.querySelector("#service-key-value").value = data.data.key;
+    document.querySelector("#service-key-once").hidden = false;
+    document.querySelector("#service-key-name").value = "";
+    document.querySelector("#service-key-note").value = "";
+    document.querySelector("#service-key-quota").value = "";
+    serviceKeysState.services = (await api("/service-keys")).data.services;
+    renderServiceKeysList();
+    statusEl.textContent = "已创建，请立即复制密钥（只显示这一次）。";
+  } catch (error) { statusEl.textContent = error.message; }
+});
+
+document.querySelector("#copy-service-key").addEventListener("click", () => {
+  const value = document.querySelector("#service-key-value").value;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(value).then(
+      () => { document.querySelector("#service-key-status").textContent = "已复制到剪贴板。"; },
+      () => { document.querySelector("#service-key-value").select(); }
+    );
+  } else document.querySelector("#service-key-value").select();
+});
+
+document.querySelector("#save-service-settings").addEventListener("click", async () => {
+  const statusEl = document.querySelector("#service-settings-status");
+  statusEl.textContent = "保存中...";
+  try {
+    await api("/service-keys-settings", {
+      method: "POST",
+      body: JSON.stringify({
+        max_limit: Number(document.querySelector("#service-cap-limit").value),
+        max_window_ms: Number(document.querySelector("#service-cap-window").value),
+        default_daily_quota: Number(document.querySelector("#service-default-quota").value),
+      }),
+    });
+    statusEl.textContent = "已保存。";
+  } catch (error) { statusEl.textContent = error.message; }
+});
+
+async function loadMpUsersAdmin() {
       const data = await api("/mp-users");
       mpUsersState = data.data;
       renderMpUsersAdmin();
@@ -3833,6 +4028,7 @@ import "vditor/dist/index.css";
         backupAdminPanel.hidden = tab !== "backup";
         accountsAdminPanel.hidden = tab !== "accounts";
         mpUsersAdminPanel.hidden = tab !== "mp-users";
+        serviceKeysAdminPanel.hidden = tab !== "service-keys";
         notifyAdminPanel.hidden = tab !== "notify";
         auditAdminPanel.hidden = tab !== "audit";
         if (tab === "notify" && !notifyState.loaded) {
@@ -3842,6 +4038,15 @@ import "vditor/dist/index.css";
             notifyAdminStatus.textContent = "";
           } catch (error) {
             notifyAdminStatus.textContent = error.message;
+          }
+        }
+        if (tab === "service-keys") {
+          document.querySelector("#service-key-status").textContent = "加载中...";
+          try {
+            await loadServiceKeysAdmin();
+            document.querySelector("#service-key-status").textContent = "";
+          } catch (error) {
+            document.querySelector("#service-key-status").textContent = error.message;
           }
         }
         if (tab === "mp-users") {

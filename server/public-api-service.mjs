@@ -395,15 +395,18 @@ export class PublicApiService {
     return { users: this.mpAuthService.blacklistStatus(ids) };
   }
 
-  serviceRateLimit(serviceId, body) {
+  serviceRateLimit(caller, body) {
+    const caps = caller?.settings || {};
+    const maxLimit = Number(caps.max_limit) || 10_000;
+    const maxWindowMs = Number(caps.max_window_ms) || 86_400_000;
     const scope = queryText(body?.scope, 60).replace(/[^A-Za-z0-9_.-]/g, "");
     const actor = queryText(body?.key, 120);
     const limit = Number(body?.limit);
     const windowMs = Number(body?.window_ms);
     if (!scope || !actor) throw new PublicApiError(400, "scope 与 key 不能为空。", "INVALID_RATE_LIMIT_INPUT");
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) throw new PublicApiError(400, "limit 需在 1-10000 之间。", "INVALID_RATE_LIMIT_INPUT");
-    if (!Number.isSafeInteger(windowMs) || windowMs < 1_000 || windowMs > 86_400_000) throw new PublicApiError(400, "window_ms 需在 1000-86400000 之间。", "INVALID_RATE_LIMIT_INPUT");
-    const namespaced = `svc:${serviceId}:${scope}`.slice(0, 128);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > maxLimit) throw new PublicApiError(400, `limit 需在 1-${maxLimit} 之间。`, "INVALID_RATE_LIMIT_INPUT");
+    if (!Number.isSafeInteger(windowMs) || windowMs < 1_000 || windowMs > maxWindowMs) throw new PublicApiError(400, `window_ms 需在 1000-${maxWindowMs} 之间。`, "INVALID_RATE_LIMIT_INPUT");
+    const namespaced = `svc:${caller.id}:${scope}`.slice(0, 128);
     const actorHash = createHash("sha256").update(actor, "utf8").digest("hex").slice(0, 40);
     const now = Date.now();
     const consumed = this.serviceRateLimiter.consume({ scope: namespaced, actorHash, limits: [{ windowMs, max: limit }], now });

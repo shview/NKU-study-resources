@@ -124,7 +124,20 @@ const accountsStore = new AdminAccountsStore({
     }, 2_000).unref();
   },
 });
+migrateServiceKeyPermission();
 seedInitialAdminAccount();
+
+function migrateServiceKeyPermission() {
+  try {
+    for (const account of accountsStore.list()) {
+      if (account.permissions.includes("accounts.manage") && !account.permissions.includes("services.manage")) {
+        accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "services.manage"] });
+      }
+    }
+  } catch (error) {
+    console.warn(`services.manage migration skipped: ${error.message}`);
+  }
+}
 
 function seedInitialAdminAccount() {
   if (accountsStore.count() > 0) return;
@@ -233,7 +246,17 @@ async function notifyModerators(payload = {}) {
 }
 const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
 const serviceAuthStore = new ServiceAuthStore({ store: jsonStore, filePath: path.join(dataDir, "service-keys.json") });
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, notify: notifyModerators, readBody: readPublicBody, clientIp });
+const consumeServiceQuota = (caller) => {
+  const quota = Number(caller?.limits?.daily_quota) || 0;
+  if (quota <= 0) return true;
+  const result = rateLimiter.consume({
+    scope: `svc-quota:${caller.id}`.slice(0, 128),
+    actorHash: "calls",
+    limits: [{ windowMs: 86_400_000, max: quota }],
+  });
+  return result.allowed === true;
+};
+const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -2416,17 +2439,29 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/service-keys") {
-      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      if (!requirePermission(req, account, "services.manage", res)) return;
       json(res, 200, { ok: true, data: await serviceAuthStore.list() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/admin-api/service-keys") {
-      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      if (!requirePermission(req, account, "services.manage", res)) return;
       const body = await readBody(req);
       try {
-        const created = await serviceAuthStore.create({ name: body.name, note: body.note });
+        const created = await serviceAuthStore.create({ name: body.name, note: body.note, dailyQuota: body.daily_quota });
         json(res, 200, { ok: true, data: created });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/service-keys-settings") {
+      if (!requirePermission(req, account, "services.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const settings = await serviceAuthStore.writeSettings(body.settings || body || {});
+        json(res, 200, { ok: true, data: settings });
       } catch (error) {
         json(res, 400, { ok: false, error: error.message });
       }
@@ -2435,7 +2470,7 @@ const server = createServer(async (req, res) => {
 
     const serviceKeyEnabledMatch = url.pathname.match(/^\/admin-api\/service-keys\/([^/]+)\/enabled$/);
     if (req.method === "POST" && serviceKeyEnabledMatch) {
-      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      if (!requirePermission(req, account, "services.manage", res)) return;
       const body = await readBody(req);
       try {
         await serviceAuthStore.setEnabled(decodePathPart(serviceKeyEnabledMatch[1]), body.enabled === true);
@@ -2446,9 +2481,22 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    const serviceKeyQuotaMatch = url.pathname.match(/^\/admin-api\/service-keys\/([^/]+)\/daily-quota$/);
+    if (req.method === "POST" && serviceKeyQuotaMatch) {
+      if (!requirePermission(req, account, "services.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        await serviceAuthStore.setDailyQuota(decodePathPart(serviceKeyQuotaMatch[1]), body.daily_quota);
+        json(res, 200, { ok: true, data: await serviceAuthStore.list() });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
     const serviceKeyMatch = url.pathname.match(/^\/admin-api\/service-keys\/([^/]+)$/);
     if (req.method === "DELETE" && serviceKeyMatch) {
-      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      if (!requirePermission(req, account, "services.manage", res)) return;
       try {
         await serviceAuthStore.remove(decodePathPart(serviceKeyMatch[1]));
         json(res, 200, { ok: true, data: await serviceAuthStore.list() });

@@ -85,10 +85,12 @@
 | `GET` | `/admin-api/manifest` | Cookie（需相应权限） | 读取完整课程树和 revision |
 | `POST` | `/admin-api/manifest` | Cookie（需相应权限） | 发布课程树并重建网站 |
 | `POST` | `/admin-api/manifest-draft` | Cookie（需相应权限） | 保存课程树草稿，不重建网站 |
-| `GET` | `/admin-api/service-keys` | Cookie（accounts.manage） | 服务密钥列表（不含密钥本体） |
-| `POST` | `/admin-api/service-keys` | Cookie（accounts.manage） | 创建服务密钥（完整密钥仅返回一次） |
-| `POST` | `/admin-api/service-keys/:id/enabled` | Cookie（accounts.manage） | 启用/停用一个服务密钥 |
-| `DELETE` | `/admin-api/service-keys/:id` | Cookie（accounts.manage） | 删除一个服务密钥 |
+| `GET` | `/admin-api/service-keys` | Cookie（services.manage） | 服务密钥列表（不含密钥本体） |
+| `POST` | `/admin-api/service-keys` | Cookie（services.manage） | 创建服务密钥（完整密钥仅返回一次） |
+| `POST` | `/admin-api/service-keys/:id/enabled` | Cookie（services.manage） | 启用/停用一个服务密钥 |
+| `POST` | `/admin-api/service-keys/:id/daily-quota` | Cookie（services.manage） | 修改一个服务的每日调用额度 |
+| `POST` | `/admin-api/service-keys-settings` | Cookie（services.manage） | 全局限流设置（limit/窗口上限、默认每日额度） |
+| `DELETE` | `/admin-api/service-keys/:id` | Cookie（services.manage） | 删除一个服务密钥 |
 | `GET` | `/admin-api/accounts` | Cookie（需相应权限） | 账号列表、权限点与角色预设 |
 | `POST` | `/admin-api/accounts` | Cookie（需相应权限） | 创建管理员账号 |
 | `PATCH` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 更新账号权限、启用状态或改密提示 |
@@ -428,6 +430,8 @@ curl -sS 'https://nkustudy.top/api/v1/review-groups/<GROUP_KEY>'
 请求 JSON：`{ "scope": "chat", "key": "user-7", "limit": 20, "window_ms": 60000 }`
 
 - `scope` 只保留 `[A-Za-z0-9_.-]`；实际计数命名空间为 `svc:<服务ID>:<scope>`，服务之间互不影响。
+- limit / window_ms 的上限、每个服务的每日调用总量均由管理员在后台「服务密钥」页配置，不在代码里写死；
+  超过每日额度的服务会得到 `429 SERVICE_QUOTA_EXCEEDED`。
 - `limit` 1-10000；`window_ms` 1000-86400000；每次调用消耗 1。
 - 成功 `200`：`{ "allowed": true, "scope": "svc:svc-xxx:chat", "count": 1, "limit": 20, "remaining": 19,
   "reset_at": 1893456000000, "retry_after_ms": 0 }`
