@@ -24,7 +24,7 @@ function writeJson(req, res, statusCode, body, { cache = false } = {}) {
   res.end(body);
 }
 
-function decodePathPart(value) {
+export function decodePathPart(value) {
   try {
     return decodeURIComponent(value);
   } catch {

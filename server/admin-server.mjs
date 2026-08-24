@@ -15,7 +15,7 @@ import { ContentPublishJournal, ContentPublishService } from "./content-publish-
 import { manifestRevision, ManifestConflictError, ManifestService } from "./manifest-service.mjs";
 import { validateManifest } from "./manifest-schema.mjs";
 import { PersistentRateLimiter } from "./persistent-rate-limiter.mjs";
-import { createPublicApiHandler } from "./public-api-router.mjs";
+import { createPublicApiHandler, decodePathPart } from "./public-api-router.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
