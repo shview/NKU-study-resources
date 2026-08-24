@@ -54,7 +54,7 @@ export class ServiceAuthStore {
       data.services = [...data.services, entry];
       data.updated = this.nowIso();
       return data;
-    }, { mode: 0o600 });
+    }, { initialize: { version: 1, services: [] }, mode: 0o600 });
     return { ...this.#public(entry), key };
   }
 
@@ -70,7 +70,7 @@ export class ServiceAuthStore {
       });
       data.updated = this.nowIso();
       return data;
-    }, { mode: 0o600 });
+    }, { initialize: { version: 1, services: [] }, mode: 0o600 });
     if (!found) throw new Error("服务不存在。");
     return true;
   }
@@ -85,7 +85,7 @@ export class ServiceAuthStore {
       found = data.services.length < before;
       data.updated = this.nowIso();
       return data;
-    }, { mode: 0o600 });
+    }, { initialize: { version: 1, services: [] }, mode: 0o600 });
     if (!found) throw new Error("服务不存在。");
     return true;
   }
