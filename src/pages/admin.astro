@@ -783,12 +783,14 @@ import "vditor/dist/index.css";
       "backup.manage": "备份管理",
       "accounts.manage": "账号管理",
       "audit.read": "审计查看",
+      "services.manage": "服务密钥",
     };
     const rolePresetFallback = {
       super_admin: ["accounts.manage", "audit.read", "backup.manage", "content.edit", "content.moderate", "content.read", "storage.delete", "storage.manage"],
       content_admin: ["content.read", "content.edit", "content.moderate"],
       reviewer: ["content.read", "content.moderate"],
       viewer: ["content.read"],
+      service_admin: ["services.manage"],
     };
     const tabPermissions = {
       resources: "content.read",
@@ -1224,9 +1226,16 @@ import "vditor/dist/index.css";
       return accountsState?.rolePresets && Object.keys(accountsState.rolePresets).length ? accountsState.rolePresets : rolePresetFallback;
     }
 
+    function serverPermissionPoints() {
+      return accountsState?.permissionPoints && accountsState.permissionPoints.length
+        ? accountsState.permissionPoints
+        : Object.keys(permissionLabels);
+    }
+
     function renderPermissionEditor(container, checked) {
       container.innerHTML = "";
-      for (const [permission, label] of Object.entries(permissionLabels)) {
+      for (const permission of serverPermissionPoints()) {
+        const label = permissionLabels[permission] || permission;
         const box = document.createElement("label");
         box.className = "perm-check";
         box.innerHTML = `<input type="checkbox" value="${permission}" ${checked.includes(permission) ? "checked" : ""} /> ${escapeHtml(label)}`;
@@ -1627,6 +1636,9 @@ async function loadMpUsersAdmin() {
       ["POST /admin-api/me/password", "修改自己密码"],
       ["POST /admin-api/notify-bots", "保存通知机器人"],
       ["POST /admin-api/notify-test", "发送通知测试"],
+      ["GET /admin-api/service-keys", "查看服务密钥"],
+      ["POST /admin-api/service-keys", "创建服务密钥"],
+      ["POST /admin-api/service-keys-settings", "保存全局限流设置"],
     ];
     const auditActionLabel = (action) => {
       if (/^PATCH \/admin-api\/accounts\//.test(action)) return "修改账号权限";
@@ -1634,6 +1646,9 @@ async function loadMpUsersAdmin() {
       if (/^DELETE \/admin-api\/accounts\//.test(action)) return "删除账号";
       if (/^POST \/admin-api\/mp-users\/.+\/blocked$/.test(action)) return "封禁/解禁小程序用户";
       if (/^DELETE \/admin-api\/notify-bots\//.test(action)) return "删除通知机器人";
+      if (/^POST \/admin-api\/service-keys\/.+\/enabled$/.test(action)) return "启用/停用服务密钥";
+      if (/^POST \/admin-api\/service-keys\/.+\/daily-quota$/.test(action)) return "修改服务每日额度";
+      if (/^DELETE \/admin-api\/service-keys\//.test(action)) return "删除服务密钥";
       return auditActionLabels.find(([key]) => action === key)?.[1] || action;
     };
 
