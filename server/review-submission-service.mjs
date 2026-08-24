@@ -52,6 +52,39 @@ export class ReviewSubmissionService {
     }
   }
 
+  /**
+   * 有帮助反应：同一用户对同一条评价只能有一个有效标记，再次调用传 null 取消。
+   * 只支持 up（无帮助已下线），写入 helpfulCount / helpfulBy（内部字段，不进公开 DTO）。
+   */
+  async reactHelpful(reviewId, userId, reaction) {
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new PublicApiError(401, "登录后才能标记有帮助。", "AUTH_REQUIRED");
+    if (reaction !== "up" && reaction !== null) {
+      throw new PublicApiError(400, "仅支持「有帮助」反应。", "UNSUPPORTED_REACTION");
+    }
+    const id = cleanText(reviewId, 160);
+    const existing = (this.readReviews().reviews || []).find((item) => cleanText(item.id, 160) === id);
+    if (!existing) return null;
+    const marked = new Set((Array.isArray(existing.helpfulBy) ? existing.helpfulBy : []).map(Number));
+    const shouldMark = reaction === "up";
+    if (shouldMark === marked.has(userId)) {
+      return { review_id: id, helpful_count: marked.size, viewer_reaction: shouldMark ? "up" : null };
+    }
+    let outcome = null;
+    await this.store.update(this.reviewsPath, (current) => {
+      current.reviews = Array.isArray(current.reviews) ? current.reviews : [];
+      const review = current.reviews.find((item) => cleanText(item.id, 160) === id);
+      if (!review) return current;
+      const voters = new Set((Array.isArray(review.helpfulBy) ? review.helpfulBy : []).map(Number));
+      if (shouldMark) voters.add(userId);
+      else voters.delete(userId);
+      review.helpfulBy = [...voters];
+      review.helpfulCount = voters.size;
+      outcome = { review_id: id, helpful_count: voters.size, viewer_reaction: shouldMark ? "up" : null };
+      return current;
+    }, { mode: 0o600 });
+    return outcome;
+  }
+
   readRules() {
     return (this.readReviews() || {}).rules || {};
   }

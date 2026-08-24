@@ -72,11 +72,11 @@ export class PublicApiService {
     this.assertMpAuthAttempt = assertMpAuthAttempt;
   }
 
-  snapshot() {
+  snapshot({ viewerId = null } = {}) {
     const manifest = this.readManifest();
     const reviewData = this.readReviews();
     if (!manifest || !Array.isArray(manifest.courses)) throw new Error("Runtime course data is unavailable.");
-    const groups = buildReviewGroups(manifest, reviewData, this.courseCatalog);
+    const groups = buildReviewGroups(manifest, reviewData, this.courseCatalog, { viewerId });
     const normalizedGuides = normalizeGuideData(this.readGuides(), {
       courseIds: new Set(manifest.courses.map((course) => course.uid)),
       fallbackCorrectionUrl: this.guideCorrectionUrl,
@@ -357,17 +357,23 @@ export class PublicApiService {
     };
   }
 
-  reviewGroups() {
-    const { groups } = this.snapshot();
+  reviewGroups({ viewerId = null } = {}) {
+    const { groups } = this.snapshot({ viewerId });
     const items = groups.map((group) => publicReviewGroupDto(group));
     return { items, total: items.length };
   }
 
-  reviewGroup(groupKey) {
-    const { groups } = this.snapshot();
+  reviewGroup(groupKey, { viewerId = null } = {}) {
+    const { groups } = this.snapshot({ viewerId });
     const group = groups.find((item) => item.key === groupKey);
     if (!group) throw new PublicApiError(404, "评价分组不存在。", "REVIEW_GROUP_NOT_FOUND");
     return publicReviewGroupDto(group, { includeReviews: true });
+  }
+
+  async reactReviewHelpful(reviewId, reaction, userId) {
+    const result = await this.reviewSubmissionService.reactHelpful(reviewId, userId, reaction);
+    if (!result) throw new PublicApiError(404, "评价不存在。", "REVIEW_NOT_FOUND");
+    return result;
   }
 
   assertReviewAttempt(clientIp) {

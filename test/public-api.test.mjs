@@ -174,7 +174,7 @@ test("review groups use website courseTitle + teacher and preserve unmatched gro
   assert.equal(unmatched.course_name, "历史未匹配课程");
   const detail = service.reviewGroup(unmatched.group_key);
   assert.equal(detail.items.length, 1);
-  assert.deepEqual(Object.keys(detail.items[0]).sort(), ["body", "created_at", "helpful_count", "id", "rating", "tags", "teacher_name"]);
+  assert.deepEqual(Object.keys(detail.items[0]).sort(), ["body", "created_at", "helpful_count", "id", "rating", "tags", "teacher_name", "viewer_reaction"]);
   assert.throws(() => service.reviewGroup("missing"), /评价分组不存在/);
 });
 

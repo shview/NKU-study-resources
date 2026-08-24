@@ -25,6 +25,7 @@
 | `GET` | `/api/v1/courses/:courseUid/resources` | 公开 | 课程资源与 R2 下载地址 |
 | `GET` | `/api/v1/review-groups` | 公开 | 评价分组列表 |
 | `GET` | `/api/v1/review-groups/:groupKey` | 公开 | 某评价分组及评价明细 |
+| `PUT` | `/api/v1/reviews/:reviewId/reaction` | 登录 | 标记/取消「有帮助」（同一用户每条评价一个标记） |
 | `POST` | `/api/v1/auth/wechat` | 公开、限流 | 小程序微信登录（code 换 token） |
 | `POST` | `/api/v1/auth/web-register` | 公开、限流 | 网页注册（昵称+密码） |
 | `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码） |
@@ -391,6 +392,19 @@ curl -sS https://nkustudy.top/api/v1/review-groups
 
 ```bash
 curl -sS 'https://nkustudy.top/api/v1/review-groups/<GROUP_KEY>'
+```
+
+### `PUT /api/v1/reviews/:reviewId/reaction`
+
+- 需要小程序登录 Bearer Token。
+- 请求 JSON：`{ "reaction": "up" }` 标记「有帮助」；`{ "reaction": null }` 取消标记。仅支持 `up`。
+- 同一用户对同一条评价只保留一个标记，重复标记幂等。
+- 成功 `200`：`{ "review_id", "helpful_count", "viewer_reaction" }`。
+- 登录后获取评价分组明细时，每条评价额外返回 `viewer_reaction`（`"up"` 或 `null`）。
+- 主要错误：`400 UNSUPPORTED_REACTION`、`401 AUTH_REQUIRED`、`404 REVIEW_NOT_FOUND`。
+
+```bash
+curl -sS -X PUT 'https://nkustudy.top/api/v1/reviews/<REVIEW_ID>/reaction'   -H 'authorization: Bearer <TOKEN>' -H 'content-type: application/json'   -d '{"reaction":"up"}'
 ```
 
 ### `POST /api/v1/reviews`

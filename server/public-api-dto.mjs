@@ -98,7 +98,8 @@ export function buildResourceUrl({ manifest, course, file, configuredOrigin }) {
   return { downloadUrl: url.href, relativePath: filePath };
 }
 
-export function publicReviewDto(review) {
+export function publicReviewDto(review, { viewerId = null } = {}) {
+  const helpfulBy = Array.isArray(review.helpfulBy) ? review.helpfulBy.map(Number) : [];
   return {
     id: text(review.id, 160),
     teacher_name: text(review.teacher, 80),
@@ -106,11 +107,12 @@ export function publicReviewDto(review) {
     tags: stringList(review.tags, 12, 40),
     body: text(review.content, 2000),
     helpful_count: Math.max(0, Number(review.helpfulCount || 0) || 0),
+    viewer_reaction: viewerId && helpfulBy.includes(Number(viewerId)) ? "up" : null,
     created_at: text(review.createdAt, 80),
   };
 }
 
-export function buildReviewGroups(manifest, reviewData, courseCatalog = null) {
+export function buildReviewGroups(manifest, reviewData, courseCatalog = null, { viewerId = null } = {}) {
   const coursesByTitle = new Map();
   for (const course of manifest.courses || []) {
     const title = normalizeReviewKeyPart(course.title);
@@ -139,7 +141,7 @@ export function buildReviewGroups(manifest, reviewData, courseCatalog = null) {
     if (!groups.has(key)) {
       groups.set(key, { key, courseTitle, teacher, course, reviews: [] });
     }
-    groups.get(key).reviews.push(publicReviewDto(review));
+    groups.get(key).reviews.push(publicReviewDto(review, { viewerId }));
   }
   for (const group of groups.values()) {
     group.reviews.sort((left, right) => right.created_at.localeCompare(left.created_at) || left.id.localeCompare(right.id));

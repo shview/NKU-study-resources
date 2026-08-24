@@ -136,7 +136,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
           else {
             match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)\/resources$/);
             if (req.method === "GET" && match) data = service.resources(decodePathPart(match[1]));
-            else if (req.method === "GET" && url.pathname === "/api/v1/review-groups") data = service.reviewGroups();
+            else if (req.method === "GET" && url.pathname === "/api/v1/review-groups") data = service.reviewGroups({ viewerId: authUser?.id || null });
             else {
               match = url.pathname.match(/^\/api\/v1\/favorites\/([^/]+)$/);
               if (req.method === "DELETE" && match) {
@@ -144,9 +144,21 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 const user = mpAuthService.requireUser(req.headers.authorization);
                 data = mpFavoritesService.remove(user, decodePathPart(match[1]));
               } else {
-                match = url.pathname.match(/^\/api\/v1\/review-groups\/([^/]+)$/);
-                if (req.method === "GET" && match) data = service.reviewGroup(decodePathPart(match[1]));
-              else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
+              match = url.pathname.match(/^\/api\/v1\/review-groups\/([^/]+)$/);
+                if (req.method === "GET" && match) data = service.reviewGroup(decodePathPart(match[1]), { viewerId: authUser?.id || null });
+                else {
+                match = url.pathname.match(/^\/api\/v1\/reviews\/([^/]+)\/reaction$/);
+                if (req.method === "PUT" && match) {
+                  if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+                  const user = mpAuthService.requireUser(req.headers.authorization);
+                  let body;
+                  try {
+                    body = await readBody(req);
+                  } catch {
+                    throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+                  }
+                  data = await service.reactReviewHelpful(decodePathPart(match[1]), body?.reaction ?? null, user.id);
+                } else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
                 const ip = clientIp(req);
                 service.assertReviewAttempt(ip);
                 let body;
@@ -158,6 +170,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: authUser?.id || null, notify });
               } else {
                 throw new PublicApiError(404, "接口不存在。", "NOT_FOUND");
+              }
               }
             }
           }
