@@ -121,6 +121,12 @@ export class PersistentRateLimiter {
     });
   }
 
+  /** 只读查询当前窗口计数（服务间限流接口返回 remaining 用），不会消耗配额。 */
+  peek({ scope, actorHash, windowMs, now = Date.now() }) {
+    const row = this.selectActive.get(boundedKey(scope, "scope"), boundedKey(actorHash, "actorHash"), positiveSafeInteger(windowMs, "windowMs"), nonNegativeSafeInteger(now, "now"));
+    return row ? { count: Number(row.count), window_start: Number(row.window_start) } : null;
+  }
+
   consume({ scope, actorHash, limits, now = Date.now() }) {
     const normalizedScope = boundedKey(scope, "scope");
     const normalizedActor = boundedKey(actorHash, "actorHash");

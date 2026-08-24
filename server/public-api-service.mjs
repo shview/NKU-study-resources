@@ -55,10 +55,12 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true } = {}) {
+  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
+    this.mpAuthService = mpAuthService;
+    this.serviceRateLimiter = serviceRateLimiter;
     this.readManifest = readManifest;
     this.readReviews = readReviews;
     this.readHome = readHome;
@@ -374,6 +376,48 @@ export class PublicApiService {
     const result = await this.reviewSubmissionService.reactHelpful(reviewId, userId, reaction);
     if (!result) throw new PublicApiError(404, "评价不存在。", "REVIEW_NOT_FOUND");
     return result;
+  }
+
+  /**
+   * 服务间接口：登录态内省 / 黑名单 / 通用限流。
+   * scope 一律加 svc:<服务ID>: 前缀，避免与其他业务计数器冲突。
+   */
+  serviceVerifyToken(token) {
+    return this.mpAuthService
+      ? this.mpAuthService.introspectToken(String(token || "").startsWith("Bearer ") ? token : `Bearer ${token}`)
+      : { active: false, reason: "auth_unavailable" };
+  }
+
+  serviceBlacklist(userIds) {
+    if (!this.mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+    const ids = (Array.isArray(userIds) ? userIds : []).slice(0, 100);
+    if (!ids.length) throw new PublicApiError(400, "user_ids 不能为空。", "INVALID_BLACKLIST_INPUT");
+    return { users: this.mpAuthService.blacklistStatus(ids) };
+  }
+
+  serviceRateLimit(serviceId, body) {
+    const scope = queryText(body?.scope, 60).replace(/[^A-Za-z0-9_.-]/g, "");
+    const actor = queryText(body?.key, 120);
+    const limit = Number(body?.limit);
+    const windowMs = Number(body?.window_ms);
+    if (!scope || !actor) throw new PublicApiError(400, "scope 与 key 不能为空。", "INVALID_RATE_LIMIT_INPUT");
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) throw new PublicApiError(400, "limit 需在 1-10000 之间。", "INVALID_RATE_LIMIT_INPUT");
+    if (!Number.isSafeInteger(windowMs) || windowMs < 1_000 || windowMs > 86_400_000) throw new PublicApiError(400, "window_ms 需在 1000-86400000 之间。", "INVALID_RATE_LIMIT_INPUT");
+    const namespaced = `svc:${serviceId}:${scope}`.slice(0, 128);
+    const actorHash = createHash("sha256").update(actor, "utf8").digest("hex").slice(0, 40);
+    const now = Date.now();
+    const consumed = this.serviceRateLimiter.consume({ scope: namespaced, actorHash, limits: [{ windowMs, max: limit }], now });
+    const active = this.serviceRateLimiter.peek({ scope: namespaced, actorHash, windowMs, now });
+    const count = Number(active?.count || 0);
+    return {
+      allowed: consumed.allowed === true,
+      scope: namespaced,
+      count,
+      limit,
+      remaining: Math.max(0, limit - count),
+      reset_at: active ? active.window_start + windowMs : now + windowMs,
+      retry_after_ms: consumed.allowed ? 0 : consumed.retryAfterMs,
+    };
   }
 
   assertReviewAttempt(clientIp) {

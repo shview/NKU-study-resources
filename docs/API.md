@@ -26,6 +26,9 @@
 | `GET` | `/api/v1/review-groups` | 公开 | 评价分组列表 |
 | `GET` | `/api/v1/review-groups/:groupKey` | 公开 | 某评价分组及评价明细 |
 | `PUT` | `/api/v1/reviews/:reviewId/reaction` | 登录 | 标记/取消「有帮助」（同一用户每条评价一个标记） |
+| `POST` | `/api/v1/auth/verify` | 服务密钥 | 服务间登录态内省：校验用户 token，返回有效/过期/注销/拉黑 |
+| `POST` | `/api/v1/service/blacklist` | 服务密钥 | 批量查询用户黑名单状态（≤100 个） |
+| `POST` | `/api/v1/service/rate-limit` | 服务密钥 | 通用固定窗口限流（按服务命名空间隔离） |
 | `POST` | `/api/v1/auth/wechat` | 公开、限流 | 小程序微信登录（code 换 token） |
 | `POST` | `/api/v1/auth/web-register` | 公开、限流 | 网页注册（昵称+密码） |
 | `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码） |
@@ -82,6 +85,10 @@
 | `GET` | `/admin-api/manifest` | Cookie（需相应权限） | 读取完整课程树和 revision |
 | `POST` | `/admin-api/manifest` | Cookie（需相应权限） | 发布课程树并重建网站 |
 | `POST` | `/admin-api/manifest-draft` | Cookie（需相应权限） | 保存课程树草稿，不重建网站 |
+| `GET` | `/admin-api/service-keys` | Cookie（accounts.manage） | 服务密钥列表（不含密钥本体） |
+| `POST` | `/admin-api/service-keys` | Cookie（accounts.manage） | 创建服务密钥（完整密钥仅返回一次） |
+| `POST` | `/admin-api/service-keys/:id/enabled` | Cookie（accounts.manage） | 启用/停用一个服务密钥 |
+| `DELETE` | `/admin-api/service-keys/:id` | Cookie（accounts.manage） | 删除一个服务密钥 |
 | `GET` | `/admin-api/accounts` | Cookie（需相应权限） | 账号列表、权限点与角色预设 |
 | `POST` | `/admin-api/accounts` | Cookie（需相应权限） | 创建管理员账号 |
 | `PATCH` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 更新账号权限、启用状态或改密提示 |
@@ -392,6 +399,43 @@ curl -sS https://nkustudy.top/api/v1/review-groups
 
 ```bash
 curl -sS 'https://nkustudy.top/api/v1/review-groups/<GROUP_KEY>'
+```
+
+### 服务间接口（X-Service-Key）
+
+供团队其他服务（机器人、指南/AI 后端等）复用本站登录态与风控。调用方先由管理员在
+`/admin-api/service-keys` 创建服务密钥（`nkusvc_` 前缀，仅创建时完整展示一次），随后在请求头携带
+`x-service-key: <密钥>`。密钥停用/删除立即生效。
+
+### `POST /api/v1/auth/verify`
+
+请求 JSON：`{ "token": "<用户 Bearer token（可带或不带 Bearer 前缀）>" }`
+
+- 成功 `200`：`{ "active": true, "user_id": 7, "nickname": "同学", "blocked": false, "expires_at": 1893456000000 }`
+- 无效时 `active:false` 且 `reason` 为 `malformed` / `revoked`（已注销）/ `expired`（已过期，附 `expires_at`）/
+  `blocked`（用户被拉黑，附 `user_id`）/ `deleted`（用户已注销账号）。
+- 内省为只读：不刷新滑动过期。拉黑用户的 token 立即视为 `active:false`。
+
+### `POST /api/v1/service/blacklist`
+
+请求 JSON：`{ "user_ids": [1, 2, 3] }`（最多 100 个，超出只取前 100）
+
+- 成功 `200`：`{ "users": [{ "user_id": 1, "exists": true, "blocked": false }, ...] }`
+- 管理员在后台「小程序用户」里拉黑/解除，本接口实时反映。
+
+### `POST /api/v1/service/rate-limit`
+
+请求 JSON：`{ "scope": "chat", "key": "user-7", "limit": 20, "window_ms": 60000 }`
+
+- `scope` 只保留 `[A-Za-z0-9_.-]`；实际计数命名空间为 `svc:<服务ID>:<scope>`，服务之间互不影响。
+- `limit` 1-10000；`window_ms` 1000-86400000；每次调用消耗 1。
+- 成功 `200`：`{ "allowed": true, "scope": "svc:svc-xxx:chat", "count": 1, "limit": 20, "remaining": 19,
+  "reset_at": 1893456000000, "retry_after_ms": 0 }`
+- 超限时 `allowed:false` 且 `retry_after_ms > 0`，`count/remaining` 反映已用量。
+- 主要错误：`400 INVALID_RATE_LIMIT_INPUT`、`401 SERVICE_KEY_REQUIRED`。
+
+```bash
+curl -sS -X POST 'https://nkustudy.top/api/v1/service/rate-limit'   -H 'x-service-key: nkusvc_xxx' -H 'content-type: application/json'   -d '{"scope":"chat","key":"user-7","limit":20,"window_ms":60000}'
 ```
 
 ### `PUT /api/v1/reviews/:reviewId/reaction`

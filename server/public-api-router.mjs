@@ -32,8 +32,21 @@ function decodePathPart(value) {
   }
 }
 
-export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, notify = null, readBody, clientIp } = {}) {
+export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, notify = null, readBody, clientIp } = {}) {
   if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
+  async function requireService(req) {
+    if (!serviceAuthStore) throw new PublicApiError(503, "服务间接口暂未开放。", "SERVICE_AUTH_NOT_CONFIGURED");
+    const caller = await serviceAuthStore.verify(req.headers["x-service-key"]);
+    if (!caller) throw new PublicApiError(401, "服务密钥无效。", "SERVICE_KEY_REQUIRED");
+    return caller;
+  }
+  async function readJsonBody(req) {
+    try {
+      return await readBody(req);
+    } catch {
+      throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+    }
+  }
   return async function handlePublicApi(req, res, url) {
     if (url.pathname !== "/api/v1" && !url.pathname.startsWith("/api/v1/")) return false;
     try {
@@ -41,7 +54,19 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       const authUser = mpAuthService ? mpAuthService.verifyToken(req.headers.authorization) : null;
       if (req.method === "GET" && url.pathname === "/api/v1/health") data = service.health();
       else if (req.method === "GET" && url.pathname === "/api/v1/home") data = service.home();
-      else if (req.method === "GET" && url.pathname === "/api/v1/search-index") data = service.searchIndex();
+      else if (req.method === "POST" && url.pathname === "/api/v1/auth/verify") {
+        await requireService(req);
+        const body = await readJsonBody(req);
+        data = service.serviceVerifyToken(String(body?.token || ""));
+      } else if (req.method === "POST" && url.pathname === "/api/v1/service/blacklist") {
+        await requireService(req);
+        const body = await readJsonBody(req);
+        data = service.serviceBlacklist(body?.user_ids);
+      } else if (req.method === "POST" && url.pathname === "/api/v1/service/rate-limit") {
+        const caller = await requireService(req);
+        const body = await readJsonBody(req);
+        data = service.serviceRateLimit(caller.id, body);
+      } else if (req.method === "GET" && url.pathname === "/api/v1/search-index") data = service.searchIndex();
       else if (req.method === "GET" && url.pathname === "/api/v1/catalog") data = service.catalog(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);

@@ -304,6 +304,39 @@ export class MpAuthService {
     return user;
   }
 
+  /**
+   * 供其他服务使用的登录态内省：区分 有效/已过期/已注销/被拉黑，
+   * 不刷新滑动过期，只读不写。
+   */
+  introspectToken(authorizationHeader, { now = this.now() } = {}) {
+    const header = String(authorizationHeader || "");
+    const match = header.match(/^Bearer ([A-Za-z0-9_-]{32,128})$/);
+    if (!match) return { active: false, reason: "malformed" };
+    const timestamp = positiveSafeInteger(now, "now");
+    const row = this.selectToken.get(tokenHash(match[1]));
+    if (!row) return { active: false, reason: "revoked" };
+    if (row.expires_at <= timestamp) return { active: false, reason: "expired", expires_at: row.expires_at };
+    const user = this.selectUserById.get(row.user_id);
+    if (!user) return { active: false, reason: "deleted", expires_at: row.expires_at };
+    return {
+      active: user.blocked !== 1,
+      ...(user.blocked === 1 ? { reason: "blocked" } : {}),
+      user_id: user.id,
+      nickname: user.nickname || "",
+      blocked: user.blocked === 1,
+      expires_at: row.expires_at,
+    };
+  }
+
+  /** 批量黑名单状态查询（服务间接口用），不泄露昵称以外的信息。 */
+  blacklistStatus(userIds) {
+    const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map((value) => Number(value)).filter((value) => Number.isSafeInteger(value) && value > 0))].slice(0, 100);
+    return ids.map((id) => {
+      const user = this.selectUserById.get(id);
+      return { user_id: id, exists: Boolean(user), blocked: user ? user.blocked === 1 : false };
+    });
+  }
+
   requireUser(authorizationHeader) {
     const user = this.verifyToken(authorizationHeader);
     if (!user) {

@@ -19,6 +19,7 @@ import { createPublicApiHandler } from "./public-api-router.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
+import { ServiceAuthStore } from "./service-auth-store.mjs";
 import { MpFavoritesService } from "./mp-favorites-service.mjs";
 import { CourseCatalogService } from "./course-catalog-service.mjs";
 import { FeishuNotifyService } from "./feishu-notify-service.mjs";
@@ -168,6 +169,15 @@ const reviewSubmissionService = new ReviewSubmissionService({
   },
 });
 const courseCatalog = new CourseCatalogService({ catalogPath: path.join(dataDir, "catalog.json") });
+const mpAuthService = new MpAuthService({
+  dbPath: runtime.stateDbPath,
+  appid: process.env.WECHAT_APPID || "",
+  secret: process.env.WECHAT_APPSECRET || "",
+});
+const mpFavoritesService = new MpFavoritesService({
+  dbPath: runtime.stateDbPath,
+  readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
+});
 const publicApiService = new PublicApiService({
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
@@ -180,15 +190,8 @@ const publicApiService = new PublicApiService({
   publicResourceOrigin: process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top",
   guideCorrectionUrl: process.env.PUBLIC_GUIDE_CORRECTION_URL || "https://nkustudy.top/feedback",
   assertMpAuthAttempt: (ip) => consumeLayeredAttempt("mp-auth-attempt", ip, { perIp: 10, global: 240 }),
-});
-const mpAuthService = new MpAuthService({
-  dbPath: runtime.stateDbPath,
-  appid: process.env.WECHAT_APPID || "",
-  secret: process.env.WECHAT_APPSECRET || "",
-});
-const mpFavoritesService = new MpFavoritesService({
-  dbPath: runtime.stateDbPath,
-  readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
+  mpAuthService,
+  serviceRateLimiter: rateLimiter,
 });
 const notifySettingsPath = path.join(dataDir, "notify-settings.json");
 const notifySecretsPath = path.join(dataDir, "notify-secrets.json");
@@ -229,7 +232,8 @@ async function notifyModerators(payload = {}) {
   return result;
 }
 const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, notify: notifyModerators, readBody: readPublicBody, clientIp });
+const serviceAuthStore = new ServiceAuthStore({ store: jsonStore, filePath: path.join(dataDir, "service-keys.json") });
+const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, notify: notifyModerators, readBody: readPublicBody, clientIp });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -2408,6 +2412,49 @@ const server = createServer(async (req, res) => {
       const beijingDay = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const dayStartMs = Date.parse(`${beijingDay}T00:00:00+08:00`);
       json(res, 200, { ok: true, data: mpAuthService.adminOverview({ dayStartMs }) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/service-keys") {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      json(res, 200, { ok: true, data: await serviceAuthStore.list() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/service-keys") {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const created = await serviceAuthStore.create({ name: body.name, note: body.note });
+        json(res, 200, { ok: true, data: created });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    const serviceKeyEnabledMatch = url.pathname.match(/^\/admin-api\/service-keys\/([^/]+)\/enabled$/);
+    if (req.method === "POST" && serviceKeyEnabledMatch) {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        await serviceAuthStore.setEnabled(decodePathPart(serviceKeyEnabledMatch[1]), body.enabled === true);
+        json(res, 200, { ok: true, data: await serviceAuthStore.list() });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    const serviceKeyMatch = url.pathname.match(/^\/admin-api\/service-keys\/([^/]+)$/);
+    if (req.method === "DELETE" && serviceKeyMatch) {
+      if (!requirePermission(req, account, "accounts.manage", res)) return;
+      try {
+        await serviceAuthStore.remove(decodePathPart(serviceKeyMatch[1]));
+        json(res, 200, { ok: true, data: await serviceAuthStore.list() });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
       return;
     }
 
