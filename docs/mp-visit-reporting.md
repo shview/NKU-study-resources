@@ -16,6 +16,15 @@ Content-Type: application/json
 - 与网页同接口、同限流（每 IP 每分钟 120 次，客户端无需自己做节流）。
 - `request` 合法域名 `https://nkustudy.top` 已在小程序后台配置，无需新增域名。
 - 上报失败静默忽略即可，不得影响页面加载。
+- 上报成功会返回 `{ok:true,stats:{counted,total,today,updatedAt,startedAt}}`；小程序可直接用 `total` 和 `startedAt` 展示与网站同源的累计访问量和安全运行时长。
+
+如只需读取统计而不记录访问，可请求：
+
+```text
+GET https://nkustudy.top/visit-api/stats
+```
+
+响应中的 `stats` 不含 `counted`，其余公开字段与 POST 一致。`total` 是网站和小程序共同累积的 30 分钟去重访问量，并非实名用户数或严格的独立访客人数。
 
 ## 页面名规则
 
