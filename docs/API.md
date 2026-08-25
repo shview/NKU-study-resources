@@ -542,7 +542,7 @@ curl -sS https://nkustudy.top/feedback-api/submit \
 
 ### `GET /visit-api/stats`
 
-成功：`{ "ok":true, "stats": { "total":0, "today":0, "updatedAt":"..." } }`。
+成功：`{ "ok":true, "stats": { "total":0, "today":0, "updatedAt":"...", "startedAt":"2026-07-14T16:00:00+08:00" } }`。其中 `total` 同时汇总网站与小程序上报的访问，`startedAt` 与网站页脚使用同一个安全运行起始时间。
 
 ```bash
 curl -sS https://nkustudy.top/visit-api/stats
@@ -552,7 +552,7 @@ curl -sS https://nkustudy.top/visit-api/stats
 
 请求：`{ "path":"/courses/某课程" }`；缺省时使用 Referer 或 `/`。服务端只记录固定页面、课程详情模板、评价详情模板或 `/__unknown__`，不记录任意原始 URL；后台和 API 路径不计数。同一 IP+User-Agent 30 分钟内去重。
 
-成功：`{ "ok":true, "stats": { "counted":true, "total":1, "today":1, "updatedAt":"..." } }`。限流为每 IP 每分钟 120、全局每分钟 600，超限返回 `429`。
+成功：`{ "ok":true, "stats": { "counted":true, "total":1, "today":1, "updatedAt":"...", "startedAt":"2026-07-14T16:00:00+08:00" } }`。返回的公开统计字段与 `GET /visit-api/stats` 一致；限流为每 IP 每分钟 120、全局每分钟 600，超限返回 `429`。
 
 ```bash
 curl -sS https://nkustudy.top/visit-api/hit \

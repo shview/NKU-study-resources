@@ -416,6 +416,25 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal(publicReviewResponse.status, 200);
   assert.deepEqual(await publicReviewResponse.json(), { code: 0, data: { submitted: true, pending: true } });
 
+  const visitStatsResponse = await fetch(`http://127.0.0.1:${port}/visit-api/stats`);
+  assert.equal(visitStatsResponse.status, 200);
+  const visitStats = await visitStatsResponse.json();
+  assert.equal(visitStats.ok, true);
+  assert.deepEqual(Object.keys(visitStats.stats).sort(), ["startedAt", "today", "total", "updatedAt"]);
+  assert.equal(visitStats.stats.startedAt, "2000-01-01T00:00:00Z", "public stats must reuse the footer runtime start");
+
+  const miniProgramVisitResponse = await fetch(`http://127.0.0.1:${port}/visit-api/hit`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "user-agent": "mini-program-status-test" },
+    body: JSON.stringify({ path: "/mp/home" }),
+  });
+  assert.equal(miniProgramVisitResponse.status, 200);
+  const miniProgramVisit = await miniProgramVisitResponse.json();
+  assert.equal(miniProgramVisit.ok, true);
+  assert.deepEqual(Object.keys(miniProgramVisit.stats).sort(), ["counted", "startedAt", "today", "total", "updatedAt"]);
+  assert.equal(miniProgramVisit.stats.startedAt, "2000-01-01T00:00:00Z");
+  assert.equal(miniProgramVisit.stats.total, visitStats.stats.total + 1, "website and mini-program visits must share one total");
+
   const invalidAttempts = [];
   for (let index = 0; index < 30; index += 1) {
     invalidAttempts.push(await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
@@ -483,5 +502,5 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal(typeof reviews.reviews[0].ipHash, "string");
   assert.equal(JSON.stringify(reviews).includes("127.0.0.1"), false);
   assert.equal(JSON.stringify(feedback).includes("127.0.0.1"), false);
-  assert.deepEqual(Object.keys(visits.pages), ["/__unknown__"]);
+  assert.deepEqual(Object.keys(visits.pages).sort(), ["/__unknown__", "/mp/home"]);
 });
