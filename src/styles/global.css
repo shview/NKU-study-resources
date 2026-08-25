@@ -1246,7 +1246,7 @@ details.resource-subsection summary::-webkit-details-marker {
 /* vditor 会把 .vditor 类合并到挂载容器本身，不会产生嵌套的 .vditor 元素，
    因此容器必须用复合选择器（.markdown-editor.vditor），
    后代规则直接以容器类为作用域，不要写中间的 .vditor。 */
-.markdown-editor.vditor,
+.markdown-editor .vditor,
 .admin-markdown-field .markdown-editor,
 .admin-markdown-field .vditor,
 .user-markdown-editor.vditor {
@@ -1256,7 +1256,7 @@ details.resource-subsection summary::-webkit-details-marker {
   background: #fff;
 }
 
-.markdown-editor.vditor,
+.markdown-editor .vditor,
 .admin-markdown-field .vditor,
 .user-markdown-editor.vditor {
   min-height: 220px;
@@ -1270,18 +1270,9 @@ details.resource-subsection summary::-webkit-details-marker {
 }
 
 /* 覆盖 vditor 自带的 Helvetica 字体栈：编辑器与预览统一使用站点字体，
-   避免 Windows 上整体落到微软雅黑导致编辑区看起来比页面其他文字更粗 */
-.markdown-editor.vditor,
-.admin-markdown-field .markdown-editor.vditor,
+   避免 Windows 上整体落到微软雅黑导致编辑区看起来比页面其他文字更粗。
+   只作用于用户侧编辑器（评价/反馈），管理页与通用编辑器保持原样。 */
 .user-markdown-editor.vditor,
-.markdown-editor .vditor-sv,
-.markdown-editor .vditor-preview,
-.markdown-editor .vditor-reset,
-.markdown-editor textarea,
-.admin-markdown-field .vditor-sv,
-.admin-markdown-field .vditor-preview,
-.admin-markdown-field .vditor-reset,
-.admin-markdown-field textarea,
 .user-markdown-editor .vditor-sv,
 .user-markdown-editor .vditor-preview,
 .user-markdown-editor .vditor-reset,
@@ -1289,13 +1280,13 @@ details.resource-subsection summary::-webkit-details-marker {
   font-family: inherit !important;
 }
 
-.markdown-editor.vditor .vditor-toolbar,
+.markdown-editor .vditor .vditor-toolbar,
 .admin-markdown-field .vditor .vditor-toolbar,
 .user-markdown-editor.vditor .vditor-toolbar {
   border-bottom: 1px solid var(--line);
 }
 
-.markdown-editor.vditor .vditor-wysiwyg,
+.markdown-editor .vditor .vditor-wysiwyg,
 .admin-markdown-field .vditor .vditor-wysiwyg,
 .user-markdown-editor.vditor .vditor-wysiwyg {
   min-height: 160px;
@@ -2100,7 +2091,7 @@ details.resource-subsection summary::-webkit-details-marker {
   background: var(--surface-soft);
 }
 
-:root[data-theme="dark"] .markdown-editor.vditor,
+:root[data-theme="dark"] .markdown-editor .vditor,
 :root[data-theme="dark"] .admin-markdown-field .vditor,
 :root[data-theme="dark"] .user-markdown-editor.vditor {
   color: var(--text) !important;
@@ -2113,10 +2104,10 @@ details.resource-subsection summary::-webkit-details-marker {
   background: var(--surface);
 }
 
-:root[data-theme="dark"] .markdown-editor.vditor .vditor-toolbar,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-toolbar,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-toolbar,
 :root[data-theme="dark"] .user-markdown-editor.vditor .vditor-toolbar,
-:root[data-theme="dark"] .markdown-editor.vditor .vditor-menu,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-menu,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-menu,
 :root[data-theme="dark"] .user-markdown-editor.vditor .vditor-menu {
   color: var(--text) !important;
@@ -2124,45 +2115,45 @@ details.resource-subsection summary::-webkit-details-marker {
   background: var(--surface-soft) !important;
 }
 
-:root[data-theme="dark"] .markdown-editor .vditor-content,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-content,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-content,
 :root[data-theme="dark"] .user-markdown-editor .vditor-content,
-:root[data-theme="dark"] .markdown-editor .vditor-wysiwyg,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-wysiwyg,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-wysiwyg,
 :root[data-theme="dark"] .user-markdown-editor .vditor-wysiwyg,
-:root[data-theme="dark"] .markdown-editor [contenteditable="true"],
+:root[data-theme="dark"] .markdown-editor .vditor [contenteditable="true"],
 :root[data-theme="dark"] .admin-markdown-field .vditor [contenteditable="true"],
 :root[data-theme="dark"] .user-markdown-editor [contenteditable="true"],
-:root[data-theme="dark"] .markdown-editor textarea,
+:root[data-theme="dark"] .markdown-editor .vditor textarea,
 :root[data-theme="dark"] .admin-markdown-field .vditor textarea,
 :root[data-theme="dark"] .user-markdown-editor textarea,
-:root[data-theme="dark"] .markdown-editor .vditor-preview,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-preview,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-preview,
 :root[data-theme="dark"] .user-markdown-editor .vditor-preview,
-:root[data-theme="dark"] .markdown-editor .vditor-reset,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-reset,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-reset,
 :root[data-theme="dark"] .user-markdown-editor .vditor-reset {
   color: var(--text) !important;
   background: var(--surface) !important;
 }
 
-:root[data-theme="dark"] .markdown-editor.vditor .vditor-toolbar button,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-toolbar button,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-toolbar button,
 :root[data-theme="dark"] .user-markdown-editor.vditor .vditor-toolbar button,
-:root[data-theme="dark"] .markdown-editor.vditor .vditor-toolbar svg,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-toolbar svg,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-toolbar svg,
 :root[data-theme="dark"] .user-markdown-editor.vditor .vditor-toolbar svg {
   color: var(--text) !important;
   fill: currentColor !important;
 }
 
-:root[data-theme="dark"] .markdown-editor.vditor .vditor-menu__content,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-menu__content,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-menu__content,
 :root[data-theme="dark"] .user-markdown-editor.vditor .vditor-menu__content,
-:root[data-theme="dark"] .markdown-editor .vditor-emojis,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-emojis,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-emojis,
 :root[data-theme="dark"] .user-markdown-editor .vditor-emojis,
-:root[data-theme="dark"] .markdown-editor .vditor-tooltip,
+:root[data-theme="dark"] .markdown-editor .vditor .vditor-tooltip,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-tooltip,
 :root[data-theme="dark"] .user-markdown-editor .vditor-tooltip {
   color: var(--text) !important;
