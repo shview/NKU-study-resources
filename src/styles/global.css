@@ -1442,7 +1442,8 @@ details.resource-subsection summary::-webkit-details-marker {
 .user-markdown-editor .vditor .vditor-preview,
 .user-markdown-editor .vditor .vditor-reset {
   font-size: 15px !important;
-  font-weight: 350 !important;
+  /* 必须用标准字重：350/650 在 Windows 微软雅黑会被匹配成粗体，导致正文与加粗无法区分 */
+  font-weight: 400 !important;
   line-height: 1.75 !important;
 }
 
@@ -1457,12 +1458,12 @@ details.resource-subsection summary::-webkit-details-marker {
 .user-markdown-editor .vditor .vditor-ir [data-type="strong"] *,
 .user-markdown-editor .vditor .vditor-reset strong,
 .user-markdown-editor .vditor .vditor-reset b {
-  font-weight: 900 !important;
+  font-weight: 700 !important;
 }
 
 .user-markdown-editor .vditor .vditor-ir .vditor-ir__marker,
 .user-markdown-editor .vditor .vditor-ir .vditor-ir__marker * {
-  font-weight: 350 !important;
+  font-weight: 400 !important;
   opacity: 0.72;
 }
 
@@ -1479,7 +1480,7 @@ details.resource-subsection summary::-webkit-details-marker {
 .user-markdown-editor .vditor .vditor-wysiwyg h5,
 .user-markdown-editor .vditor .vditor-wysiwyg h6 {
   font-size: 16px !important;
-  font-weight: 650 !important;
+  font-weight: 600 !important;
 }
 
 .review-announcement {
