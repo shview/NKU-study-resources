@@ -189,7 +189,17 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                     throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
                   }
                   data = await service.reactReviewHelpful(decodePathPart(match[1]), body?.reaction ?? null, user.id);
-                } else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
+                } else if (req.method === "POST" && url.pathname === "/api/v1/guide-assistant/answers") {
+                if (!mpAuthService || !service.guideAssistantAnswer) throw new PublicApiError(503, "问答服务暂未开放。", "AI_UNAVAILABLE");
+                const user = mpAuthService.requireUser(req.headers.authorization);
+                let body;
+                try {
+                  body = await readBody(req);
+                } catch {
+                  throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+                }
+                data = await service.guideAssistantAnswer(user.id, body);
+              } else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
                 const ip = clientIp(req);
                 service.assertReviewAttempt(ip);
                 let body;

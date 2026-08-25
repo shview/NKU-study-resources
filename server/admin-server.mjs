@@ -19,6 +19,9 @@ import { createPublicApiHandler, decodePathPart } from "./public-api-router.mjs"
 import { PublicApiError } from "./public-api-errors.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
+import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
+import { createGuideAssistantService } from "./guide-assistant-service.mjs";
+import { createQwenProviderFromEnv } from "./qwen-provider.mjs";
 import { ServiceAuthStore } from "./service-auth-store.mjs";
 import { MpFavoritesService } from "./mp-favorites-service.mjs";
 import { CourseCatalogService } from "./course-catalog-service.mjs";
@@ -191,10 +194,27 @@ const mpFavoritesService = new MpFavoritesService({
   dbPath: runtime.stateDbPath,
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
 });
+const learningCompassService = createDefaultLearningCompassService();
+const guideAssistantService = createGuideAssistantService({
+  learningCompass: learningCompassService,
+  qwen: createQwenProviderFromEnv(),
+  limiter: (userId) => rateLimiter.consumeLayered({
+    scope: "guide-assistant",
+    actorHash: hashActor(`user:${userId}`, secret),
+    actorLimits: [
+      { windowMs: 24 * 60 * 60 * 1000, max: 20 },
+      { windowMs: 60 * 1000, max: 3 },
+    ],
+    globalActorHash: hashActor("global:guide-assistant", secret),
+    globalLimits: [{ windowMs: 24 * 60 * 60 * 1000, max: 2_000 }],
+  }).allowed,
+});
 const publicApiService = new PublicApiService({
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
   readHome,
+  learningCompass: learningCompassService,
+  guideAssistant: guideAssistantService,
   readVisitStats: readVisitStats,
   readFeedback: () => readFeedback(),
   courseCatalog,

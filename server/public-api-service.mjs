@@ -55,7 +55,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, learningCompass = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
+  constructor({ readManifest, readReviews, readHome, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -65,6 +65,7 @@ export class PublicApiService {
     this.readReviews = readReviews;
     this.readHome = readHome;
     this.learningCompass = learningCompass || createDefaultLearningCompassService();
+    this.guideAssistant = guideAssistant;
     this.readVisitStats = readVisitStats;
     this.readFeedback = readFeedback || (() => ({ items: [] }));
     this.courseCatalog = courseCatalog;
@@ -318,6 +319,11 @@ export class PublicApiService {
 
   guideVariant(guideId, variantId) {
     return this.learningCompass.guideVariant(guideId, variantId);
+  }
+
+  async guideAssistantAnswer(userId, body) {
+    if (!this.guideAssistant) throw new PublicApiError(503, "问答服务暂未开放，请使用普通指南或搜索。", "AI_UNAVAILABLE");
+    return this.guideAssistant.answer(userId, body);
   }
 
   reviewGroups({ viewerId = null } = {}) {

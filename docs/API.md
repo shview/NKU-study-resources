@@ -21,6 +21,7 @@
 | `GET` | `/api/v1/guides` | 公开 | 学习指南针指南列表（稳定五分类、facets、分页） |
 | `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |
 | `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |
+| `POST` | `/api/v1/guide-assistant/answers` | 登录 | 学习指南针 AI 问答（检索+引用+拒答） |
 | `GET` | `/api/v1/courses` | 公开 | 搜索、筛选和分页课程 |
 | `GET` | `/api/v1/courses/:courseUid` | 公开 | 课程详情 |
 | `GET` | `/api/v1/courses/:courseUid/resources` | 公开 | 课程资源与 R2 下载地址 |
@@ -336,6 +337,29 @@ curl -sS https://nkustudy.top/api/v1/home
 - 按需读取一个转专业学院/单位的逐字原文。当前仅 `transfer-major-2026` 是 `multi_variant`。
 - 成功 `data` 为 `{guide_id, variant:{id,title,order,sections[{id,title,body_format,body,source_ids}],sources[]}}`；`sections[].body` 为该学院官方原文件的 Markdown 全文，学院之间内容不串用。
 - 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`、`404 GUIDE_VARIANT_NOT_FOUND`。
+
+### `POST /api/v1/guide-assistant/answers`
+
+学习指南针 AI 问答（B 批）。必须携带小程序登录 Bearer Token：`Authorization: Bearer <token>`。
+
+请求体（全部字段校验在 provider 调用前完成）：
+
+```json
+{
+  "question": "课程成绩有异议，如何申请复核？",
+  "history": [{ "role": "user", "content": "…" }, { "role": "assistant", "content": "…" }],
+  "profile": { "admission_year": 2025, "major": "用户主动填写的专业" }
+}
+```
+
+- `question` 必填，1–1000 字；`history` 最多 9 轮（role 只允许 `user/assistant`，历史回答不作为事实来源，每问重新检索）；`profile` 可选。
+- 服务端顺序：Token 验证 → 黑名单/注销检查 → 限流 → 输入校验 → 检索 published 逐字块 → 冲突/无依据拒答 → 调用千问 → 返回。
+- 限流：每用户每日 20 次、分钟 3 次，全局每日 2000 次（SQLite 持久化窗口）。
+- 30 秒总预算，provider 失败最多自动重试 1 次，仍失败返回 `503 AI_UNAVAILABLE`。
+- 依据不足/来源冲突/越界返回 `200` 业务拒答：`data.refused=true`，`reason` 为 `INSUFFICIENT_EVIDENCE|SOURCE_CONFLICT|OUT_OF_SCOPE` 之一，不调用模型、不编造。
+- 成功响应 `data`：`answer`、`refused:false`、`reason:null`、`applicable_scope`、`freshness_notice`、`citations[{id,title,document_no,publisher,published_at,file_type,file_url,official_page_url}]`（整份原文件级引用，`file_url` 为 R2 公网直链）。
+- 模型密钥只存在于服务器环境变量（`DASHSCOPE_API_KEY`、可选 `QWEN_BASE_URL`/`QWEN_MODEL`/`QWEN_MAX_TOKENS`）；未配置密钥时稳定返回 `503 AI_UNAVAILABLE`，普通指南不受影响。
+- 主要错误：`400 INVALID_AI_QUESTION`、`401 AUTH_REQUIRED`、`429 RATE_LIMITED`、`503 AI_UNAVAILABLE`。
 
 ### `GET /api/v1/courses`
 
