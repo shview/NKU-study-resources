@@ -46,6 +46,7 @@ import "vditor/dist/index.css";
         <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
         <button class="button secondary" type="button" data-admin-tab="accounts">账号管理</button>
         <button class="button secondary" type="button" data-admin-tab="service-keys">服务密钥</button>
+        <button class="button secondary" type="button" data-admin-tab="ai">AI 问答</button>
         <button class="button secondary" type="button" data-admin-tab="mp-users">小程序用户</button>
         <button class="button secondary" type="button" data-admin-tab="notify">通知设置</button>
         <button class="button secondary" type="button" data-admin-tab="audit">审计日志</button>
@@ -444,6 +445,69 @@ import "vditor/dist/index.css";
         </div>
       </div>
 
+      <div id="ai-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>AI 问答（API 与模型管理）</h2>
+          </div>
+          <div class="panel-body">
+            <p class="muted">学习指南针 AI 问答的模型与限流配置。密钥加密落盘（0600），保存后立即生效、无需重启；停用或未配置密钥时问答接口返回 503，普通指南不受影响。</p>
+            <div class="admin-form">
+              <div class="filter-row">
+                <label class="admin-field" style="max-width:180px;">
+                  <span>服务状态</span>
+                  <select id="ai-enabled">
+                    <option value="true">启用</option>
+                    <option value="false">停用（503）</option>
+                  </select>
+                </label>
+                <label class="admin-field" style="flex:1;">
+                  <span>DashScope API Key（留空保持不变）</span>
+                  <input id="ai-api-key" type="password" placeholder="sk-…（当前：未配置）" autocomplete="new-password" />
+                </label>
+                <label class="admin-field" style="max-width:120px;">
+                  <span>&nbsp;</span>
+                  <button class="button secondary" id="ai-clear-key" type="button">清除密钥</button>
+                </label>
+              </div>
+              <div class="filter-row">
+                <label class="admin-field" style="flex:2;">
+                  <span>Base URL（必须是阿里云 HTTPS）</span>
+                  <input id="ai-base-url" type="text" autocomplete="off" />
+                </label>
+                <label class="admin-field" style="flex:1;">
+                  <span>模型</span>
+                  <input id="ai-model" type="text" placeholder="qwen-plus" autocomplete="off" />
+                </label>
+                <label class="admin-field" style="max-width:140px;">
+                  <span>max_tokens</span>
+                  <input id="ai-max-tokens" type="number" min="64" max="8192" />
+                </label>
+              </div>
+              <div class="filter-row">
+                <label class="admin-field" style="max-width:180px;">
+                  <span>每用户每日次数</span>
+                  <input id="ai-daily-user" type="number" min="1" max="10000" />
+                </label>
+                <label class="admin-field" style="max-width:180px;">
+                  <span>每用户每分钟次数</span>
+                  <input id="ai-minute-user" type="number" min="1" max="1000" />
+                </label>
+                <label class="admin-field" style="max-width:180px;">
+                  <span>全局每日次数</span>
+                  <input id="ai-daily-global" type="number" min="1" max="1000000" />
+                </label>
+                <button class="button" id="ai-save" type="button">保存配置</button>
+                <button class="button secondary" id="ai-test" type="button">测试连接</button>
+              </div>
+              <div class="filter-row">
+                <span class="muted" id="ai-status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="service-keys-admin-panel" hidden>
         <div class="panel">
           <div class="panel-header">
@@ -756,6 +820,8 @@ import "vditor/dist/index.css";
     const accountsAdminList = document.querySelector("#accounts-admin-list");
     const mpUsersAdminPanel = document.querySelector("#mp-users-admin-panel");
     const serviceKeysAdminPanel = document.querySelector("#service-keys-admin-panel");
+    const aiAdminPanel = document.querySelector("#ai-admin-panel");
+    bindAiAdminEvents();
     const mpUsersAdminStatus = document.querySelector("#mp-users-admin-status");
     const mpUsersSummary = document.querySelector("#mp-users-summary");
     const mpUsersList = document.querySelector("#mp-users-list");
@@ -783,6 +849,7 @@ import "vditor/dist/index.css";
       "backup.manage": "备份管理",
       "accounts.manage": "账号管理",
       "audit.read": "审计查看",
+      "ai.manage": "AI 问答",
       "services.manage": "服务密钥",
     };
     const rolePresetFallback = {
@@ -791,6 +858,7 @@ import "vditor/dist/index.css";
       reviewer: ["content.read", "content.moderate"],
       viewer: ["content.read"],
       service_admin: ["services.manage"],
+      ai_admin: ["ai.manage"],
     };
     const tabPermissions = {
       resources: "content.read",
@@ -806,6 +874,7 @@ import "vditor/dist/index.css";
       backup: "backup.manage",
       accounts: "accounts.manage",
       "service-keys": "services.manage",
+      ai: "ai.manage",
       "mp-users": "content.read",
       notify: "backup.manage",
       audit: "audit.read",
@@ -1390,6 +1459,80 @@ import "vditor/dist/index.css";
 
     let serviceKeysState = { settings: null, services: [] };
 
+let aiAdminState = { loaded: false, clearKey: false };
+
+async function loadAiAdmin() {
+  const data = await api("/ai-settings");
+  const settings = data.data;
+  document.querySelector("#ai-enabled").value = String(settings.enabled);
+  document.querySelector("#ai-api-key").value = "";
+  document.querySelector("#ai-api-key").placeholder = settings.has_api_key ? `sk-…（当前：${settings.api_key_masked}${settings.seeded_from_env ? "，来自环境变量" : ""}）` : "sk-…（当前：未配置）";
+  document.querySelector("#ai-base-url").value = settings.base_url;
+  document.querySelector("#ai-model").value = settings.model;
+  document.querySelector("#ai-max-tokens").value = settings.max_tokens;
+  document.querySelector("#ai-daily-user").value = settings.daily_limit_per_user;
+  document.querySelector("#ai-minute-user").value = settings.minute_limit_per_user;
+  document.querySelector("#ai-daily-global").value = settings.daily_limit_global;
+  aiAdminState.clearKey = false;
+  aiAdminState.loaded = true;
+}
+
+async function saveAiAdmin() {
+  const status = document.querySelector("#ai-status");
+  status.textContent = "保存中...";
+  const apiKeyInput = document.querySelector("#ai-api-key").value.trim();
+  const body = {
+    settings: {
+      enabled: document.querySelector("#ai-enabled").value === "true",
+      base_url: document.querySelector("#ai-base-url").value.trim(),
+      model: document.querySelector("#ai-model").value.trim(),
+      max_tokens: Number(document.querySelector("#ai-max-tokens").value),
+      daily_limit_per_user: Number(document.querySelector("#ai-daily-user").value),
+      minute_limit_per_user: Number(document.querySelector("#ai-minute-user").value),
+      daily_limit_global: Number(document.querySelector("#ai-daily-global").value),
+    },
+  };
+  if (apiKeyInput) body.api_key = apiKeyInput;
+  if (aiAdminState.clearKey) body.clear_api_key = true;
+  try {
+    await api("/ai-settings", { method: "POST", body: JSON.stringify(body) });
+    await loadAiAdmin();
+    status.textContent = "已保存并生效。";
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+async function testAiAdmin() {
+  const status = document.querySelector("#ai-status");
+  status.textContent = "测试中（最多 15 秒）...";
+  const apiKeyInput = document.querySelector("#ai-api-key").value.trim();
+  const body = {};
+  if (apiKeyInput) body.api_key = apiKeyInput;
+  if (aiAdminState.clearKey) {
+    status.textContent = "已选择清除密钥，请先保存再测试。";
+    return;
+  }
+  try {
+    const data = await api("/ai-settings/test", { method: "POST", body: JSON.stringify(body) });
+    const result = data.data;
+    if (result.ok) status.textContent = `连接成功：模型 ${result.model}，延迟 ${result.latency_ms}ms，回复「${result.preview}」。`;
+    else status.textContent = `连接失败：${result.reason}${result.error ? `（${result.error}）` : ""}`;
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+function bindAiAdminEvents() {
+  document.querySelector("#ai-save").addEventListener("click", saveAiAdmin);
+  document.querySelector("#ai-test").addEventListener("click", testAiAdmin);
+  document.querySelector("#ai-clear-key").addEventListener("click", () => {
+    aiAdminState.clearKey = !aiAdminState.clearKey;
+    document.querySelector("#ai-clear-key").textContent = aiAdminState.clearKey ? "撤销清除" : "清除密钥";
+    document.querySelector("#ai-status").textContent = aiAdminState.clearKey ? "保存后将清除已配置的密钥。" : "";
+  });
+}
+
 async function loadServiceKeysAdmin() {
   const data = await api("/service-keys");
   serviceKeysState = { settings: data.data.settings, services: data.data.services };
@@ -1617,6 +1760,9 @@ async function loadMpUsersAdmin() {
     }
 
     const auditActionLabels = [
+      ["GET /admin-api/ai-settings", "查看 AI 问答配置"],
+      ["POST /admin-api/ai-settings", "保存 AI 问答配置"],
+      ["POST /admin-api/ai-settings/test", "测试 AI 连接"],
       ["login.success", "登录成功"],
       ["login.failed", "登录失败"],
       ["POST /admin-api/manifest", "发布课程树"],
@@ -4065,6 +4211,16 @@ async function loadMpUsersAdmin() {
             notifyAdminStatus.textContent = "";
           } catch (error) {
             notifyAdminStatus.textContent = error.message;
+          }
+        }
+        aiAdminPanel.hidden = tab !== "ai";
+        if (tab === "ai" && !aiAdminState.loaded) {
+          document.querySelector("#ai-status").textContent = "加载中...";
+          try {
+            await loadAiAdmin();
+            document.querySelector("#ai-status").textContent = "";
+          } catch (error) {
+            document.querySelector("#ai-status").textContent = error.message;
           }
         }
         if (tab === "service-keys") {

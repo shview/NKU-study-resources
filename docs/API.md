@@ -22,6 +22,9 @@
 | `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |
 | `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |
 | `POST` | `/api/v1/guide-assistant/answers` | 登录 | 学习指南针 AI 问答（检索+引用+拒答） |
+| `GET` | `/admin-api/ai-settings` | `ai.manage` | 读取 AI 问答配置（Key 掩码） |
+| `POST` | `/admin-api/ai-settings` | `ai.manage` | 保存 AI 问答配置（Key/模型/限流，动态生效） |
+| `POST` | `/admin-api/ai-settings/test` | `ai.manage` | 用当前或待存配置真实调用一次模型测试连通 |
 | `GET` | `/api/v1/courses` | 公开 | 搜索、筛选和分页课程 |
 | `GET` | `/api/v1/courses/:courseUid` | 公开 | 课程详情 |
 | `GET` | `/api/v1/courses/:courseUid/resources` | 公开 | 课程资源与 R2 下载地址 |

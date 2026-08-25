@@ -226,6 +226,7 @@ export function createGuideAssistantService({ learningCompass, qwen = null, limi
       const timeoutMs = Math.max(1_000, TOTAL_BUDGET_MS - elapsed);
       try {
         const answer = await qwen(messages, { timeoutMs });
+        if (answer === null) throw new PublicApiError(503, "问答服务暂未开放，请使用普通指南或搜索。", "AI_UNAVAILABLE");
         const cleaned = cleanText(answer);
         if (!cleaned) throw new Error("empty provider answer");
         return cleaned;

@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 
 export const ADMIN_PERMISSION_POINTS = Object.freeze([
   "accounts.manage",
+  "ai.manage",
   "audit.read",
   "backup.manage",
   "content.edit",
@@ -18,6 +19,7 @@ export const ADMIN_PERMISSION_POINTS = Object.freeze([
 export const ADMIN_ROLE_PRESETS = Object.freeze({
   super_admin: ADMIN_PERMISSION_POINTS.slice(),
   service_admin: ["services.manage"],
+  ai_admin: ["ai.manage"],
   content_admin: ["content.read", "content.edit", "content.moderate"],
   reviewer: ["content.read", "content.moderate"],
   viewer: ["content.read"],

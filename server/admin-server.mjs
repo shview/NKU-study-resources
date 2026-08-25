@@ -21,7 +21,8 @@ import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
 import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import { createGuideAssistantService } from "./guide-assistant-service.mjs";
-import { createQwenProviderFromEnv } from "./qwen-provider.mjs";
+import { createQwenProviderFromSettings } from "./qwen-provider.mjs";
+import { AiProviderStore } from "./ai-provider-store.mjs";
 import { ServiceAuthStore } from "./service-auth-store.mjs";
 import { MpFavoritesService } from "./mp-favorites-service.mjs";
 import { CourseCatalogService } from "./course-catalog-service.mjs";
@@ -136,6 +137,9 @@ function migrateServiceKeyPermission() {
       if (account.permissions.includes("accounts.manage") && !account.permissions.includes("services.manage")) {
         accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "services.manage"] });
       }
+      if (account.permissions.includes("services.manage") && !account.permissions.includes("ai.manage")) {
+        accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "ai.manage"] });
+      }
     }
   } catch (error) {
     console.warn(`services.manage migration skipped: ${error.message}`);
@@ -195,19 +199,23 @@ const mpFavoritesService = new MpFavoritesService({
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
 });
 const learningCompassService = createDefaultLearningCompassService();
+const aiProviderStore = new AiProviderStore({ store: jsonStore, filePath: path.join(dataDir, "ai-provider-settings.json") });
 const guideAssistantService = createGuideAssistantService({
   learningCompass: learningCompassService,
-  qwen: createQwenProviderFromEnv(),
-  limiter: (userId) => rateLimiter.consumeLayered({
-    scope: "guide-assistant",
-    actorHash: hashActor(`user:${userId}`, secret),
-    actorLimits: [
-      { windowMs: 24 * 60 * 60 * 1000, max: 20 },
-      { windowMs: 60 * 1000, max: 3 },
-    ],
-    globalActorHash: hashActor("global:guide-assistant", secret),
-    globalLimits: [{ windowMs: 24 * 60 * 60 * 1000, max: 2_000 }],
-  }).allowed,
+  qwen: createQwenProviderFromSettings(() => aiProviderStore.runtime()),
+  limiter: (userId) => {
+    const { daily_limit_per_user, minute_limit_per_user, daily_limit_global } = aiProviderStore.runtime();
+    return rateLimiter.consumeLayered({
+      scope: "guide-assistant",
+      actorHash: hashActor(`user:${userId}`, secret),
+      actorLimits: [
+        { windowMs: 24 * 60 * 60 * 1000, max: daily_limit_per_user },
+        { windowMs: 60 * 1000, max: minute_limit_per_user },
+      ],
+      globalActorHash: hashActor("global:guide-assistant", secret),
+      globalLimits: [{ windowMs: 24 * 60 * 60 * 1000, max: daily_limit_global }],
+    }).allowed;
+  },
 });
 const publicApiService = new PublicApiService({
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
@@ -2471,6 +2479,59 @@ const server = createServer(async (req, res) => {
         json(res, 200, { ok: true, data: created });
       } catch (error) {
         json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/ai-settings") {
+      if (!requirePermission(req, account, "ai.manage", res)) return;
+      json(res, 200, { ok: true, data: aiProviderStore.masked() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/ai-settings") {
+      if (!requirePermission(req, account, "ai.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const data = await aiProviderStore.update({
+          settings: body.settings || body,
+          apiKey: body.api_key,
+          clearApiKey: body.clear_api_key === true,
+        });
+        json(res, 200, { ok: true, data });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/ai-settings/test") {
+      if (!requirePermission(req, account, "ai.manage", res)) return;
+      const body = await readBody(req);
+      const startedAt = Date.now();
+      try {
+        const runtime = aiProviderStore.runtime();
+        if (!runtime.enabled) {
+          json(res, 200, { ok: true, data: { ok: false, reason: "AI_QUESTION_DISABLED", latency_ms: 0 } });
+          return;
+        }
+        if (!runtime.api_key) {
+          json(res, 200, { ok: true, data: { ok: false, reason: "API_KEY_MISSING", latency_ms: 0 } });
+          return;
+        }
+        const { createQwenProviderFromEnv } = await import("./qwen-provider.mjs");
+        const provider = createQwenProviderFromEnv({
+          DASHSCOPE_API_KEY: body.api_key || runtime.api_key,
+          QWEN_BASE_URL: body.base_url || runtime.base_url,
+          QWEN_MODEL: body.model || runtime.model,
+          QWEN_MAX_TOKENS: String(runtime.max_tokens),
+        });
+        const answer = await provider([{ role: "user", content: "请只回复两个字：正常" }], { timeoutMs: 15_000 });
+        const latency = Date.now() - startedAt;
+        const preview = String(answer || "").trim().slice(0, 40);
+        json(res, 200, { ok: true, data: { ok: true, model: body.model || runtime.model, latency_ms: latency, preview } });
+      } catch (error) {
+        json(res, 200, { ok: true, data: { ok: false, reason: "PROVIDER_ERROR", error: String(error.message || error).slice(0, 120), latency_ms: Date.now() - startedAt } });
       }
       return;
     }
