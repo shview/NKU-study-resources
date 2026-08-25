@@ -959,6 +959,7 @@ function publicVisitStats(stats = readVisitStats()) {
     total: stats.total,
     today: Number(stats.days[day] || 0),
     updatedAt: stats.updatedAt || "",
+    startedAt: readFooter().startedAt,
   };
 }
 
