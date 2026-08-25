@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { PublicApiError } from "./public-api-errors.mjs";
-import { GUIDE_CATEGORIES, normalizeGuideData } from "./public-guide-data.mjs";
+import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import {
   buildReviewGroups,
   isVisibleCourseMetaTag,
@@ -55,7 +55,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
+  constructor({ readManifest, readReviews, readHome, learningCompass = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -64,7 +64,7 @@ export class PublicApiService {
     this.readManifest = readManifest;
     this.readReviews = readReviews;
     this.readHome = readHome;
-    this.readGuides = readGuides;
+    this.learningCompass = learningCompass || createDefaultLearningCompassService();
     this.readVisitStats = readVisitStats;
     this.readFeedback = readFeedback || (() => ({ items: [] }));
     this.courseCatalog = courseCatalog;
@@ -79,12 +79,7 @@ export class PublicApiService {
     const reviewData = this.readReviews();
     if (!manifest || !Array.isArray(manifest.courses)) throw new Error("Runtime course data is unavailable.");
     const groups = buildReviewGroups(manifest, reviewData, this.courseCatalog, { viewerId });
-    const normalizedGuides = normalizeGuideData(this.readGuides(), {
-      courseIds: new Set(manifest.courses.map((course) => course.uid)),
-      fallbackCorrectionUrl: this.guideCorrectionUrl,
-    });
-    if (normalizedGuides.errors.length) throw new Error(`Runtime guide data is invalid: ${normalizedGuides.errors.join(" ")}`);
-    return { manifest, reviewData, groups, guides: normalizedGuides.data };
+    return { manifest, reviewData, groups, learningCompass: this.learningCompass };
   }
 
   health() {
@@ -215,7 +210,7 @@ export class PublicApiService {
   }
 
   searchIndex() {
-    const { manifest, groups, guides } = this.snapshot();
+    const { manifest, groups, learningCompass } = this.snapshot();
     const coursesById = new Map(manifest.courses.map((course) => [course.uid, course]));
     const courseDtos = new Map(manifest.courses.map((course) => [course.uid, publicCourseDto(course, groups, manifest)]));
     const items = [];
@@ -283,19 +278,19 @@ export class PublicApiService {
       }
     }
 
-    for (const guide of guides.items) {
+    for (const guide of learningCompass.searchItems()) {
       items.push({
         ...indexItemBase({
           id: guide.id,
           type: "guide",
           name: guide.title,
-          shortName: guide.short_name,
           aliases: guide.aliases,
           tags: guide.tags,
-          searchText: [guide.summary, guide.category, guide.applicable_scope].join(" "),
-          subtitle: [guide.category, `${guide.updated_at.slice(0, 10)} 更新`].filter(Boolean).join(" · "),
+          searchText: [guide.summary, guide.category_label, guide.applicable_scope].join(" "),
+          subtitle: [guide.category_label, `${guide.updated_at.slice(0, 10)} 更新`].filter(Boolean).join(" · "),
         }),
         category: guide.category,
+        category_label: guide.category_label,
         updated_at: guide.updated_at,
       });
     }
@@ -306,57 +301,23 @@ export class PublicApiService {
     const timestamps = [
       manifest.updated,
       ...manifest.courses.map((course) => course.updated),
-      guides.updated_at,
-      ...guides.items.map((guide) => guide.updated_at),
+      learningCompass.contentUpdatedAt(),
+      ...learningCompass.searchItems().map((guide) => guide.updated_at),
       ...groups.flatMap((group) => group.reviews.map((review) => review.created_at)),
     ];
     return { version, generated_at: generatedAt(timestamps), items, total: items.length };
   }
 
   guides(searchParams) {
-    const { guides } = this.snapshot();
-    const page = positiveInteger(searchParams.get("page"), 1, { max: 1_000_000 });
-    const pageSize = positiveInteger(searchParams.get("page_size"), 20, { max: 100 });
-    const category = queryText(searchParams.get("category"), 40);
-    if (category && !GUIDE_CATEGORIES.includes(category)) throw new PublicApiError(400, "指南分类无效。", "INVALID_GUIDE_CATEGORY");
-    const filtered = guides.items.filter((guide) => !category || guide.category === category);
-    const offset = (page - 1) * pageSize;
-    return {
-      items: filtered.slice(offset, offset + pageSize).map((guide) => ({
-        id: guide.id,
-        title: guide.title,
-        summary: guide.summary,
-        category: guide.category,
-        updated_at: guide.updated_at,
-        applicable_scope: guide.applicable_scope,
-        related_course_ids: guide.related_course_ids,
-      })),
-      total: filtered.length,
-      page,
-      page_size: pageSize,
-      facets: { categories: GUIDE_CATEGORIES.filter((value) => guides.items.some((guide) => guide.category === value)) },
-      data_updated_at: guides.updated_at,
-    };
+    return this.learningCompass.guides(searchParams);
   }
 
   guide(guideId) {
-    const { manifest, guides } = this.snapshot();
-    const guide = guides.items.find((item) => item.id === guideId);
-    if (!guide) throw new PublicApiError(404, "指南不存在。", "GUIDE_NOT_FOUND");
-    const coursesById = new Map(manifest.courses.map((course) => [course.uid, course]));
-    return {
-      id: guide.id,
-      title: guide.title,
-      summary: guide.summary,
-      category: guide.category,
-      updated_at: guide.updated_at,
-      applicable_scope: guide.applicable_scope,
-      steps: guide.steps,
-      related_courses: guide.related_course_ids.map((id) => ({ id, name: queryText(coursesById.get(id)?.title, 120) })),
-      source_title: guide.source_title,
-      source_url: guide.source_url,
-      correction_url: guide.correction_url,
-    };
+    return this.learningCompass.guide(guideId);
+  }
+
+  guideVariant(guideId, variantId) {
+    return this.learningCompass.guideVariant(guideId, variantId);
   }
 
   reviewGroups({ viewerId = null } = {}) {

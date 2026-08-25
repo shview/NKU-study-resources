@@ -18,8 +18,9 @@
 | `GET` | `/api/v1/home` | 公开 | 小程序首页数据 |
 | `GET` | `/api/v1/search-index` | 公开 | 完整、版本化的四类搜索快照 |
 | `GET` | `/api/v1/catalog` | 公开 | 选课手册课程目录（课程+教师，支持 q 搜索与分页） |
-| `GET` | `/api/v1/guides` | 公开 | 指南列表、分类和分页 |
-| `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情、相关课程和纠错入口 |
+| `GET` | `/api/v1/guides` | 公开 | 学习指南针指南列表（稳定五分类、facets、分页） |
+| `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |
+| `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |
 | `GET` | `/api/v1/courses` | 公开 | 搜索、筛选和分页课程 |
 | `GET` | `/api/v1/courses/:courseUid` | 公开 | 课程详情 |
 | `GET` | `/api/v1/courses/:courseUid/resources` | 公开 | 课程资源与 R2 下载地址 |
@@ -312,17 +313,29 @@ curl -sS https://nkustudy.top/api/v1/home
 
 ### `GET /api/v1/guides`
 
-查询参数：`category` 可为空或取 `course-selection`、`training-program`、`add-drop`、`exam-grade`；`page` 默认 1，`page_size` 默认 20、最大 100。未知分类返回 `400 INVALID_GUIDE_CATEGORY`。
+学习指南针公共指南列表（无需登录，只读）。数据来自版本化内容快照 `server/data/learning-compass-snapshot.json`（5 分类、18 篇 published 指南、29 个转专业学院变体）。
 
-成功 `data` 为 `{items,total,page,page_size,facets,data_updated_at}`；列表项只含 `id`、`title`、`summary`、`category`、`updated_at`、`applicable_scope`、`related_course_ids`。`facets.categories` 只列当前有已发布内容的分类。
+查询参数：`category` 可为空或取稳定五分类 `course-study`、`exam-grade`、`student-status-graduation`、`academic-development`、`rules-rights`；`page` 默认 1，`page_size` 默认 20、最大 100。未知分类返回 `400 INVALID_GUIDE_CATEGORY`。
+
+成功 `data` 为 `{items,total,page,page_size,facets,data_updated_at}`：
+
+- 列表项（GuideSummary）：`id`、`title`、`summary`、`category`、`category_label`、`applicable_scope`、`updated_at`、`time_status`（`long_term|current|ended|historical`）、`content_type`（`standard|multi_variant`）、`read_minutes`、`source_count`、`aliases`、`tags`。
+- `facets.categories` 为对象数组 `[{value,label,order,count}]`，只列当前有已发布内容的分类。
+- 旧字段 `steps/source_title/source_url` 已按产品决定直接移除（未公测，无兼容窗口）。
 
 ### `GET /api/v1/guides/:guideId`
 
-- `guideId` 是 `guides.json` 中由内容维护者分配、发布后不随标题变化的稳定 ID。
-- 成功字段：`id`、`title`、`summary`、`category`、`updated_at`、`applicable_scope`、`steps[{title,body}]`、`related_courses[{id,name}]`、`source_title`、`source_url`、`correction_url`。
-- `related_courses[].id` 必须是现有课程 UUID；URL 只允许无账号信息的公开 HTTPS 地址。
-- 本阶段纠错采用公开链接方案，默认指向网站反馈页；没有新增小程序写接口或管理接口。
-- 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`；运行时指南数据违反白名单或引用未知课程时失败关闭并返回 `500 INTERNAL_ERROR`。
+- `guideId` 是内容快照中发布后不变的稳定 ID。
+- 成功字段（GuideDetail）：`id`、`title`、`summary`、`category`、`category_label`、`applicable_scope`、`updated_at`、`time_status`、`content_type`、`read_minutes`、`sections[{id,title,body_format,body,source_ids}]`、`sources[{id,title,document_no,publisher,published_at,file_type,file_name,file_url,official_page_url,location_label}]`、`variants[{id,title,order,source_count}]`、`related_courses`、`correction_url`。
+- `sections[].body` 为忠实于官方原文的 Markdown；`sources[].file_url` 指向 R2 公网域名 `https://resources.nkustudy.top/guide-sources/...`，浏览器与小程序 `downloadFile` 均可直接访问，不经应用服务器代理。
+- 多学院指南（`transfer-major-2026`）详情只返回校级章节和 29 个轻量 `variants`，不携带 150 个学院原文块；学院正文按需经 variants 接口加载。
+- 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`。
+
+### `GET /api/v1/guides/:guideId/variants/:variantId`
+
+- 按需读取一个转专业学院/单位的逐字原文。当前仅 `transfer-major-2026` 是 `multi_variant`。
+- 成功 `data` 为 `{guide_id, variant:{id,title,order,sections[{id,title,body_format,body,source_ids}],sources[]}}`；`sections[].body` 为该学院官方原文件的 Markdown 全文，学院之间内容不串用。
+- 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`、`404 GUIDE_VARIANT_NOT_FOUND`。
 
 ### `GET /api/v1/courses`
 

@@ -156,12 +156,15 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         }
         data = mpFavoritesService.add(user, body.course_id);
       } else {
-        let match = url.pathname.match(/^\/api\/v1\/guides\/([^/]+)$/);
-        if (req.method === "GET" && match) data = service.guide(decodePathPart(match[1]));
+        let match = url.pathname.match(/^\/api\/v1\/guides\/([^/]+)\/variants\/([^/]+)$/);
+        if (req.method === "GET" && match) data = service.guideVariant(decodePathPart(match[1]), decodePathPart(match[2]));
         else {
-          match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)$/);
-          if (req.method === "GET" && match) data = service.course(decodePathPart(match[1]));
+          match = url.pathname.match(/^\/api\/v1\/guides\/([^/]+)$/);
+          if (req.method === "GET" && match) data = service.guide(decodePathPart(match[1]));
           else {
+            match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)$/);
+            if (req.method === "GET" && match) data = service.course(decodePathPart(match[1]));
+            else {
             match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)\/resources$/);
             if (req.method === "GET" && match) data = service.resources(decodePathPart(match[1]));
             else if (req.method === "GET" && url.pathname === "/api/v1/review-groups") data = service.reviewGroups({ viewerId: authUser?.id || null });
@@ -203,6 +206,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
             }
           }
         }
+      }
       }
       }
       writeJson(req, res, 200, responseBody(data), { cache: req.method === "GET" && url.pathname !== "/api/v1/health" });

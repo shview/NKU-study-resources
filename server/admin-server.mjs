@@ -195,7 +195,6 @@ const publicApiService = new PublicApiService({
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
   readHome,
-  readGuides,
   readVisitStats: readVisitStats,
   readFeedback: () => readFeedback(),
   courseCatalog,
