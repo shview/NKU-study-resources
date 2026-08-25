@@ -107,8 +107,8 @@ const rateLimiter = new PersistentRateLimiter({ dbPath: runtime.stateDbPath });
 const sessionStore = new AdminSessionStore({
   dbPath: runtime.stateDbPath,
   secret,
-  absoluteTtlMs: Number(process.env.ADMIN_SESSION_ABSOLUTE_TTL_MS || 8 * 60 * 60 * 1000),
-  idleTtlMs: Number(process.env.ADMIN_SESSION_IDLE_TTL_MS || 30 * 60 * 1000),
+  absoluteTtlMs: Number(process.env.ADMIN_SESSION_ABSOLUTE_TTL_MS || 7 * 24 * 60 * 60 * 1000),
+  idleTtlMs: Number(process.env.ADMIN_SESSION_IDLE_TTL_MS || 7 * 24 * 60 * 60 * 1000),
 });
 const auditArchiveDir = path.join(dataDir, "audit-archive");
 let auditArchiveUploadStarted = false;
@@ -2122,7 +2122,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       const token = sessionStore.create({ username: account.username });
-      res.setHeader("set-cookie", `${adminCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`);
+      res.setHeader("set-cookie", `${adminCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800`);
       accountsStore.audit({
         username: account.username,
         action: "login.success",

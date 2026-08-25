@@ -896,6 +896,10 @@ import "vditor/dist/index.css";
           currentRevision: data.currentRevision,
         });
         if (response.status === 409) error.message += "\n服务器内容已变化，本次没有覆盖。请重新加载后再编辑。";
+        if (response.status === 401) {
+          error.message = "登录已过期，请重新登录。";
+          showSessionExpired();
+        }
         throw error;
       }
       return data;
@@ -1742,6 +1746,14 @@ async function loadMpUsersAdmin() {
       } else {
         showFirstAllowedTab();
       }
+    }
+
+    function showSessionExpired() {
+      const wasSignedIn = !adminApp.hidden;
+      sessionState = { username: "", permissions: [], mustChangePassword: false };
+      adminApp.hidden = true;
+      loginPanel.hidden = false;
+      loginStatus.textContent = wasSignedIn ? "登录已过期，请重新登录。" : "";
     }
 
     async function checkSession() {
