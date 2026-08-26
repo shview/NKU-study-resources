@@ -42,7 +42,18 @@ function createQwenClient({ apiKey, baseUrl, model, maxTokens }) {
         }),
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`qwen http ${response.status}`);
+      if (!response.ok) {
+        // 读取并记录非敏感错误码（如 invalid_api_key / invalid_model），完整 body 不落日志
+        let providerCode = "";
+        try {
+          const body = await response.text();
+          providerCode = String(JSON.parse(body)?.error?.code || "").slice(0, 60);
+        } catch {}
+        const error = new Error(`qwen http ${response.status}`);
+        error.status = response.status;
+        error.providerCode = providerCode;
+        throw error;
+      }
       const data = await response.json();
       const content = data?.choices?.[0]?.message?.content;
       const text = typeof content === "string" ? content : Array.isArray(content) ? content.map((part) => (part?.type === "text" ? part.text : "")).join("\n") : "";
@@ -73,6 +84,13 @@ export function createQwenProviderFromSettings(readRuntime) {
   return async function qwen(messages, options = {}) {
     const runtime = readRuntime();
     if (!runtime || !runtime.enabled || !String(runtime.api_key || "").trim()) return null;
-    return createQwenClient(runtime)(messages, options);
+    // 运行时配置是 snake_case（api_key/base_url/max_tokens），必须显式映射，
+    // 不能整对象透传——曾因字段名不匹配把密钥发成 undefined 导致全线 401。
+    return createQwenClient({
+      apiKey: runtime.api_key,
+      baseUrl: runtime.base_url,
+      model: runtime.model,
+      maxTokens: runtime.max_tokens,
+    })(messages, options);
   };
 }

@@ -200,9 +200,29 @@ const mpFavoritesService = new MpFavoritesService({
 });
 const learningCompassService = createDefaultLearningCompassService();
 const aiProviderStore = new AiProviderStore({ store: jsonStore, filePath: path.join(dataDir, "ai-provider-settings.json") });
+const guideAssistantQwen = createQwenProviderFromSettings(() => aiProviderStore.runtime());
+const loggedGuideAssistantQwen = async (messages, options = {}) => {
+  const runtime = aiProviderStore.runtime();
+  const fields = {
+    event: "guide-assistant-provider",
+    model: runtime.model,
+    base_host: new URL(runtime.base_url).hostname,
+    request_params: ["model", "messages", "max_tokens", "stream:false"],
+  };
+  const startedAt = Date.now();
+  try {
+    const output = await guideAssistantQwen(messages, options);
+    console.log(JSON.stringify({ ...fields, result: output === null ? "unconfigured" : "ok", content_len: output ? output.length : 0, latency_ms: Date.now() - startedAt }));
+    return output;
+  } catch (error) {
+    console.error(JSON.stringify({ ...fields, result: "error", http_status: error?.status ?? null, provider_code: error?.providerCode ?? null, latency_ms: Date.now() - startedAt }));
+    throw error;
+  }
+};
 const guideAssistantService = createGuideAssistantService({
   learningCompass: learningCompassService,
-  qwen: createQwenProviderFromSettings(() => aiProviderStore.runtime()),
+  log: (fields) => console.log(JSON.stringify(fields)),
+  qwen: loggedGuideAssistantQwen,
   limiter: (userId) => {
     const { daily_limit_per_user, minute_limit_per_user, daily_limit_global } = aiProviderStore.runtime();
     return rateLimiter.consumeLayered({

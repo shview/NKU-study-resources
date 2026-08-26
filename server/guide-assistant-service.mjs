@@ -85,10 +85,13 @@ function serializeEvidence(entries) {
     .join("\n\n");
 }
 
-export function createGuideAssistantService({ learningCompass, qwen = null, limiter = null, now = () => Date.now() } = {}) {
+export function createGuideAssistantService({ learningCompass, qwen = null, limiter = null, now = () => Date.now(), log = null, requestId = () => Math.random().toString(36).slice(2, 10) } = {}) {
   if (!learningCompass) throw new Error("GuideAssistantService requires a learningCompass service.");
   const chunks = learningCompass.retrievalChunks();
   const conflictTopics = learningCompass.conflictTopics();
+  const emit = (fields) => {
+    if (log) log({ ts: new Date(now()).toISOString(), ...fields });
+  };
 
   function validateInput(body) {
     if (!isPlainObject(body)) throw new PublicApiError(400, "请求正文必须是 JSON 对象。", "INVALID_AI_QUESTION");
@@ -236,23 +239,59 @@ export function createGuideAssistantService({ learningCompass, qwen = null, limi
         if (now() - startedAt >= TOTAL_BUDGET_MS) break;
       }
     }
-    throw new PublicApiError(503, "问答服务暂时不可用，请稍后再试或使用普通指南。", "AI_UNAVAILABLE");
+    const unavailable = new PublicApiError(503, "问答服务暂时不可用，请稍后再试或使用普通指南。", "AI_UNAVAILABLE");
+    unavailable.providerStatus = lastError?.status ?? null;
+    unavailable.providerCode = lastError?.providerCode ?? null;
+    throw unavailable;
   }
 
   return {
     async answer(userId, body) {
+      const rid = requestId();
+      const startedAt = now();
       if (!userId) throw new PublicApiError(401, "请先登录后再使用问答。", "AUTH_REQUIRED");
       const { question, history, profile } = validateInput(body);
       if (limiter && !limiter(userId)) {
+        emit({ rid, event: "rate_limited", user: userId });
         throw new PublicApiError(429, "问答请求过于频繁，请稍后再试或使用普通指南。", "RATE_LIMITED");
       }
       const conflict = hitConflictTopic(question);
-      if (conflict) return refusal("SOURCE_CONFLICT");
+      if (conflict) {
+        emit({ rid, event: "refused", reason: "SOURCE_CONFLICT", latency_ms: now() - startedAt });
+        return refusal("SOURCE_CONFLICT");
+      }
       const { selected, best } = retrieve(question);
-      if (best < MIN_SCORE_TO_ANSWER || !selected.length) return refusal("INSUFFICIENT_EVIDENCE");
+      if (best < MIN_SCORE_TO_ANSWER || !selected.length) {
+        emit({ rid, event: "refused", reason: "INSUFFICIENT_EVIDENCE", latency_ms: now() - startedAt });
+        return refusal("INSUFFICIENT_EVIDENCE");
+      }
       const messages = buildMessages(question, history, profile, selected);
-      const answer = await callProvider(messages);
-      return {
+      const promptChars = messages.reduce((total, message) => total + message.content.length, 0);
+      emit({
+        rid,
+        event: "prompt_built",
+        stage: "prompt",
+        evidence_chunks: selected.length,
+        prompt_messages: messages.length,
+        prompt_chars: promptChars,
+        prompt_est_tokens: Math.round(promptChars / 1.6),
+        request_params: ["model", "messages", "max_tokens", "stream:false"],
+      });
+      let answer;
+      try {
+        answer = await callProvider(messages);
+      } catch (error) {
+        emit({
+          rid,
+          event: "unavailable",
+          stage: error instanceof PublicApiError && error.code === "AI_UNAVAILABLE" ? "provider" : "provider",
+          http_status: error?.providerStatus ?? null,
+          provider_code: error?.providerCode ?? null,
+          latency_ms: now() - startedAt,
+        });
+        throw error;
+      }
+      const result = {
         answer,
         refused: false,
         reason: null,
@@ -260,6 +299,15 @@ export function createGuideAssistantService({ learningCompass, qwen = null, limi
         freshness_notice: FRESHNESS_NOTICE,
         citations: citationsFor(selected),
       };
+      emit({
+        rid,
+        event: "answered",
+        stage: "done",
+        content_len: answer.length,
+        citations: result.citations.length,
+        latency_ms: now() - startedAt,
+      });
+      return result;
     },
   };
 }

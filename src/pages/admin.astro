@@ -1497,7 +1497,8 @@ async function saveAiAdmin() {
   try {
     await api("/ai-settings", { method: "POST", body: JSON.stringify(body) });
     await loadAiAdmin();
-    status.textContent = "已保存并生效。";
+    status.textContent = "已保存，正在自动测试连接...";
+    await testAiAdmin();
   } catch (error) {
     status.textContent = error.message;
   }
