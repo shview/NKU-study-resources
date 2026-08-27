@@ -1404,6 +1404,19 @@ async function handleFeedbackSubmit(req, res) {
     return;
   }
 
+  const guideShaped = title.startsWith("指南反馈：") || /^\s*\[guide_id=/.test(content);
+  if (guideShaped) {
+    let guideFeedbackEnabled = true;
+    try {
+      guideFeedbackEnabled = (await readJsonFile(notifySettingsPath)).guide_feedback_enabled !== false;
+    } catch {}
+    if (!guideFeedbackEnabled) {
+      console.log(JSON.stringify({ event: "guide_feedback_dropped", title_head: title.slice(0, 40) }));
+      json(res, 200, { ok: true });
+      return;
+    }
+  }
+
   await jsonStore.update(feedbackPath, (current) => {
     current.items = Array.isArray(current.items) ? current.items : [];
     current.items.unshift({
@@ -2426,6 +2439,18 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/admin-api/notify-settings") {
       if (!requirePermission(req, account, "backup.manage", res)) return;
       json(res, 200, { ok: true, data: await feishuNotify.describe() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/notify-settings") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const data = await feishuNotify.setGuideFeedbackEnabled(body.guide_feedback_enabled === true);
+        json(res, 200, { ok: true, data });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
       return;
     }
 
