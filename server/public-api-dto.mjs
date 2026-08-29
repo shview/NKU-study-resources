@@ -138,8 +138,9 @@ export function buildReviewGroups(manifest, reviewData, courseCatalog = null, { 
     if (!courseTitle || !teacher) continue;
     const key = reviewGroupKey(courseTitle, teacher);
     const course = resolveCourse(courseTitle);
+    const catalogCourse = courseCatalog?.find?.(courseTitle) || null;
     if (!groups.has(key)) {
-      groups.set(key, { key, courseTitle, teacher, course, reviews: [] });
+      groups.set(key, { key, courseTitle, teacher, course, catalogCourse, reviews: [] });
     }
     groups.get(key).reviews.push(publicReviewDto(review, { viewerId }));
   }
@@ -160,9 +161,12 @@ export function publicReviewGroupDto(group, { includeReviews = false } = {}) {
   const dto = {
     group_key: group.key,
     course_id: group.course?.uid || null,
+    catalog_course_id: group.catalogCourse?.id || null,
     course_name: group.course?.title || group.courseTitle,
     teacher_name: group.teacher,
     matched: Boolean(group.course),
+    // course_title 提交路径覆盖全部已有评价组，因此所有组都可投稿
+    submittable: true,
     review_count: group.reviews.length,
     rating_average: ratings.length ? Number((ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1)) : null,
   };
