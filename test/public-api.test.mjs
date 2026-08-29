@@ -92,6 +92,12 @@ function fixture() {
       }],
       conflicts: [],
     }),
+    readFeedback: () => ({
+      items: [
+        { id: "fb-1", title: "有回复的反馈", content: "内容", type: "feature", status: "completed", user_id: 7, reply: "已添加该课程。", repliedAt: "2026-08-28T00:00:00Z", createdAt: "2026-08-27T00:00:00Z" },
+        { id: "fb-2", title: "匿名反馈", content: "内容2", type: "bug", status: "open", createdAt: "2026-08-27T01:00:00Z" },
+      ],
+    }),
     reviewSubmissionService,
     publicResourceOrigin: "https://resources.nkustudy.top",
     guideCorrectionUrl: "https://nkustudy.top/feedback",
@@ -215,6 +221,25 @@ test("mini-program review body maps into the shared submission service", async (
   assert.equal(submissions[1].input.courseTitle, "中文课程");
   assert.equal(submissions[1].input.content, "足够长的课程评价正文内容。");
   assert.equal(Object.hasOwn(submissions[1].input, "anonymous"), false);
+});
+
+test("mini-program can review a historical group by exact course_title", async () => {
+  const { service, submissions } = fixture();
+  service.assertReviewAttempt("actor2");
+  const result = await service.submitReview({ course_title: "历史未匹配课程", teacher: "李老师", rating: 4, body: "给历史课程组的新的评价内容。" }, { clientIp: "actor2", userAgent: "wx" });
+  assert.deepEqual(result, { submitted: true, pending: true });
+  assert.equal(submissions[1].input.courseTitle, "历史未匹配课程");
+  await assert.rejects(() => service.submitReview({ course_title: "不存在的课程名", teacher: "张老师", rating: 5, body: "随便写的正文。" }, { clientIp: "actor2", userAgent: "wx" }), (error) => error.code === "REVIEW_GROUP_NOT_FOUND");
+});
+
+test("my feedback list carries admin replies for logged-in submitters", () => {
+  const { service } = fixture();
+  const mine = service.getMyFeedback(7);
+  assert.equal(mine.total, 1);
+  assert.equal(mine.items[0].reply, "已添加该课程。");
+  assert.equal(mine.items[0].repliedAt, "2026-08-28T00:00:00Z");
+  const anonymous = service.getMyFeedback(99);
+  assert.equal(anonymous.total, 0);
 });
 
 test("review groups merge punctuation variants and resolve catalog aliases", async () => {

@@ -174,6 +174,9 @@ const reviewSubmissionService = new ReviewSubmissionService({
   validateCourseTitle: (courseTitle) => {
     const manifestTitles = new Set((jsonStore.readSync(manifestPath).courses || []).map((course) => String(course.title)));
     if (manifestTitles.has(courseTitle) || courseCatalog.find(courseTitle)) return;
+    // 历史评价组：课程不在 manifest/目录时，允许精确命中已有评价的课程标题（并入原组）
+    const reviewTitles = new Set((readReviews().reviews || []).map((review) => String(review.courseTitle || "").trim()).filter(Boolean));
+    if (reviewTitles.has(courseTitle)) return;
     throw new PublicApiError(400, "请从已有课程中选择（课程目录未收录该课程名）。", "COURSE_NOT_IN_CATALOG");
   },
   validateTeacher: (courseTitle, teacher) => {

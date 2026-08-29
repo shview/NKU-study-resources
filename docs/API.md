@@ -104,6 +104,7 @@
 | `POST` | `/admin-api/me/password` | Cookie | 修改自己的密码 |
 | `GET` | `/admin-api/audit` | Cookie（需相应权限） | 分页查询管理操作审计日志 |
 | `GET` | `/admin-api/mp-users` | Cookie（需相应权限） | 小程序用户列表与登录统计 |
+| `POST` | `/admin-api/notify-settings` | `backup.manage` | 设置指南反馈接收开关 |
 | `GET` | `/admin-api/notify-settings` | Cookie（需相应权限） | 飞书通知机器人列表（不返回密钥明文） |
 | `POST` | `/admin-api/notify-bots` | Cookie（需相应权限） | 新增或更新飞书机器人（webhook/密钥/开关） |
 | `DELETE` | `/admin-api/notify-bots/:param` | Cookie（需相应权限） | 删除飞书机器人 |

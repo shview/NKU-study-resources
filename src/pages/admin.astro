@@ -2643,6 +2643,7 @@ async function loadMpUsersAdmin() {
           <h3 style="margin: 12px 0 0;">${escapeHtml(item.title || "")}</h3>
           ${item.resourceRef ? `<p class="muted" style="font-size:0.85em;">关联资源：${escapeHtml(item.resourceRef)}</p>` : ""}
           <p>${escapeHtml(item.content || "")}</p>
+          ${item.reply ? `<div class="review-admin-item" style="margin:8px 0;background:var(--surface-soft,#f1f5f9);"><div class="course-meta"><span class="pill">已回复</span></div><p>${escapeHtml(item.reply)}</p><small class="muted">${escapeHtml(item.repliedAt || "")}</small></div>` : ""}
           <small class="muted">${escapeHtml(item.contact || "无联系方式")} · ${escapeHtml(item.createdAt || "")}</small>
         `;
 
@@ -2664,6 +2665,12 @@ async function loadMpUsersAdmin() {
           field("联系方式", item.contact ?? "", (value) => {
             item.contact = value;
             item.updatedAt = new Date().toISOString();
+          }),
+          markdownField("回复用户（登录提交者在小程序“我的反馈”可见；清空则删除回复）", item.reply ?? "", (value) => {
+            item.reply = value;
+            item.repliedAt = value ? new Date().toISOString() : "";
+            item.updatedAt = new Date().toISOString();
+            if (value && item.status === "open") item.status = "completed";
           })
         );
         editForm.hidden = true;

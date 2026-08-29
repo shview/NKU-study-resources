@@ -395,7 +395,7 @@ export class PublicApiService {
   }
 
   getMyFeedback(userId, { page = 1, pageSize = 20 } = {}) {
-    const feedback = this.readFeedbackData();
+    const feedback = this.readFeedback();
     const safePage = Math.max(1, Number(page) || 1);
     const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
     const items = (feedback.items || [])
@@ -406,6 +406,7 @@ export class PublicApiService {
         id: item.id, title: item.title, content: item.content, type: item.type,
         status: String(item.status || "open"), hidden: item.hidden === true,
         resourceRef: item.resourceRef || "", createdAt: item.createdAt || "", updatedAt: item.updatedAt || "",
+        reply: String(item.reply || ""), repliedAt: item.repliedAt || "",
       })),
       total: items.length, page: safePage, page_size: safePageSize,
     };
@@ -435,6 +436,12 @@ export class PublicApiService {
       courseTitle = catalogCourse.name;
     } else if (course) {
       courseTitle = course.title;
+    } else if (body?.course_title) {
+      const groupTitle = queryText(body.course_title, 120);
+      const { reviewData } = this.snapshot();
+      const knownTitles = new Set((reviewData.reviews || []).map((review) => String(review.courseTitle || "").trim()).filter(Boolean));
+      if (!knownTitles.has(groupTitle)) throw new PublicApiError(404, "没有找到该课程的评价记录。", "REVIEW_GROUP_NOT_FOUND");
+      courseTitle = groupTitle;
     } else {
       throw new PublicApiError(404, "课程不存在。", "COURSE_NOT_FOUND");
     }
