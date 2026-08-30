@@ -190,6 +190,33 @@ import "vditor/dist/index.css";
                           <span class="muted" id="review-merge-status"></span>
                         </div>
                       </div>
+                      <details class="card admin-collapsible-card" style="margin-top: 14px;">
+                        <summary>往目录池加课程（评价可选课程补充）</summary>
+                        <div class="admin-form" style="margin-top: 14px;">
+                          <div class="filter-row">
+                            <label class="admin-field" style="flex:2;">
+                              <span>课程名称（必填）</span>
+                              <input id="catalog-add-name" type="text" maxlength="120" placeholder="如：量子计算导论" autocomplete="off" />
+                            </label>
+                            <label class="admin-field" style="flex:1;">
+                              <span>开课学院（选填）</span>
+                              <input id="catalog-add-category" type="text" maxlength="80" placeholder="如：计算机学院" autocomplete="off" />
+                            </label>
+                            <label class="admin-field" style="flex:1;">
+                              <span>学期（选填）</span>
+                              <input id="catalog-add-term" type="text" maxlength="40" placeholder="如：2026-2027-1" autocomplete="off" />
+                            </label>
+                          </div>
+                          <label class="admin-field">
+                            <span>任课教师（必填，多位用顿号或逗号分隔）</span>
+                            <input id="catalog-add-teachers" type="text" placeholder="如：李四、王五" autocomplete="off" />
+                          </label>
+                          <div class="filter-row">
+                            <button class="button" type="button" id="catalog-add-submit">加入目录池</button>
+                            <span class="muted" id="catalog-add-status">加入后立即生效：网页与小程序评价均可搜索并提交该课程。</span>
+                          </div>
+                        </div>
+                      </details>
                       <div class="review-admin-list" id="review-admin-list" style="margin-top: 14px;"></div>
                     </div>
                   </div>
@@ -777,6 +804,25 @@ import "vditor/dist/index.css";
     const reviewAdminPanel = document.querySelector("#review-admin-panel");
     const reviewRulesEditor = document.querySelector("#review-rules-editor");
     const reviewAdminList = document.querySelector("#review-admin-list");
+    document.querySelector("#catalog-add-submit").addEventListener("click", async () => {
+      const status = document.querySelector("#catalog-add-status");
+      const name = document.querySelector("#catalog-add-name").value.trim();
+      const categories = document.querySelector("#catalog-add-category").value.trim();
+      const term = document.querySelector("#catalog-add-term").value.trim();
+      const teachers = document.querySelector("#catalog-add-teachers").value.trim();
+      if (name.length < 2) { status.textContent = "请填写课程名称（至少 2 个字）。"; return; }
+      if (!teachers) { status.textContent = "请至少填写一位任课教师。"; return; }
+      status.textContent = "提交中...";
+      try {
+        await api("/catalog/courses", { method: "POST", body: JSON.stringify({ name, categories, terms: term, teachers }) });
+        for (const id of ["catalog-add-name", "catalog-add-category", "catalog-add-term", "catalog-add-teachers"]) {
+          document.querySelector("#" + id).value = "";
+        }
+        status.textContent = `已加入目录池：${name}。网页与小程序评价即可使用。`;
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
     const reviewAdminSidebar = document.querySelector("#review-admin-sidebar");
     const reviewAdminSidebarSearch = document.querySelector("#review-admin-sidebar-search");
     const reviewAdminSearch = document.querySelector("#review-admin-search");

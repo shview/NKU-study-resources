@@ -300,35 +300,6 @@ async function notifyModerators(payload = {}) {
 }
 const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
 
-async function submitCatalogCourse(body, { ip }) {
-  if (!consumeLayeredAttempt("catalog-add-attempt", ip, { perIp: 10, global: 600 })) {
-    throw new PublicApiError(429, "操作过于频繁，请稍后再试。", "RATE_LIMITED");
-  }
-  if (body?.website) return { submitted: true, pending: false };
-  const manifestTitles = new Set((jsonStore.readSync(manifestPath).courses || []).map((course) => String(course.title)));
-  try {
-    const course = await courseCatalog.addCourse({
-      name: body?.name,
-      categories: body?.categories,
-      teachers: body?.teachers,
-      terms: body?.terms,
-      manifestTitles,
-    });
-    Promise.resolve(notifyModerators({
-      type: "catalog-course.added",
-      lines: [
-        `**课程**：${course.name}`,
-        `**教师**：${course.teachers.join("、") || "-"}`,
-        ...(course.categories.length ? [`**学院**：${course.categories.join("、")}`] : []),
-        ...(course.terms.length ? [`**学期**：${course.terms.join("、")}`] : []),
-      ],
-    })).catch(() => {});
-    return { submitted: true, pending: false, course };
-  } catch (error) {
-    if (error instanceof PublicApiError) throw error;
-    throw new PublicApiError(Number(error.statusCode) || 400, String(error.message || "课程信息无效。"), error.code || "INVALID_CATALOG_COURSE");
-  }
-}
 const serviceAuthStore = new ServiceAuthStore({ store: jsonStore, filePath: path.join(dataDir, "service-keys.json") });
 const consumeServiceQuota = (caller) => {
   const quota = Number(caller?.limits?.daily_quota) || 0;
@@ -340,7 +311,7 @@ const consumeServiceQuota = (caller) => {
   });
   return result.allowed === true;
 };
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp, submitCatalogCourse });
+const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -2428,6 +2399,34 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/admin-api/reviews") {
       if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readReviewStore() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/catalog/courses") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      try {
+        const manifestTitles = new Set((jsonStore.readSync(manifestPath).courses || []).map((course) => String(course.title)));
+        const course = await courseCatalog.addCourse({
+          name: body?.name,
+          categories: body?.categories,
+          teachers: body?.teachers,
+          terms: body?.terms,
+          manifestTitles,
+        });
+        Promise.resolve(notifyModerators({
+          type: "catalog-course.added",
+          lines: [
+            `**课程**：${course.name}`,
+            `**教师**：${course.teachers.join("、") || "-"}`,
+            ...(course.categories.length ? [`**学院**：${course.categories.join("、")}`] : []),
+            ...(course.terms.length ? [`**学期**：${course.terms.join("、")}`] : []),
+          ],
+        })).catch(() => {});
+        json(res, 200, { ok: true, data: { submitted: true, course } });
+      } catch (error) {
+        json(res, Number(error.statusCode) || 400, { ok: false, error: String(error.message || "课程信息无效。"), code: error.code || "INVALID_CATALOG_COURSE" });
+      }
       return;
     }
 

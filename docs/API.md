@@ -22,7 +22,7 @@
 | `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |
 | `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |
 | `POST` | `/api/v1/guide-assistant/answers` | 登录 | 学习指南针 AI 问答（检索+引用+拒答） |
-| `POST` | `/api/v1/catalog/courses` | 公开 | 网页评价"往目录池加课程"（校验+去重+限流） |
+| `POST` | `/admin-api/catalog/courses` | `content.edit` | 评价管理"往目录池加课程"（校验+去重） |
 | `GET` | `/admin-api/ai-settings` | `ai.manage` | 读取 AI 问答配置（Key 掩码） |
 | `POST` | `/admin-api/ai-settings` | `ai.manage` | 保存 AI 问答配置（Key/模型/限流，动态生效） |
 | `POST` | `/admin-api/ai-settings/test` | `ai.manage` | 用当前或待存配置真实调用一次模型测试连通 |
@@ -343,15 +343,14 @@ curl -sS https://nkustudy.top/api/v1/home
 - 成功 `data` 为 `{guide_id, variant:{id,title,order,sections[{id,title,body_format,body,source_ids}],sources[]}}`；`sections[].body` 为该学院官方原文件的 Markdown 全文，学院之间内容不串用。
 - 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`、`404 GUIDE_VARIANT_NOT_FOUND`。
 
-### `POST /api/v1/catalog/courses`
+### `POST /admin-api/catalog/courses`
 
-网页端评价表单的"添加课程到目录池"入口：课程不在课程库/目录时，用户提交课程名/学院/教师/学期，通过校验后**直接写入课程目录**（`catalog.json`）并热生效——随后即可用该课程名提交评价（走 `catalog_course_id` 路径）。
+管理后台「评价审核」面板的"往目录池加课程"：课程不在课程库/目录时，管理员提交课程名/学院/教师/学期，通过校验后**直接写入课程目录**（`catalog.json`）并热生效——网页与小程序评价立即可搜索并提交该课程。
 
-- 请求体：`{ name, categories?, teachers, terms?, website? }`；`name` 2–120 字、`teachers` 必填（字符串或数组，支持顿号/逗号分隔，去重后最多 20 位）；`categories` 最多 5 项；`website` 为蜜罐字段。
-- 去重：与目录课程（含别名、忽略空白/全半角括号）及课程库标题重复时返回 `409 CATALOG_COURSE_EXISTS`（提示可直接填课程名提交评价）。
-- 限流：每 IP 每分钟 10 次、全局 600 次；超限 `429 RATE_LIMITED`。
-- 成功 `data`：`{ submitted:true, pending:false, course:{id,name,categories,teachers,terms} }`；同时向飞书通知"目录新增课程"。
-- 主要错误：`400 INVALID_CATALOG_COURSE`、`409 CATALOG_COURSE_EXISTS`、`429 RATE_LIMITED`、`503 CATALOG_NOT_CONFIGURED`。
+- 权限：`content.edit`。
+- 请求体：`{ name, categories?, teachers, terms? }`；`name` 2–120 字、`teachers` 必填（字符串或数组，支持顿号/逗号分隔，去重后最多 20 位）；`categories` 最多 5 项。
+- 去重：与目录课程（含别名、忽略空白/全半角括号）及课程库标题重复时返回 `400`，`code=CATALOG_COURSE_EXISTS`（提示可直接填写课程名提交评价）。
+- 成功 `data`：`{ submitted:true, course:{id,name,categories,teachers,terms} }`；同时向飞书通知"目录新增课程"。新增条目带 `origin:"user"` 标记便于区分教务来源。
 
 ### `POST /api/v1/guide-assistant/answers`
 

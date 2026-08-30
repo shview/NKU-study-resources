@@ -43,39 +43,12 @@ import "vditor/dist/index.css";
         <form class="review-form" id="review-form">
           <label class="admin-field">
             <span>课程</span>
-            <input name="courseTitle" id="review-course-title" list="course-title-options" placeholder="课程名称" autocomplete="off" required />
+            <input name="courseTitle" list="course-title-options" placeholder="课程名称" autocomplete="off" required />
             <small class="field-hint">可以填写资源库里还没有的课程，提交时会询问是否新建评价索引。</small>
             <datalist id="course-title-options">
               {courses.map((course) => <option value={course.title} />)}
             </datalist>
           </label>
-          <div class="review-editor-switch" style="margin: -6px 0 10px;">
-            <button class="button secondary" type="button" id="toggle-catalog-add" style="min-height: 34px; font-size: 13px;">目录里没有这门课？添加到目录池</button>
-          </div>
-          <div class="admin-form" id="catalog-add-panel" hidden>
-            <div class="admin-field">
-              <span>课程名称（必填）</span>
-              <input id="catalog-add-name" type="text" maxlength="120" placeholder="如：量子计算导论" autocomplete="off" />
-            </div>
-            <div class="filter-row">
-              <label class="admin-field" style="flex:1;">
-                <span>开课学院（选填）</span>
-                <input id="catalog-add-category" type="text" maxlength="80" placeholder="如：计算机学院" autocomplete="off" />
-              </label>
-              <label class="admin-field" style="flex:1;">
-                <span>学期（选填）</span>
-                <input id="catalog-add-term" type="text" maxlength="40" placeholder="如：2026-2027-1" autocomplete="off" />
-              </label>
-            </div>
-            <label class="admin-field">
-              <span>任课教师（必填，多位用顿号或逗号分隔）</span>
-              <input id="catalog-add-teachers" type="text" placeholder="如：李四、王五" autocomplete="off" />
-            </label>
-            <div class="filter-row">
-              <button class="button" type="button" id="catalog-add-submit">加入目录池</button>
-              <span class="muted" id="catalog-add-status"></span>
-            </div>
-          </div>
           <label class="admin-field">
             <span>老师</span>
             <input name="teacher" placeholder="老师姓名" autocomplete="off" required />
@@ -137,48 +110,6 @@ import "vditor/dist/index.css";
     const panel = document.querySelector("#review-submit-panel");
     const form = document.querySelector("#review-form");
     const statusEl = document.querySelector("#review-submit-status");
-    const catalogAddPanel = document.querySelector("#catalog-add-panel");
-    const catalogAddStatus = document.querySelector("#catalog-add-status");
-    document.querySelector("#toggle-catalog-add").addEventListener("click", () => {
-      catalogAddPanel.hidden = !catalogAddPanel.hidden;
-      if (!catalogAddPanel.hidden) {
-        const typed = document.querySelector("#review-course-title")?.value?.trim();
-        if (typed) document.querySelector("#catalog-add-name").value = typed;
-        document.querySelector("#catalog-add-name").focus();
-      }
-    });
-    document.querySelector("#catalog-add-submit").addEventListener("click", async () => {
-      const name = document.querySelector("#catalog-add-name").value.trim();
-      const categories = document.querySelector("#catalog-add-category").value.trim();
-      const term = document.querySelector("#catalog-add-term").value.trim();
-      const teachers = document.querySelector("#catalog-add-teachers").value.trim();
-      if (name.length < 2) { catalogAddStatus.textContent = "请填写课程名称（至少 2 个字）。"; return; }
-      if (!teachers) { catalogAddStatus.textContent = "请至少填写一位任课教师。"; return; }
-      catalogAddStatus.textContent = "提交中...";
-      try {
-        const response = await fetch("/api/v1/catalog/courses", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name, categories, terms: term, teachers, website: "" }),
-        });
-        const data = await response.json();
-        if (!response.ok || data.code !== 0) throw new Error(data.message || data.error || "提交失败");
-        if (data.data?.course) {
-          const option = document.createElement("option");
-          option.value = data.data.course.name;
-          document.querySelector("#course-title-options").append(option);
-          document.querySelector("#review-course-title").value = data.data.course.name;
-        }
-        catalogAddPanel.hidden = true;
-        catalogAddStatus.textContent = "";
-        for (const id of ["catalog-add-name", "catalog-add-category", "catalog-add-term", "catalog-add-teachers"]) {
-          document.querySelector("#" + id).value = "";
-        }
-        statusEl.textContent = "课程已加入目录池，可直接提交评价。";
-      } catch (error) {
-        catalogAddStatus.textContent = error.message;
-      }
-    });
     const announcement = document.querySelector("#review-announcement");
     const publicAnnouncement = document.querySelector("#review-public-announcement");
     const publicAnnouncementPanel = document.querySelector("#review-public-announcement-panel");
