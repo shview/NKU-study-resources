@@ -52,15 +52,17 @@ test("manifest schema rejects overlapping course prefixes and duplicate declared
   assert.equal(errors.some((error) => /duplicate file path/.test(error)), true);
 });
 
-test("partial discovery updates matches, adds explicit courses and retains unmatched courses", () => {
+test("partial discovery updates matches, skips empty new folders and retains unmatched courses", () => {
   const discoveries = [
     { basePath: "web/only", term: "term", group: "group", title: "Web only", sections: [{ title: "其他", files: [] }] },
     { basePath: "r2/new", term: "term", group: "group", title: "New", sections: [] },
+    { basePath: "r2/with-files", term: "term", group: "group", title: "With files", sections: [{ title: "其他", files: [{ title: "a.pdf", path: "a.pdf", size: 1, description: "" }] }] },
   ];
   const result = mergeR2Discoveries({ resourceRoot: "x", courses: [existing, { ...existing, uid: "00000000-0000-4000-8000-000000000002", id: "unmatched", basePath: "unmatched/" }] }, discoveries, { createId: () => "new", date: "now" });
   assert.equal(result.manifest.courses.some((course) => course.id === "unmatched"), true);
-  assert.equal(result.manifest.courses.length, 3);
+  assert.equal(result.manifest.courses.length, 3, "已有2门 + 仅带真实文件的新目录1门；空目录不建课");
   assert.deepEqual({ updated: result.updated, added: result.added }, { updated: 1, added: 1 });
+  assert.equal(result.report.placeholderSkipped, 1);
 });
 
 test("R2 prepare failure never publishes or deletes", async () => {
@@ -267,4 +269,19 @@ test("upload-style R2 work shares the destructive mutation queue", async () => {
   releaseUpload();
   await Promise.all([upload, publish]);
   assert.deepEqual(events, ["upload:start", "upload:end", "publish:read", "publish:mutate"]);
+});
+
+test("placeholder-only folders never create courses on rebuild (name-pool placeholders are safe)", () => {
+  const snapshot = { resourceRoot: "x", courses: [] };
+  const discoveries = [
+    { term: "E课", group: "通识选修课", title: "只有占位的课", basePath: "E课/通识选修课/只有占位的课", sections: [] },
+    { term: "E课", group: "通识选修课", title: "有真实资料的课", basePath: "E课/通识选修课/有真实资料的课", sections: [{ title: "其他", note: "", files: [{ title: "a.pdf", path: "a.pdf", size: 1, description: "" }] }] },
+  ];
+  const result = mergeR2Discoveries(snapshot, discoveries, { createId: () => "new-id", date: "now" });
+  assert.equal(result.manifest.courses.length, 1, "占位-only 目录不得创建课程");
+  assert.equal(result.manifest.courses[0].title, "有真实资料的课");
+  assert.equal(result.report.addedCourses, 1);
+  assert.equal(result.report.placeholderSkipped, 1);
+  // 有文件的发现不受影响
+  assert.equal(result.report.addedResources, 1);
 });
