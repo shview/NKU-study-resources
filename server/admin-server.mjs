@@ -191,7 +191,11 @@ const reviewSubmissionService = new ReviewSubmissionService({
     }
   },
 });
-const courseCatalog = new CourseCatalogService({ catalogPath: path.join(dataDir, "catalog.json") });
+const catalogPath2 = path.join(dataDir, "catalog.json");
+const courseCatalog = new CourseCatalogService({
+  catalogPath: catalogPath2,
+  writeJson: (mutator) => jsonStore.update(catalogPath2, mutator, { initialize: { version: 1, updated: today(), sources: [], courses: [] } }),
+});
 const mpAuthService = new MpAuthService({
   dbPath: runtime.stateDbPath,
   appid: process.env.WECHAT_APPID || "",
@@ -280,7 +284,7 @@ function submissionHint(rules) {
 }
 
 async function notifyModerators(payload = {}) {
-  const typeLabels = { "review.pending": payload.pending === false ? "新评价（免审已公开）" : "新评价待审", "feedback.pending": "新反馈待处理", "resource-report": "资源失效反馈" };
+  const typeLabels = { "review.pending": payload.pending === false ? "新评价（免审已公开）" : "新评价待审", "feedback.pending": "新反馈待处理", "resource-report": "资源失效反馈", "catalog-course.added": "目录新增课程（网页提交）" };
   const title = typeLabels[payload.type] || "待处理通知";
   const lines = [];
   if (payload.type === "review.pending") {
@@ -295,6 +299,36 @@ async function notifyModerators(payload = {}) {
   return result;
 }
 const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
+
+async function submitCatalogCourse(body, { ip }) {
+  if (!consumeLayeredAttempt("catalog-add-attempt", ip, { perIp: 10, global: 600 })) {
+    throw new PublicApiError(429, "操作过于频繁，请稍后再试。", "RATE_LIMITED");
+  }
+  if (body?.website) return { submitted: true, pending: false };
+  const manifestTitles = new Set((jsonStore.readSync(manifestPath).courses || []).map((course) => String(course.title)));
+  try {
+    const course = await courseCatalog.addCourse({
+      name: body?.name,
+      categories: body?.categories,
+      teachers: body?.teachers,
+      terms: body?.terms,
+      manifestTitles,
+    });
+    Promise.resolve(notifyModerators({
+      type: "catalog-course.added",
+      lines: [
+        `**课程**：${course.name}`,
+        `**教师**：${course.teachers.join("、") || "-"}`,
+        ...(course.categories.length ? [`**学院**：${course.categories.join("、")}`] : []),
+        ...(course.terms.length ? [`**学期**：${course.terms.join("、")}`] : []),
+      ],
+    })).catch(() => {});
+    return { submitted: true, pending: false, course };
+  } catch (error) {
+    if (error instanceof PublicApiError) throw error;
+    throw new PublicApiError(Number(error.statusCode) || 400, String(error.message || "课程信息无效。"), error.code || "INVALID_CATALOG_COURSE");
+  }
+}
 const serviceAuthStore = new ServiceAuthStore({ store: jsonStore, filePath: path.join(dataDir, "service-keys.json") });
 const consumeServiceQuota = (caller) => {
   const quota = Number(caller?.limits?.daily_quota) || 0;
@@ -306,7 +340,7 @@ const consumeServiceQuota = (caller) => {
   });
   return result.allowed === true;
 };
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp });
+const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp, submitCatalogCourse });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;

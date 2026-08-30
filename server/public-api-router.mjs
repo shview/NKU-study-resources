@@ -32,7 +32,7 @@ export function decodePathPart(value) {
   }
 }
 
-export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp } = {}) {
+export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp, submitCatalogCourse = null } = {}) {
   if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
   async function requireService(req) {
     if (!serviceAuthStore) throw new PublicApiError(503, "服务间接口暂未开放。", "SERVICE_AUTH_NOT_CONFIGURED");
@@ -168,6 +168,16 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
             match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)\/resources$/);
             if (req.method === "GET" && match) data = service.resources(decodePathPart(match[1]));
             else if (req.method === "GET" && url.pathname === "/api/v1/review-groups") data = service.reviewGroups({ viewerId: authUser?.id || null });
+      else if (req.method === "POST" && url.pathname === "/api/v1/catalog/courses") {
+        if (!submitCatalogCourse) throw new PublicApiError(503, "课程目录提交暂未开放。", "CATALOG_NOT_CONFIGURED");
+        let body;
+        try {
+          body = await readBody(req);
+        } catch {
+          throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+        }
+        data = await submitCatalogCourse(body, { ip: clientIp(req) });
+      }
             else {
               match = url.pathname.match(/^\/api\/v1\/favorites\/([^/]+)$/);
               if (req.method === "DELETE" && match) {

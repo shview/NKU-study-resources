@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -6,8 +7,9 @@ function normalizeName(value) {
 }
 
 export class CourseCatalogService {
-  constructor({ catalogPath }) {
+  constructor({ catalogPath, writeJson = null } = {}) {
     this.catalogPath = path.resolve(catalogPath);
+    this.writeJson = writeJson;
     this.#load();
   }
 
@@ -81,6 +83,45 @@ export class CourseCatalogService {
         terms: course.terms || [],
       }));
     return { items: slice, total, page: safePage, page_size: safePageSize };
+  }
+
+  /** 网页端"往目录池加课程"：校验、去重、追加并热重载。 */
+  async addCourse({ name, categories = [], teachers = [], terms = [], manifestTitles = new Set() } = {}) {
+    if (typeof this.writeJson !== "function") throw new Error("CourseCatalogService is read-only.");
+    const clean = (value) => String(value ?? "").trim();
+    const list = (values, maxItems, maxLength) => {
+      const raw = Array.isArray(values) ? values : String(values ?? "").split(/[\u3001\uFF0C,\n]/);
+      return [...new Set(raw.map((item) => clean(item).slice(0, maxLength)).filter(Boolean))].slice(0, maxItems);
+    };
+    const courseName = clean(name).slice(0, 120);
+    const courseTeachers = list(teachers, 20, 80);
+    const courseCategories = list(categories, 5, 80);
+    const courseTerms = list(terms, 5, 40);
+    if (courseName.length < 2) {
+      const error = new Error("请填写课程名称（至少 2 个字）。");
+      error.statusCode = 400; error.code = "INVALID_CATALOG_COURSE"; throw error;
+    }
+    if (!courseTeachers.length) {
+      const error = new Error("请至少填写一位任课教师。");
+      error.statusCode = 400; error.code = "INVALID_CATALOG_COURSE"; throw error;
+    }
+    if (this.find(courseName) || manifestTitles.has(courseName)) {
+      const error = new Error("该课程已在目录或课程库中，可直接填写课程名提交评价。");
+      error.statusCode = 409; error.code = "CATALOG_COURSE_EXISTS"; throw error;
+    }
+    const id = `cat-${createHash("sha256").update(normalizeName(courseName)).digest("hex").slice(0, 10)}`;
+    if (this.byId.has(id)) {
+      const error = new Error("该课程已在目录或课程库中，可直接填写课程名提交评价。");
+      error.statusCode = 409; error.code = "CATALOG_COURSE_EXISTS"; throw error;
+    }
+    const entry = { id, name: courseName, aliases: [], categories: courseCategories, modules: [], teachers: courseTeachers, terms: courseTerms, origin: "user" };
+    await this.writeJson((current) => {
+      const data = current && typeof current === "object" ? current : {};
+      data.courses = [...(Array.isArray(data.courses) ? data.courses : []), entry];
+      return data;
+    });
+    this.reload();
+    return { id: entry.id, name: entry.name, categories: entry.categories, teachers: entry.teachers, terms: entry.terms };
   }
 
   reload() {
