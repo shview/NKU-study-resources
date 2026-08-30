@@ -20,6 +20,11 @@ const feedbackData = readBuildData("feedback.json");
           hidden={!feedbackData.announcement}
           set:html={markdownToHtml(feedbackData.announcement ?? "")}
         />
+        <div class="filter-row" style="margin-bottom: 14px; align-items: center; gap: 10px;">
+          <input class="searchbar" id="feedback-search" type="text" placeholder="搜索反馈标题、内容或管理员回复" style="flex: 1; min-width: 220px;" />
+          <span class="muted" id="feedback-search-clear" hidden style="cursor: pointer;">清除</span>
+        </div>
+        <div class="filter-row" id="feedback-status-filter" style="margin-bottom: 14px; flex-wrap: wrap; gap: 8px;"></div>
         <div class="review-list" id="feedback-list">
           <p class="empty">正在加载反馈。</p>
         </div>
@@ -87,7 +92,23 @@ const feedbackData = readBuildData("feedback.json");
     const contentEditorNode = document.querySelector("#feedback-content-editor");
     const contentValue = document.querySelector("#feedback-content-value");
     let feedback = [];
+    let visibleFeedbackItems = [];
     let currentPage = 1;
+    let searchKeyword = "";
+    let filterStatus = "all";
+    const statusFilterOptions = [
+      { value: "all", label: "全部" },
+      { value: "open", label: "待处理" },
+      { value: "completed", label: "已完成" },
+      { value: "rejected", label: "不予完成" },
+      { value: "parked", label: "搁置" },
+    ];
+    const beijingDate = (value) => {
+      const date = new Date(value || "");
+      if (!value || Number.isNaN(date.getTime())) return "";
+      const shifted = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+      return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
+    };
     let contentEditor = null;
     let editorSettings = null;
 
@@ -207,14 +228,44 @@ const feedbackData = readBuildData("feedback.json");
       pagination.append(prev, label, next);
     }
 
+    function applyFeedbackFilters() {
+      const keyword = searchKeyword.trim().toLowerCase();
+      visibleFeedbackItems = feedback.filter((item) => {
+        if (filterStatus !== "all" && item.status !== filterStatus) return false;
+        if (!keyword) return true;
+        return [item.title, item.content, item.reply].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+      });
+      currentPage = 1;
+    }
+
+    function renderStatusFilter() {
+      const wrap = document.querySelector("#feedback-status-filter");
+      wrap.innerHTML = "";
+      for (const option of statusFilterOptions) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "button" + (filterStatus === option.value ? "" : " secondary");
+        chip.style.minHeight = "32px";
+        chip.style.fontSize = "13px";
+        chip.textContent = option.label;
+        chip.addEventListener("click", () => {
+          filterStatus = option.value;
+          applyFeedbackFilters();
+          renderStatusFilter();
+          renderFeedback();
+        });
+        wrap.append(chip);
+      }
+    }
+
     function renderFeedback() {
-      if (!feedback.length) {
-        list.innerHTML = `<p class="empty">还没有公开反馈。</p>`;
+      if (!visibleFeedbackItems.length) {
+        list.innerHTML = `<p class="empty">${searchKeyword.trim() ? `没有匹配「${escapeHtml(searchKeyword.trim())}」的反馈。` : "还没有公开反馈。"}</p>`;
         pagination.hidden = true;
         return;
       }
       const start = (currentPage - 1) * pageSize;
-      const pageItems = feedback.slice(start, start + pageSize);
+      const pageItems = visibleFeedbackItems.slice(start, start + pageSize);
       list.innerHTML = pageItems.map((item) => `
         <article class="review-card">
           <div class="course-meta">
@@ -223,10 +274,15 @@ const feedbackData = readBuildData("feedback.json");
           </div>
           <h3 style="margin: 12px 0 0;">${escapeHtml(item.title)}</h3>
           <div class="markdown-body">${markdownToHtml(item.content)}</div>
-          <small class="muted">${escapeHtml((item.createdAt || "").slice(0, 10))}</small>
+          ${item.reply ? `<div class="review-announcement" style="margin-top: 10px;">
+            <div class="course-meta"><span class="pill">管理员回复</span></div>
+            <div class="markdown-body">${markdownToHtml(item.reply)}</div>
+            <small class="muted">${escapeHtml(beijingDate(item.repliedAt))}</small>
+          </div>` : ""}
+          <small class="muted">${escapeHtml(beijingDate(item.createdAt))}</small>
         </article>
       `).join("");
-      renderPagination(feedback.length);
+      renderPagination(visibleFeedbackItems.length);
     }
 
     async function loadFeedback() {
@@ -243,9 +299,26 @@ const feedbackData = readBuildData("feedback.json");
       } catch {
         feedback = [];
       }
-      currentPage = 1;
+      applyFeedbackFilters();
+      renderStatusFilter();
       renderFeedback();
     }
+
+    const searchInput = document.querySelector("#feedback-search");
+    const searchClear = document.querySelector("#feedback-search-clear");
+    searchInput?.addEventListener("input", () => {
+      searchKeyword = searchInput.value;
+      searchClear.hidden = !searchKeyword;
+      applyFeedbackFilters();
+      renderFeedback();
+    });
+    searchClear?.addEventListener("click", () => {
+      searchKeyword = "";
+      searchInput.value = "";
+      searchClear.hidden = true;
+      applyFeedbackFilters();
+      renderFeedback();
+    });
 
     openButton?.addEventListener("click", () => {
       panel.hidden = false;
