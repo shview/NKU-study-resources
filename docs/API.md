@@ -23,6 +23,7 @@
 | `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |
 | `POST` | `/api/v1/guide-assistant/answers` | 登录 | 学习指南针 AI 问答（检索+引用+拒答） |
 | `POST` | `/admin-api/catalog/courses` | `content.edit` | 评价管理"往目录池加课程"（校验+去重） |
+| `POST` | `/admin-api/catalog/import-courses` | `content.edit` | 从目录池批量建课程壳（幂等，附 dry_run） |
 | `GET` | `/admin-api/ai-settings` | `ai.manage` | 读取 AI 问答配置（Key 掩码） |
 | `POST` | `/admin-api/ai-settings` | `ai.manage` | 保存 AI 问答配置（Key/模型/限流，动态生效） |
 | `POST` | `/admin-api/ai-settings/test` | `ai.manage` | 用当前或待存配置真实调用一次模型测试连通 |

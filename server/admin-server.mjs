@@ -23,6 +23,7 @@ import { createDefaultLearningCompassService } from "./learning-compass-service.
 import { createGuideAssistantService } from "./guide-assistant-service.mjs";
 import { createQwenProviderFromSettings } from "./qwen-provider.mjs";
 import { AiProviderStore } from "./ai-provider-store.mjs";
+import { buildCatalogCourseImports } from "./catalog-import.mjs";
 import { ServiceAuthStore } from "./service-auth-store.mjs";
 import { MpFavoritesService } from "./mp-favorites-service.mjs";
 import { CourseCatalogService } from "./course-catalog-service.mjs";
@@ -2399,6 +2400,27 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/admin-api/reviews") {
       if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readReviewStore() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/catalog/import-courses") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      try {
+        const category = cleanText(body?.category, 40) || "通识选修课";
+        const term = cleanText(body?.term, 40) || "E课";
+        const dryRun = body?.dry_run === true;
+        const { manifest, revision } = await manifestService.readWithRevision();
+        const result = buildCatalogCourseImports(manifest, courseCatalog.courses, { category, term, date: today() });
+        if (dryRun || !result.created) {
+          json(res, 200, { ok: true, data: { ...result, courses: undefined, dryRun } });
+          return;
+        }
+        const published = await manifestService.publish({ ...manifest, courses: [...manifest.courses, ...result.courses] }, { expectedRevision: revision, deletedCourseUids: [] });
+        json(res, 200, { ok: true, data: { category, term, created: result.created, skipped: result.skipped, revision: published.revision, dryRun: false } });
+      } catch (error) {
+        json(res, Number(error.statusCode) || 400, { ok: false, error: error.message });
+      }
       return;
     }
 
