@@ -52,7 +52,7 @@ test("manifest schema rejects overlapping course prefixes and duplicate declared
   assert.equal(errors.some((error) => /duplicate file path/.test(error)), true);
 });
 
-test("partial discovery updates matches, skips empty new folders and retains unmatched courses", () => {
+test("partial discovery updates matches, creates shells for new empty folders and retains unmatched courses", () => {
   const discoveries = [
     { basePath: "web/only", term: "term", group: "group", title: "Web only", sections: [{ title: "其他", files: [] }] },
     { basePath: "r2/new", term: "term", group: "group", title: "New", sections: [] },
@@ -60,9 +60,10 @@ test("partial discovery updates matches, skips empty new folders and retains unm
   ];
   const result = mergeR2Discoveries({ resourceRoot: "x", courses: [existing, { ...existing, uid: "00000000-0000-4000-8000-000000000002", id: "unmatched", basePath: "unmatched/" }] }, discoveries, { createId: () => "new", date: "now" });
   assert.equal(result.manifest.courses.some((course) => course.id === "unmatched"), true);
-  assert.equal(result.manifest.courses.length, 3, "已有2门 + 仅带真实文件的新目录1门；空目录不建课");
-  assert.deepEqual({ updated: result.updated, added: result.added }, { updated: 1, added: 1 });
-  assert.equal(result.report.placeholderSkipped, 1);
+  assert.equal(result.manifest.courses.length, 4, "已有2门 + 新目录2门（普通学期空目录建课程壳）");
+  assert.deepEqual({ updated: result.updated, added: result.added }, { updated: 1, added: 2 });
+  assert.equal(result.report.placeholderShells, 1);
+  assert.equal(result.report.placeholderSkipped ?? 0, 0, "非E课空目录不再进入占位跳过");
 });
 
 test("R2 prepare failure never publishes or deletes", async () => {
@@ -285,3 +286,23 @@ test("placeholder-only folders never create courses on rebuild (name-pool placeh
   // 有文件的发现不受影响
   assert.equal(result.report.addedResources, 1);
 });
+
+test("placeholder-only folders outside the E课 name pool create course shells", () => {
+  const snapshot = { resourceRoot: "x", courses: [] };
+  const discoveries = [
+    { term: "大二上", group: "专业必修课", title: "有机化学实验", basePath: "大二上/专业必修课/有机化学实验", sections: [] },
+    { term: "大二上", group: "专业必修课", title: "已有资料课", basePath: "大二上/专业必修课/已有资料课", sections: [{ title: "其他", note: "", files: [{ title: "a.pdf", path: "a.pdf", size: 1, description: "" }] }] },
+  ];
+  const result = mergeR2Discoveries(snapshot, discoveries, { createId: () => "new-id", date: "now" });
+  assert.equal(result.manifest.courses.length, 2, "普通学期下纯占位目录应创建课程壳");
+  const shell = result.manifest.courses.find((course) => course.title === "有机化学实验");
+  assert.equal(shell.term, "大二上");
+  assert.equal(shell.group, "专业必修课");
+  assert.equal(shell.basePath, "大二上/专业必修课/有机化学实验/");
+  assert.deepEqual(shell.sections, []);
+  assert.equal(result.report.addedCourses, 2);
+  assert.equal(result.report.placeholderShells, 1, "空壳课程应单独计数");
+  assert.equal(result.report.placeholderSkipped ?? 0, 0, "非E课目录不进入占位跳过统计");
+  assert.equal(result.report.addedResources, 1);
+});
+

@@ -86,14 +86,16 @@ export function mergeR2Discoveries(snapshot, discoveries, { conflicts = [], crea
       report.missing.push(...merged.report.missing.map((filePath) => ({ basePath: entryBasePath, filePath })));
       continue;
     }
-    // 只有占位文件（如 .openlist）的目录不创建课程：目录名预建（名字池）允许存在，
-    // 但重建课程树必须等到该目录下出现真实资料才落课程，避免占位目录灌入大量空课程。
+    // E课名字池按目录名预建占位（仅 .openlist），量级大且多数尚未开课，
+    // 重建时跳过等真实资料出现；普通学期/分类下管理员新建的目录视为有意开课，
+    // 纯占位也创建课程壳，资料上传后由后续重建合并。
     const realFileCount = (entry.sections || []).reduce((sum, section) => sum + (section.files || []).length, 0);
-    if (!existing && realFileCount === 0) {
+    if (!existing && realFileCount === 0 && entry.term === "E课") {
       report.placeholderSkipped = (report.placeholderSkipped || 0) + 1;
       observedPaths.add(entryBasePath);
       continue;
     }
+    if (!existing && realFileCount === 0) report.placeholderShells = (report.placeholderShells || 0) + 1;
     manifest.courses.push({
       id: createId(entry), term: entry.term, group: entry.group, title: entry.title,
       summary: "待补充课程简介。", contributors: [], assessment: "绩点制",

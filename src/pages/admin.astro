@@ -759,7 +759,7 @@ import "vditor/dist/index.css";
 
   <script>
     import Vditor from "vditor";
-    import { statusWithWarnings } from "../lib/admin-response-warnings.js";
+    import { r2SyncStatus, statusWithWarnings } from "../lib/admin-response-warnings.js";
 
     let state = null;
     let manifestRevision = "";
@@ -3862,7 +3862,7 @@ async function loadMpUsersAdmin() {
         renderManifestSettings();
         renderTree();
         renderEditor();
-        publishStatus.textContent = statusWithWarnings("已按 R2 更新并发布", data);
+        publishStatus.textContent = r2SyncStatus("已按 R2 更新并发布", data);
       } catch (error) {
         publishStatus.textContent = error.message;
       }
@@ -3881,7 +3881,7 @@ async function loadMpUsersAdmin() {
         renderManifestSettings();
         renderTree();
         renderEditor();
-        publishStatus.textContent = statusWithWarnings("已按 R2 重建并发布", data);
+        publishStatus.textContent = r2SyncStatus("已按 R2 重建并发布", data);
       } catch (error) {
         publishStatus.textContent = error.message;
       }

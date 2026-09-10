@@ -42,7 +42,7 @@ test("public v1 routing remains separate from mini-program administration", () =
 test("static publish warnings remain in management responses and are visible in the admin UI", () => {
   assert.match(source, /return result;\s*}\s*\n\s*function readDeploymentProof/);
   assert.match(source, /Static publish durability warning/);
-  assert.match(adminUiSource, /import \{ statusWithWarnings \} from "\.\.\/lib\/admin-response-warnings\.js"/);
+  assert.match(adminUiSource, /import \{ [^}]*statusWithWarnings[^}]*\} from "\.\.\/lib\/admin-response-warnings\.js"/);
   assert.match(adminUiSource, /publishStatus\.textContent = statusWithWarnings\("已发布", data\)/);
   assert.match(adminUiSource, /已按 R2 重建并发布", data/);
   assert.match(adminUiSource, /课程已删除并发布", data/);
