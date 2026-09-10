@@ -91,7 +91,6 @@ const footer = {
             <h1>{title}</h1>
           </div>
           <div class="top-actions">
-            <a class="top-link" href="/me/" id="user-link" style="display:none;">我的</a>
             <button class="top-link" id="login-btn" type="button" style="display:none;" onclick="document.getElementById('auth-modal').showModal()">登录</button>
             <button class="theme-toggle top-link" id="theme-toggle" type="button" aria-label="切换明暗色" title="切换明暗色">
               <span class="theme-icon theme-icon-sun" aria-hidden="true">
@@ -148,17 +147,15 @@ const footer = {
       <script>
         (async () => {
           const loginBtn = document.querySelector("#login-btn");
-          const userLink = document.querySelector("#user-link");
-          const status = document.querySelector("#auth-status");
           try {
             const r = await fetch("/api/v1/auth/web-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
             if (r.ok) {
               const d = await r.json();
               if (d.data?.user?.nickname) {
-                loginBtn.textContent = d.data.user.nickname;
+                loginBtn.textContent = "我";
+                loginBtn.title = `已登录：${d.data.user.nickname}`;
                 loginBtn.style.display = "";
                 loginBtn.onclick = () => location.href = "/me/";
-                userLink.style.display = "";
                 return;
               }
             }

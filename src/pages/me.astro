@@ -1,6 +1,5 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { markdownToHtml } from "../lib/markdown";
 ---
 
 <Layout title="我的" eyebrow="Me">
@@ -13,6 +12,77 @@ import { markdownToHtml } from "../lib/markdown";
   </section>
 </Layout>
 
+<style>
+  .me-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  .me-card > h3 {
+    margin: 0 0 14px;
+    font-size: 1.02em;
+  }
+  .me-field {
+    display: block;
+    margin-bottom: 10px;
+  }
+  .me-field > span {
+    display: block;
+    font-size: 0.82em;
+    margin-bottom: 4px;
+    color: var(--muted);
+  }
+  .me-field > input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    color: inherit;
+    box-sizing: border-box;
+  }
+  .me-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.9em;
+  }
+  .me-btn.primary {
+    border: none;
+    background: #4b1f6f;
+    color: #fff;
+    font-weight: 700;
+  }
+  .me-btn.danger {
+    border-color: #dc2626;
+    color: #dc2626;
+  }
+  .me-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .me-status {
+    font-size: 0.85em;
+    margin-left: 10px;
+  }
+  .me-status.ok { color: #16a34a; }
+  .me-status.err { color: #dc2626; }
+  .me-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .me-row:last-child { border-bottom: none; }
+</style>
+
 <script>
   async function api(path, options = {}) {
     const response = await fetch(`/api/v1${path}`, {
@@ -24,10 +94,13 @@ import { markdownToHtml } from "../lib/markdown";
     return data.data;
   }
 
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const statusLabel = (s) => ({ pending: "待审", approved: "已通过", hidden: "已隐藏", open: "待处理", completed: "已完成", rejected: "不予完成", parked: "搁置" }[s] || s);
+
   async function init() {
     const app = document.querySelector("#me-app");
     let user = null;
-    // 尝试恢复登录态（通过 web-login 空请求检查 cookie）
+    // 空 web-login 请求 = 通过 httpOnly cookie 恢复会话
     try {
       const d = await api("/auth/web-login", { method: "POST", body: "{}" });
       if (d?.user?.nickname) user = d.user;
@@ -36,72 +109,176 @@ import { markdownToHtml } from "../lib/markdown";
     if (!user) {
       app.innerHTML = `
         <div style="text-align:center;padding:60px 0;">
-          <p style="margin-bottom:16px;">登录后可查看收藏、评价和反馈</p>
-          <a href="/" style="color:#4B1F6F;font-weight:700;">← 返回首页</a>
+          <p style="margin-bottom:16px;">登录后可管理账号并查看收藏、评价和反馈</p>
+          <button type="button" class="me-btn primary" id="me-open-login">登录 / 注册</button>
+          <p style="margin-top:20px;"><a href="/" style="color:#4B1F6F;font-weight:700;">← 返回首页</a></p>
         </div>`;
+      document.querySelector("#me-open-login")?.addEventListener("click", () => document.getElementById("auth-modal")?.showModal());
       return;
     }
 
-    const [favorites, reviews, feedback] = await Promise.all([
-      api("/me/favorites?page=1&page_size=50").catch(() => ({ items: [] })),
-      api("/me/reviews?page=1&page_size=50").catch(() => ({ items: [] })),
-      api("/me/feedback?page=1&page_size=50").catch(() => ({ items: [] })),
-    ]);
-
-    const statusLabel = (s) => ({ pending: "待审", approved: "已通过", hidden: "已隐藏", open: "待处理", completed: "已完成", rejected: "不予完成", parked: "搁置" }[s] || s);
-
     app.innerHTML = `
       <div style="max-width: 640px; margin: 0 auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+
+        <div class="me-card" style="display:flex;justify-content:space-between;align-items:center;">
           <div>
-            <h2 style="margin:0;">${user.nickname}</h2>
-            <p class="muted" style="margin:4px 0 0;font-size:0.85em;">${user.email || "未设置邮箱"}</p>
+            <h2 style="margin:0;" id="me-nickname">${esc(user.nickname)}</h2>
+            <p class="muted" style="margin:4px 0 0;font-size:0.85em;">${esc(user.email || "未设置邮箱")}</p>
           </div>
-          <button type="button" id="logout-btn" style="padding:8px 16px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit;cursor:pointer;font-size:0.9em;">退出</button>
+          <button type="button" class="me-btn" id="logout-btn">退出登录</button>
         </div>
 
-        <details open style="margin-bottom:16px;">
-          <summary style="font-weight:700;cursor:pointer;padding:8px 0;">收藏课程（${favorites.total ?? favorites.items.length}）</summary>
-          <div style="padding:8px 0;">
-            ${favorites.items.length ? favorites.items.map(f => `
-              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-                <a href="/courses/${encodeURIComponent(f.name)}/" style="color:inherit;text-decoration:none;font-weight:600;">${f.name}</a>
-                <span class="muted" style="font-size:0.82em;">${f.term || ""} · ${f.resource_count || 0} 份资料</span>
-              </div>`).join("") : '<p class="muted" style="padding:12px 0;">暂无收藏</p>'}
-          </div>
-        </details>
+        <div class="me-card">
+          <h3>账号设置</h3>
 
-        <details open style="margin-bottom:16px;">
-          <summary style="font-weight:700;cursor:pointer;padding:8px 0;">我的评价（${reviews.total ?? reviews.items.length}）</summary>
-          <div style="padding:8px 0;">
-            ${reviews.items.length ? reviews.items.map(r => `
-              <div style="padding:10px 0;border-bottom:1px solid var(--line);">
-                <div style="display:flex;justify-content:space-between;">
-                  <strong>${r.course_title} · ${r.teacher_name}</strong>
-                  <span style="font-size:0.8em;color:${r.status === "approved" ? "#16a34a" : "#eab308"};">${statusLabel(r.status)}${r.hidden ? " · 已隐藏" : ""}</span>
-                </div>
-                <p style="margin:4px 0 0;font-size:0.85em;color:var(--muted);">${r.body.slice(0, 100)}${r.body.length > 100 ? "…" : ""}</p>
-              </div>`).join("") : '<p class="muted" style="padding:12px 0;">暂无评价</p>'}
-          </div>
-        </details>
+          <details style="margin-bottom:14px;">
+            <summary style="cursor:pointer;padding:6px 0;font-weight:600;">修改昵称</summary>
+            <div style="padding:10px 0 4px;max-width:340px;">
+              <label class="me-field"><span>新昵称（全局唯一，2-32 字符）</span><input id="nick-input" type="text" maxlength="32" placeholder="输入新的昵称" /></label>
+              <button type="button" class="me-btn primary" id="nick-save">保存昵称</button>
+              <span class="me-status" id="nick-status"></span>
+            </div>
+          </details>
 
-        <details open>
-          <summary style="font-weight:700;cursor:pointer;padding:8px 0;">我的反馈（${feedback.total ?? feedback.items.length}）</summary>
-          <div style="padding:8px 0;">
-            ${feedback.items.length ? feedback.items.map(f => `
-              <div style="padding:10px 0;border-bottom:1px solid var(--line);">
-                <div style="display:flex;justify-content:space-between;">
-                  <strong>${f.title}</strong>
-                  <span style="font-size:0.8em;color:${f.status === "completed" ? "#16a34a" : "var(--muted)"};">${statusLabel(f.status)}</span>
-                </div>
-                <p style="margin:4px 0 0;font-size:0.85em;color:var(--muted);">${f.content.slice(0, 100)}${f.content.length > 100 ? "…" : ""}</p>
-                <span class="muted" style="font-size:0.78em;">${f.createdAt}</span>
-              </div>`).join("") : '<p class="muted" style="padding:12px 0;">暂无反馈</p>'}
-          </div>
-        </details>
+          <details style="margin-bottom:6px;">
+            <summary style="cursor:pointer;padding:6px 0;font-weight:600;">修改密码</summary>
+            <div style="padding:10px 0 4px;max-width:340px;">
+              <label class="me-field"><span>当前密码</span><input id="pw-current" type="password" autocomplete="current-password" /></label>
+              <label class="me-field"><span>新密码（至少 8 位）</span><input id="pw-new" type="password" autocomplete="new-password" /></label>
+              <label class="me-field"><span>确认新密码（二次确认）</span><input id="pw-confirm" type="password" autocomplete="new-password" /></label>
+              <button type="button" class="me-btn primary" id="pw-save">修改密码</button>
+              <span class="me-status" id="pw-status"></span>
+            </div>
+          </details>
+        </div>
+
+        <div class="me-card">
+          <h3>我的收藏（<span id="fav-count">…</span>）</h3>
+          <div id="fav-list"><p class="muted" style="padding:8px 0;">加载中…</p></div>
+        </div>
+
+        <div class="me-card">
+          <h3>我的评价（<span id="rev-count">…</span>）</h3>
+          <div id="rev-list"><p class="muted" style="padding:8px 0;">加载中…</p></div>
+        </div>
+
+        <div class="me-card">
+          <h3>我的反馈（<span id="fb-count">…</span>）</h3>
+          <div id="fb-list"><p class="muted" style="padding:8px 0;">加载中…</p></div>
+        </div>
+
+        <div class="me-card" style="border-color:#dc2626;">
+          <h3 style="color:#dc2626;">危险操作</h3>
+          <details>
+            <summary style="cursor:pointer;padding:6px 0;font-weight:600;color:#dc2626;">注销账号</summary>
+            <div style="padding:10px 0 4px;max-width:420px;">
+              <p class="muted" style="font-size:0.85em;margin:0 0 10px;">注销将删除登录方式与收藏，已发布的评价和反馈内容会保留但解除关联。此操作不可撤销。</p>
+              <label class="me-field"><span>请输入「注销」以确认</span><input id="del-confirm" type="text" placeholder="注销" /></label>
+              <button type="button" class="me-btn danger" id="del-btn" disabled>永久注销账号</button>
+              <span class="me-status" id="del-status"></span>
+            </div>
+          </details>
+        </div>
+
       </div>`;
 
+    // —— 修改昵称（二次确认）——
+    document.querySelector("#nick-save")?.addEventListener("click", async () => {
+      const status = document.querySelector("#nick-status");
+      const nickname = document.querySelector("#nick-input").value.trim();
+      status.className = "me-status";
+      if (nickname.length < 2) { status.textContent = "昵称至少 2 个字符"; status.classList.add("err"); return; }
+      if (nickname === user.nickname) { status.textContent = "昵称未变化"; return; }
+      if (!confirm(`确定将昵称改为「${nickname}」？`)) return;
+      status.textContent = "保存中…";
+      try {
+        const d = await api("/me/profile", { method: "POST", body: JSON.stringify({ nickname }) });
+        user.nickname = d.user.nickname;
+        document.querySelector("#me-nickname").textContent = d.user.nickname;
+        status.classList.add("ok"); status.textContent = "已更新";
+      } catch (e) { status.classList.add("err"); status.textContent = e.message; }
+    });
+
+    // —— 修改密码（两次输入 + 当前密码校验）——
+    document.querySelector("#pw-save")?.addEventListener("click", async () => {
+      const status = document.querySelector("#pw-status");
+      const current = document.querySelector("#pw-current").value;
+      const next = document.querySelector("#pw-new").value;
+      const confirm2 = document.querySelector("#pw-confirm").value;
+      status.className = "me-status";
+      if (!current) { status.textContent = "请输入当前密码"; status.classList.add("err"); return; }
+      if (next.length < 8) { status.textContent = "新密码至少 8 位"; status.classList.add("err"); return; }
+      if (next !== confirm2) { status.textContent = "两次输入的新密码不一致"; status.classList.add("err"); return; }
+      if (!confirm("确定修改密码？修改后需使用新密码登录。")) return;
+      status.textContent = "提交中…";
+      try {
+        await api("/me/web-password/change", { method: "POST", body: JSON.stringify({ current_password: current, new_password: next }) });
+        document.querySelector("#pw-current").value = "";
+        document.querySelector("#pw-new").value = "";
+        document.querySelector("#pw-confirm").value = "";
+        status.classList.add("ok"); status.textContent = "密码已修改";
+      } catch (e) { status.classList.add("err"); status.textContent = e.message; }
+    });
+
+    // —— 注销（输入「注销」双重确认）——
+    document.querySelector("#del-confirm")?.addEventListener("input", (e) => {
+      document.querySelector("#del-btn").disabled = e.target.value.trim() !== "注销";
+    });
+    document.querySelector("#del-btn")?.addEventListener("click", async () => {
+      const status = document.querySelector("#del-status");
+      if (!confirm("最后确认：真的要永久注销账号吗？此操作不可撤销。")) return;
+      status.className = "me-status"; status.textContent = "处理中…";
+      try {
+        await api("/me/delete-account", { method: "POST", body: "{}" });
+        location.href = "/";
+      } catch (e) { status.classList.add("err"); status.textContent = e.message; }
+    });
+
+    // —— 列表加载 ——
+    const loadLists = async () => {
+      const [favorites, reviews, feedback] = await Promise.all([
+        api("/me/favorites?page=1&page_size=50").catch(() => ({ items: [] })),
+        api("/me/reviews?page=1&page_size=50").catch(() => ({ items: [] })),
+        api("/me/feedback?page=1&page_size=50").catch(() => ({ items: [] })),
+      ]);
+
+      document.querySelector("#fav-count").textContent = favorites.total ?? favorites.items.length;
+      document.querySelector("#fav-list").innerHTML = favorites.items.length ? favorites.items.map((f) => `
+        <div class="me-row">
+          <a href="/courses/${encodeURIComponent(f.name)}/" style="color:inherit;text-decoration:none;font-weight:600;">${esc(f.name)}</a>
+          <span class="muted" style="font-size:0.82em;">${esc(f.term || "")} · ${f.resource_count || 0} 份资料</span>
+        </div>`).join("") : '<p class="muted" style="padding:8px 0;">暂无收藏</p>';
+
+      document.querySelector("#rev-count").textContent = reviews.total ?? reviews.items.length;
+      document.querySelector("#rev-list").innerHTML = reviews.items.length ? reviews.items.map((r) => `
+        <div class="me-row" style="align-items:flex-start;">
+          <div style="flex:1;">
+            <div style="display:flex;justify-content:space-between;">
+              <strong>${esc(r.course_title)} · ${esc(r.teacher_name)}</strong>
+              <span style="font-size:0.8em;color:${r.status === "approved" ? "#16a34a" : "#eab308"};">${statusLabel(r.status)}${r.hidden ? " · 已隐藏" : ""}</span>
+            </div>
+            <p style="margin:4px 0 0;font-size:0.85em;color:var(--muted);">${esc(r.body.slice(0, 100))}${r.body.length > 100 ? "…" : ""}</p>
+          </div>
+        </div>`).join("") : '<p class="muted" style="padding:8px 0;">暂无评价</p>';
+
+      document.querySelector("#fb-count").textContent = feedback.total ?? feedback.items.length;
+      document.querySelector("#fb-list").innerHTML = feedback.items.length ? feedback.items.map((f) => `
+        <div class="me-row" style="align-items:flex-start;">
+          <div style="flex:1;">
+            <div style="display:flex;justify-content:space-between;">
+              <strong>${esc(f.title)}</strong>
+              <span style="font-size:0.8em;color:${f.status === "completed" ? "#16a34a" : "var(--muted)"};">${statusLabel(f.status)}</span>
+            </div>
+            <p style="margin:4px 0 0;font-size:0.85em;color:var(--muted);">${esc(f.content.slice(0, 100))}${f.content.length > 100 ? "…" : ""}</p>
+            <span class="muted" style="font-size:0.78em;">${esc(f.createdAt)}</span>
+          </div>
+        </div>`).join("") : '<p class="muted" style="padding:8px 0;">暂无反馈</p>';
+    };
+    loadLists();
+
+    // —— 退出登录 ——
     document.querySelector("#logout-btn")?.addEventListener("click", async () => {
+      if (!confirm("确定退出登录？")) return;
       await fetch("/api/v1/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => {});
       location.href = "/";
     });

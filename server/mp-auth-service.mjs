@@ -239,7 +239,7 @@ export class MpAuthService {
       return this.selectUserById.get(created.id);
     })();
     this.#secureDatabaseFiles();
-    return row;
+    return this.#issueToken(row, timestamp);
   }
 
   webLogin({ nickname, password }, { now = this.now() } = {}) {
@@ -257,7 +257,25 @@ export class MpAuthService {
     }
     const timestamp = positiveSafeInteger(now, "now");
     this.markLogin.run(timestamp, row.id);
-    return this.selectUserById.get(row.id);
+    return this.#issueToken(this.selectUserById.get(row.id), timestamp);
+  }
+
+  /**
+   * 修改网页密码：必须先验证当前密码，避免持有会话者无凭据接管账号。
+   */
+  changeWebPassword(userId, { currentPassword, newPassword } = {}) {
+    const account = this.selectUserById.get(Number(userId));
+    if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    if (!account.web_password_hash) {
+      throw new PublicApiError(400, "该账号尚未设置网页密码，请先在“设置网页登录密码”中创建。", "WEB_PASSWORD_NOT_SET");
+    }
+    if (!verifyWebPassword(String(currentPassword ?? ""), account.web_password_hash)) {
+      throw new PublicApiError(401, "当前密码不正确。", "AUTH_INVALID_CREDENTIALS");
+    }
+    const secret = validateWebPassword(newPassword);
+    this.updateWebPassword.run(hashWebPassword(secret), account.id);
+    this.#secureDatabaseFiles();
+    return true;
   }
 
   deleteAccount(userId) {

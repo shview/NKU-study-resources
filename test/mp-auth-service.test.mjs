@@ -184,3 +184,57 @@ test("keyword flagged reviews are forced pending with a hit record", async () =>
   assert.equal(reviewKeywordMatch("正常评价", ["代写", "刷分"]).length, 0);
   assert.equal(reviewKeywordMatch("可以代写作业", ["代写"]).length > 0, true);
 });
+
+test("webRegister and webLogin issue session tokens", () => {
+  const { service } = tempService();
+  const registered = service.webRegister({ nickname: "网页用户", password: "password-123" });
+  assert.match(registered.token, /^[A-Za-z0-9_-]{40,}$/);
+  assert.equal(registered.user.nickname, "网页用户");
+
+  const session = service.webLogin({ nickname: "网页用户", password: "password-123" });
+  assert.match(session.token, /^[A-Za-z0-9_-]{40,}$/);
+  assert.equal(session.user.nickname, "网页用户");
+  assert.equal(session.user.has_web_password, true);
+
+  assert.throws(() => service.webLogin({ nickname: "网页用户", password: "wrong-password" }), (error) => {
+    assert.equal(error instanceof PublicApiError, true);
+    assert.equal(error.statusCode, 401);
+    return true;
+  });
+  service.close();
+});
+
+test("changeWebPassword verifies current password before setting a new one", () => {
+  const { service } = tempService();
+  const registered = service.webRegister({ nickname: "改密用户", password: "old-password-1" });
+
+  assert.throws(() => service.changeWebPassword(registered.user.id, { currentPassword: "bad-password", newPassword: "new-password-1" }), (error) => {
+    assert.equal(error instanceof PublicApiError, true);
+    assert.equal(error.statusCode, 401);
+    return true;
+  });
+
+  assert.throws(() => service.changeWebPassword(registered.user.id, { currentPassword: "old-password-1", newPassword: "short" }), (error) => {
+    assert.equal(error instanceof PublicApiError, true);
+    assert.equal(error.statusCode, 400);
+    return true;
+  });
+
+  assert.equal(service.changeWebPassword(registered.user.id, { currentPassword: "old-password-1", newPassword: "new-password-1" }), true);
+
+  assert.throws(() => service.webLogin({ nickname: "改密用户", password: "old-password-1" }), /昵称或密码不正确/);
+  const relogin = service.webLogin({ nickname: "改密用户", password: "new-password-1" });
+  assert.equal(relogin.user.nickname, "改密用户");
+  service.close();
+});
+
+test("changeWebPassword rejects accounts without a web password", async () => {
+  const { service } = tempService();
+  const wechat = await service.loginWithCode("good-code-1");
+  assert.throws(() => service.changeWebPassword(wechat.user.id, { currentPassword: "whatever-1", newPassword: "new-password-1" }), (error) => {
+    assert.equal(error instanceof PublicApiError, true);
+    assert.equal(error.statusCode, 400);
+    return true;
+  });
+  service.close();
+});

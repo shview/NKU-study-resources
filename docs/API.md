@@ -38,7 +38,7 @@
 | `POST` | `/api/v1/service/rate-limit` | 服务密钥 | 通用固定窗口限流（按服务命名空间隔离） |
 | `POST` | `/api/v1/auth/wechat` | 公开、限流 | 小程序微信登录（code 换 token） |
 | `POST` | `/api/v1/auth/web-register` | 公开、限流 | 网页注册（昵称+密码） |
-| `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码） |
+| `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码，签发 httpOnly 会话 cookie；空请求用于恢复会话） |
 | `POST` | `/api/v1/auth/logout` | Bearer Token | 注销小程序登录令牌 |
 | `GET` | `/api/v1/me` | Bearer Token | 当前小程序用户信息 |
 | `GET` | `/api/v1/me/favorites` | Bearer Token | 我的收藏课程列表（分页） |
@@ -46,7 +46,8 @@
 | `POST` | `/api/v1/favorites` | Bearer Token | 收藏课程（body：course_id） |
 | `DELETE` | `/api/v1/favorites/:param` | Bearer Token | 取消收藏课程 |
 | `POST` | `/api/v1/me/profile` | Bearer Token | 更新昵称与头像 |
-| `POST` | `/api/v1/me/web-password` | Bearer Token | 设置/修改网页登录密码 |
+| `POST` | `/api/v1/me/web-password` | Bearer Token | 设置网页登录密码（微信端首次设置） |
+| `POST` | `/api/v1/me/web-password/change` | Bearer Token | 修改网页登录密码（需验证当前密码） |
 | `POST` | `/api/v1/me/delete-account` | Bearer Token | 注销账号（删绑定关系、保留内容；封禁账号需联系管理员） |
 | `GET` | `/api/v1/me/feedback` | Bearer Token | 我的反馈列表（含审核状态） |
 | `POST` | `/api/v1/reviews` | 公开、限流 | 小程序提交评价 |
