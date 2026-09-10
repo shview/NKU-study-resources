@@ -12,75 +12,82 @@ import Layout from "../layouts/Layout.astro";
   </section>
 </Layout>
 
-<style>
-  .me-card {
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: var(--surface);
-    padding: 20px 22px;
-    margin-bottom: 18px;
+<style is:global>
+  /* JS 注入的 DOM 只能使用全局样式：全部沿用站点设计体系（panel/admin-field/button），
+     这里仅补充个人中心特有的少量外观（危险按钮、状态色、列表行）。 */
+  .me-scope {
+    max-width: 660px;
+    margin: 0 auto;
+    display: grid;
+    gap: 16px;
   }
-  .me-card > h3 {
-    margin: 0 0 14px;
-    font-size: 1.02em;
-  }
-  .me-field {
-    display: block;
-    margin-bottom: 10px;
-  }
-  .me-field > span {
-    display: block;
-    font-size: 0.82em;
-    margin-bottom: 4px;
-    color: var(--muted);
-  }
-  .me-field > input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--bg);
-    color: inherit;
-    box-sizing: border-box;
-  }
-  .me-btn {
-    padding: 8px 16px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--surface);
-    color: inherit;
+  .me-summary {
     cursor: pointer;
+    padding: 10px 0;
+    font-weight: 750;
+    color: var(--text);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .me-summary::-webkit-details-marker { display: none; }
+  .me-summary::before {
+    content: "▸";
+    color: var(--muted);
     font-size: 0.9em;
+    transition: transform 0.15s ease;
   }
-  .me-btn.primary {
-    border: none;
-    background: #4b1f6f;
-    color: #fff;
-    font-weight: 700;
-  }
-  .me-btn.danger {
-    border-color: #dc2626;
-    color: #dc2626;
-  }
-  .me-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .me-status {
-    font-size: 0.85em;
-    margin-left: 10px;
-  }
-  .me-status.ok { color: #16a34a; }
-  .me-status.err { color: #dc2626; }
+  details[open] > .me-summary::before { transform: rotate(90deg); }
+  .me-rows { display: grid; gap: 2px; }
   .me-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--line);
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--line-soft);
   }
   .me-row:last-child { border-bottom: none; }
+  .me-row-main { flex: 1; min-width: 0; }
+  .me-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .me-status { font-size: 13px; font-weight: 600; }
+  .me-status.ok { color: #16a34a; }
+  .me-status.err { color: #dc2626; }
+  .me-chip {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    background: var(--surface-soft);
+  }
+  .me-chip.ok { color: #15803d; border-color: #bbf7d0; background: #f0fdf4; }
+  .me-chip.warn { color: #a16207; border-color: #fde68a; background: #fefce8; }
+  .me-chip.err { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+  :root[data-theme="dark"] .me-chip.ok { color: #4ade80; border-color: #14532d; background: #0a1f0e; }
+  :root[data-theme="dark"] .me-chip.warn { color: #facc15; border-color: #713f12; background: #211a05; }
+  :root[data-theme="dark"] .me-chip.err { color: #f87171; border-color: #7f1d1d; background: #250d0d; }
+  .button.me-danger {
+    color: #b91c1c;
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+  .button.me-danger:hover { background: #fee2e2; }
+  :root[data-theme="dark"] .button.me-danger {
+    color: #f87171;
+    border-color: #7f1d1d;
+    background: #250d0d;
+  }
+  .me-danger-panel { border-color: #fecaca; }
+  :root[data-theme="dark"] .me-danger-panel { border-color: #7f1d1d; }
 </style>
 
 <script>
@@ -95,7 +102,7 @@ import Layout from "../layouts/Layout.astro";
   }
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const statusLabel = (s) => ({ pending: "待审", approved: "已通过", hidden: "已隐藏", open: "待处理", completed: "已完成", rejected: "不予完成", parked: "搁置" }[s] || s);
+  const chip = (s) => ({ pending: ["待审", "warn"], approved: ["已通过", "ok"], hidden: ["已隐藏", "err"], open: ["待处理", "warn"], completed: ["已完成", "ok"], rejected: ["不予完成", "err"], parked: ["搁置", ""] }[s] || [s, ""]);
 
   async function init() {
     const app = document.querySelector("#me-app");
@@ -108,76 +115,123 @@ import Layout from "../layouts/Layout.astro";
 
     if (!user) {
       app.innerHTML = `
-        <div style="text-align:center;padding:60px 0;">
-          <p style="margin-bottom:16px;">登录后可管理账号并查看收藏、评价和反馈</p>
-          <button type="button" class="me-btn primary" id="me-open-login">登录 / 注册</button>
-          <p style="margin-top:20px;"><a href="/" style="color:#4B1F6F;font-weight:700;">← 返回首页</a></p>
+        <div class="me-scope">
+          <div class="panel">
+            <div class="panel-header"><h2>登录后继续</h2></div>
+            <div class="panel-body" style="text-align:center;">
+              <p class="muted" style="margin:0 0 18px;">登录后可管理账号并查看收藏、评价和反馈</p>
+              <div class="filter-row" style="justify-content:center;border-left:none;background:none;padding:0;">
+                <button type="button" class="button" id="me-open-login">登录 / 注册</button>
+                <a class="button secondary" href="/">返回首页</a>
+              </div>
+            </div>
+          </div>
         </div>`;
       document.querySelector("#me-open-login")?.addEventListener("click", () => document.getElementById("auth-modal")?.showModal());
       return;
     }
 
     app.innerHTML = `
-      <div style="max-width: 640px; margin: 0 auto;">
+      <div class="me-scope">
 
-        <div class="me-card" style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <h2 style="margin:0;" id="me-nickname">${esc(user.nickname)}</h2>
-            <p class="muted" style="margin:4px 0 0;font-size:0.85em;">${esc(user.email || "未设置邮箱")}</p>
+        <div class="panel">
+          <div class="panel-header split-header">
+            <div>
+              <h2 id="me-nickname">${esc(user.nickname)}</h2>
+              <p class="muted" style="margin:4px 0 0;font-size:13px;">${esc(user.email || "未设置邮箱")}</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="button secondary" id="logout-btn">退出登录</button>
+            </div>
           </div>
-          <button type="button" class="me-btn" id="logout-btn">退出登录</button>
         </div>
 
-        <div class="me-card">
-          <h3>账号设置</h3>
+        <div class="panel">
+          <div class="panel-header"><h2>账号设置</h2></div>
+          <div class="panel-body">
 
-          <details style="margin-bottom:14px;">
-            <summary style="cursor:pointer;padding:6px 0;font-weight:600;">修改昵称</summary>
-            <div style="padding:10px 0 4px;max-width:340px;">
-              <label class="me-field"><span>新昵称（全局唯一，2-32 字符）</span><input id="nick-input" type="text" maxlength="32" placeholder="输入新的昵称" /></label>
-              <button type="button" class="me-btn primary" id="nick-save">保存昵称</button>
-              <span class="me-status" id="nick-status"></span>
-            </div>
-          </details>
+            <details>
+              <summary class="me-summary">修改昵称</summary>
+              <form class="review-form" style="max-width:360px;padding-top:6px;">
+                <label class="admin-field">
+                  <span>新昵称（全局唯一，2-32 字符）</span>
+                  <input id="nick-input" type="text" maxlength="32" placeholder="输入新的昵称" autocomplete="off" />
+                </label>
+                <div class="filter-row" style="border-left:none;background:none;padding:0;">
+                  <button type="button" class="button" id="nick-save">保存昵称</button>
+                  <span class="me-status" id="nick-status"></span>
+                </div>
+              </form>
+            </details>
 
-          <details style="margin-bottom:6px;">
-            <summary style="cursor:pointer;padding:6px 0;font-weight:600;">修改密码</summary>
-            <div style="padding:10px 0 4px;max-width:340px;">
-              <label class="me-field"><span>当前密码</span><input id="pw-current" type="password" autocomplete="current-password" /></label>
-              <label class="me-field"><span>新密码（至少 8 位）</span><input id="pw-new" type="password" autocomplete="new-password" /></label>
-              <label class="me-field"><span>确认新密码（二次确认）</span><input id="pw-confirm" type="password" autocomplete="new-password" /></label>
-              <button type="button" class="me-btn primary" id="pw-save">修改密码</button>
-              <span class="me-status" id="pw-status"></span>
-            </div>
-          </details>
+            <details style="margin-top:10px;">
+              <summary class="me-summary">修改密码</summary>
+              <form class="review-form" style="max-width:360px;padding-top:6px;">
+                <label class="admin-field">
+                  <span>当前密码</span>
+                  <input id="pw-current" type="password" autocomplete="current-password" placeholder="正在使用的密码" />
+                </label>
+                <label class="admin-field">
+                  <span>新密码（至少 8 位）</span>
+                  <input id="pw-new" type="password" autocomplete="new-password" placeholder="新密码" />
+                </label>
+                <label class="admin-field">
+                  <span>确认新密码（二次确认）</span>
+                  <input id="pw-confirm" type="password" autocomplete="new-password" placeholder="再次输入新密码" />
+                  <small class="field-hint">两次输入一致才会提交；服务端会校验当前密码。</small>
+                </label>
+                <div class="filter-row" style="border-left:none;background:none;padding:0;">
+                  <button type="button" class="button" id="pw-save">修改密码</button>
+                  <span class="me-status" id="pw-status"></span>
+                </div>
+              </form>
+            </details>
+
+          </div>
         </div>
 
-        <div class="me-card">
-          <h3>我的收藏（<span id="fav-count">…</span>）</h3>
-          <div id="fav-list"><p class="muted" style="padding:8px 0;">加载中…</p></div>
+        <div class="panel">
+          <div class="panel-header split-header">
+            <h2>我的收藏</h2>
+            <span class="me-chip" id="fav-count">…</span>
+          </div>
+          <div class="panel-body"><div class="me-rows" id="fav-list"><p class="muted" style="padding:6px 0;">加载中…</p></div></div>
         </div>
 
-        <div class="me-card">
-          <h3>我的评价（<span id="rev-count">…</span>）</h3>
-          <div id="rev-list"><p class="muted" style="padding:8px 0;">加载中…</p></div>
+        <div class="panel">
+          <div class="panel-header split-header">
+            <h2>我的评价</h2>
+            <span class="me-chip" id="rev-count">…</span>
+          </div>
+          <div class="panel-body"><div class="me-rows" id="rev-list"><p class="muted" style="padding:6px 0;">加载中…</p></div></div>
         </div>
 
-        <div class="me-card">
-          <h3>我的反馈（<span id="fb-count">…</span>）</h3>
-          <div id="fb-list"><p class="muted" style="padding:8px 0;">加载中…</p></div>
+        <div class="panel">
+          <div class="panel-header split-header">
+            <h2>我的反馈</h2>
+            <span class="me-chip" id="fb-count">…</span>
+          </div>
+          <div class="panel-body"><div class="me-rows" id="fb-list"><p class="muted" style="padding:6px 0;">加载中…</p></div></div>
         </div>
 
-        <div class="me-card" style="border-color:#dc2626;">
-          <h3 style="color:#dc2626;">危险操作</h3>
-          <details>
-            <summary style="cursor:pointer;padding:6px 0;font-weight:600;color:#dc2626;">注销账号</summary>
-            <div style="padding:10px 0 4px;max-width:420px;">
-              <p class="muted" style="font-size:0.85em;margin:0 0 10px;">注销将删除登录方式与收藏，已发布的评价和反馈内容会保留但解除关联。此操作不可撤销。</p>
-              <label class="me-field"><span>请输入「注销」以确认</span><input id="del-confirm" type="text" placeholder="注销" /></label>
-              <button type="button" class="me-btn danger" id="del-btn" disabled>永久注销账号</button>
-              <span class="me-status" id="del-status"></span>
-            </div>
-          </details>
+        <div class="panel me-danger-panel">
+          <div class="panel-header"><h2 style="color:#dc2626;">危险操作</h2></div>
+          <div class="panel-body">
+            <details>
+              <summary class="me-summary" style="color:#dc2626;">注销账号</summary>
+              <form class="review-form" style="max-width:420px;padding-top:6px;">
+                <p class="field-hint" style="margin:0;">注销将删除登录方式与收藏，已发布的评价和反馈内容会保留但解除关联。此操作不可撤销。</p>
+                <label class="admin-field">
+                  <span>请输入「注销」以确认</span>
+                  <input id="del-confirm" type="text" placeholder="注销" autocomplete="off" />
+                </label>
+                <div class="filter-row" style="border-left:none;background:none;padding:0;">
+                  <button type="button" class="button me-danger" id="del-btn" disabled>永久注销账号</button>
+                  <span class="me-status" id="del-status"></span>
+                </div>
+              </form>
+            </details>
+          </div>
         </div>
 
       </div>`;
@@ -242,37 +296,43 @@ import Layout from "../layouts/Layout.astro";
         api("/me/feedback?page=1&page_size=50").catch(() => ({ items: [] })),
       ]);
 
-      document.querySelector("#fav-count").textContent = favorites.total ?? favorites.items.length;
+      document.querySelector("#fav-count").textContent = `共 ${favorites.total ?? favorites.items.length} 门`;
       document.querySelector("#fav-list").innerHTML = favorites.items.length ? favorites.items.map((f) => `
         <div class="me-row">
-          <a href="/courses/${encodeURIComponent(f.name)}/" style="color:inherit;text-decoration:none;font-weight:600;">${esc(f.name)}</a>
-          <span class="muted" style="font-size:0.82em;">${esc(f.term || "")} · ${f.resource_count || 0} 份资料</span>
-        </div>`).join("") : '<p class="muted" style="padding:8px 0;">暂无收藏</p>';
+          <a href="/courses/${encodeURIComponent(f.name)}/" style="color:inherit;text-decoration:none;font-weight:700;">${esc(f.name)}</a>
+          <span class="muted" style="font-size:12px;">${esc(f.term || "")} · ${f.resource_count || 0} 份资料</span>
+        </div>`).join("") : '<p class="muted" style="padding:6px 0;">暂无收藏</p>';
 
-      document.querySelector("#rev-count").textContent = reviews.total ?? reviews.items.length;
-      document.querySelector("#rev-list").innerHTML = reviews.items.length ? reviews.items.map((r) => `
+      document.querySelector("#rev-count").textContent = `共 ${reviews.total ?? reviews.items.length} 条`;
+      document.querySelector("#rev-list").innerHTML = reviews.items.length ? reviews.items.map((r) => {
+        const [label, tone] = chip(r.status);
+        return `
         <div class="me-row" style="align-items:flex-start;">
-          <div style="flex:1;">
-            <div style="display:flex;justify-content:space-between;">
+          <div class="me-row-main">
+            <div class="me-row-top">
               <strong>${esc(r.course_title)} · ${esc(r.teacher_name)}</strong>
-              <span style="font-size:0.8em;color:${r.status === "approved" ? "#16a34a" : "#eab308"};">${statusLabel(r.status)}${r.hidden ? " · 已隐藏" : ""}</span>
+              <span class="me-chip ${tone}">${esc(label)}${r.hidden ? " · 已隐藏" : ""}</span>
             </div>
-            <p style="margin:4px 0 0;font-size:0.85em;color:var(--muted);">${esc(r.body.slice(0, 100))}${r.body.length > 100 ? "…" : ""}</p>
+            <p class="muted" style="margin:4px 0 0;font-size:13px;line-height:1.55;">${esc(r.body.slice(0, 100))}${r.body.length > 100 ? "…" : ""}</p>
           </div>
-        </div>`).join("") : '<p class="muted" style="padding:8px 0;">暂无评价</p>';
+        </div>`;
+      }).join("") : '<p class="muted" style="padding:6px 0;">暂无评价</p>';
 
-      document.querySelector("#fb-count").textContent = feedback.total ?? feedback.items.length;
-      document.querySelector("#fb-list").innerHTML = feedback.items.length ? feedback.items.map((f) => `
+      document.querySelector("#fb-count").textContent = `共 ${feedback.total ?? feedback.items.length} 条`;
+      document.querySelector("#fb-list").innerHTML = feedback.items.length ? feedback.items.map((f) => {
+        const [label, tone] = chip(f.status);
+        return `
         <div class="me-row" style="align-items:flex-start;">
-          <div style="flex:1;">
-            <div style="display:flex;justify-content:space-between;">
+          <div class="me-row-main">
+            <div class="me-row-top">
               <strong>${esc(f.title)}</strong>
-              <span style="font-size:0.8em;color:${f.status === "completed" ? "#16a34a" : "var(--muted)"};">${statusLabel(f.status)}</span>
+              <span class="me-chip ${tone}">${esc(label)}</span>
             </div>
-            <p style="margin:4px 0 0;font-size:0.85em;color:var(--muted);">${esc(f.content.slice(0, 100))}${f.content.length > 100 ? "…" : ""}</p>
-            <span class="muted" style="font-size:0.78em;">${esc(f.createdAt)}</span>
+            <p class="muted" style="margin:4px 0 0;font-size:13px;line-height:1.55;">${esc(f.content.slice(0, 100))}${f.content.length > 100 ? "…" : ""}</p>
+            <span class="field-hint">${esc(f.createdAt)}</span>
           </div>
-        </div>`).join("") : '<p class="muted" style="padding:8px 0;">暂无反馈</p>';
+        </div>`;
+      }).join("") : '<p class="muted" style="padding:6px 0;">暂无反馈</p>';
     };
     loadLists();
 
