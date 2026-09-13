@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CONTENT_IMAGE_OWNERS,
+  CONTENT_IMAGE_MIGRATE_LIMIT,
+  extractDataUriImages,
+  replaceDataUriImages,
   sniffImageType,
   contentImagePrefix,
   contentPublicRoot,
@@ -80,4 +83,21 @@ test("validateContentImage rejects spoofed content types via magic bytes", () =>
   assert.match(mismatch.error, /不一致/);
   const good = validateContentImage({ mimeType: "image/png", size: PNG_BYTES.length, buffer: PNG_BYTES });
   assert.equal(good.ok, true);
+});
+
+test("extractDataUriImages walks nested content and normalizes jpeg mime", () => {
+  const content = {
+    announcement: `前文 ![二维码](data:image/png;base64,${"A".repeat(32)}) 后文`,
+    nested: { items: [{ note: `data:image/jpeg;base64,${"B".repeat(32)}` }, `data:image/jpg;base64,${"B".repeat(32)}`] },
+    plain: "没有图片",
+  };
+  const images = extractDataUriImages(content);
+  assert.equal(images.length, 3, "png + jpeg + jpg 各自独立");
+  assert.equal(images[1].mime, "image/jpeg");
+  assert.equal(images[2].mime, "image/jpeg", "jpg 归一化为 image/jpeg");
+  const replaced = replaceDataUriImages(structuredClone(content), images.map((image, index) => [image.uri, `https://r.example/content/home/img${index}.png`]));
+  assert.equal(replaced.announcement.includes("img0.png"), true);
+  assert.equal(replaced.nested.items[0].note, "https://r.example/content/home/img1.png");
+  assert.equal(JSON.stringify(replaced).includes("base64"), false, "替换后不再残留 base64");
+  assert.ok(CONTENT_IMAGE_MIGRATE_LIMIT >= 1);
 });

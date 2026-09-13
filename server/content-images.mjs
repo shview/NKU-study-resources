@@ -88,3 +88,45 @@ export function orphanContentImageKeys(oldObject, nextObject, owner, publicRoot)
   const nextKeys = extractContentImageKeys(nextObject, owner, publicRoot);
   return [...oldKeys].filter((key) => !nextKeys.has(key)).sort();
 }
+
+/** 单次保存最多迁移的 base64 图片数，防止一次性塞入巨量内容。 */
+export const CONTENT_IMAGE_MIGRATE_LIMIT = 5;
+
+const DATA_URI_PATTERN = /data:image\/(png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=]{16,})/g;
+
+/** 深度遍历内容对象，收集全部 base64 数据 URI（按出现顺序去重）。 */
+export function extractDataUriImages(contentObject) {
+  const found = new Map();
+  const visit = (value) => {
+    if (typeof value === "string") {
+      for (const match of value.matchAll(DATA_URI_PATTERN)) {
+        const uri = match[0];
+        if (!found.has(uri)) found.set(uri, { mime: match[1] === "jpg" || match[1] === "jpeg" ? "image/jpeg" : `image/${match[1]}`, base64: match[2] });
+      }
+      return;
+    }
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    if (value && typeof value === "object") { Object.values(value).forEach(visit); }
+  };
+  visit(contentObject);
+  return [...found.entries()].map(([uri, info]) => ({ uri, ...info }));
+}
+
+/** 深度替换字符串中的数据 URI 为直链。 */
+export function replaceDataUriImages(contentObject, replacements) {
+  const map = new Map(replacements);
+  const walk = (value) => {
+    if (typeof value === "string") {
+      let next = value;
+      for (const [uri, url] of map) next = next.split(uri).join(url);
+      return next;
+    }
+    if (Array.isArray(value)) return value.map(walk);
+    if (value && typeof value === "object") {
+      for (const key of Object.keys(value)) value[key] = walk(value[key]);
+      return value;
+    }
+    return value;
+  };
+  return walk(contentObject);
+}

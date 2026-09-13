@@ -23,13 +23,16 @@ import { createDefaultLearningCompassService } from "./learning-compass-service.
 import { createGuideAssistantService } from "./guide-assistant-service.mjs";
 import { createQwenProviderFromSettings } from "./qwen-provider.mjs";
 import {
+  CONTENT_IMAGE_MIGRATE_LIMIT,
   CONTENT_IMAGE_MAX_BYTES,
   CONTENT_IMAGE_OWNERS,
   contentImagePrefix,
   contentPublicRoot,
   extractContentImageKeys,
+  extractDataUriImages,
   newContentImageName,
   orphanContentImageKeys,
+  replaceDataUriImages,
   validateContentImage,
 } from "./content-images.mjs";
 import { AiProviderStore } from "./ai-provider-store.mjs";
@@ -1543,9 +1546,12 @@ async function readReviewStore() {
   return { data, revision: manifestRevision(data) };
 }
 
-async function updateReviewStore(next, expectedRevision) {
+async function updateReviewStore(input, expectedRevision) {
   let revision;
   let beforeImages = null;
+  const migrated = await migrateContentDataUris("reviews", structuredClone(input));
+  const next = migrated.data;
+  const migratedImages = migrated.migrated;
   const data = await jsonStore.update(reviewsPath, (persisted) => {
     const current = normalizeReviewData(persisted);
     beforeImages = structuredClone(current);
@@ -1565,7 +1571,7 @@ async function updateReviewStore(next, expectedRevision) {
     return current;
   }, { mode: 0o600 });
   const cleanup = beforeImages ? await cleanupOrphanContentImages("reviews", beforeImages, data) : { removed: 0 };
-  return { data, revision, ...(cleanup.warning ? { contentImageWarning: cleanup.warning } : {}) };
+  return { data, revision, ...(cleanup.warning ? { contentImageWarning: cleanup.warning } : {}), ...(migratedImages ? { migratedImages } : {}) };
 }
 
 async function uploadFileToR2({ course, section, filename, stream, mimeType, abortSignal }) {
@@ -2128,12 +2134,19 @@ async function publishContent(filePath, data, expectedRevision, normalize) {
   const owner = path.basename(filePath, ".json");
   const tracksImages = CONTENT_IMAGE_OWNERS.includes(owner);
   const oldData = tracksImages ? jsonStore.readSync(filePath) : null;
+  let migratedImages = 0;
   try {
+    if (tracksImages) {
+      const migrated = await migrateContentDataUris(owner, structuredClone(data));
+      data = migrated.data;
+      migratedImages = migrated.migrated;
+    }
     const result = await contentPublishService.publish(filePath, data, { expectedRevision, normalize });
     if (result.ok && oldData) {
       const cleanup = await cleanupOrphanContentImages(owner, oldData, result.data ?? data);
       if (cleanup.warning) result.contentImageWarning = cleanup.warning;
     }
+    if (result.ok && migratedImages) result.migratedImages = migratedImages;
     return result;
   } catch (error) {
     return {
@@ -2144,6 +2157,43 @@ async function publishContent(filePath, data, expectedRevision, normalize) {
       currentRevision: error.currentRevision,
     };
   }
+}
+
+/**
+ * 保存前把内容里的 base64 数据 URI 上传 R2 并改写为直链：
+ * 无论编辑器处于何种状态（旧页面/不支持插图的字段），内容库都不会再落 base64。
+ */
+async function migrateContentDataUris(owner, data) {
+  if (!r2Client || !r2Bucket || !CONTENT_IMAGE_OWNERS.includes(owner)) return { data, migrated: 0 };
+  const images = extractDataUriImages(data);
+  if (!images.length) return { data, migrated: 0 };
+  if (images.length > CONTENT_IMAGE_MIGRATE_LIMIT) {
+    const error = new Error(`单次保存最多包含 ${CONTENT_IMAGE_MIGRATE_LIMIT} 张内嵌图片，请减少后分批保存。`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const manifest = await manifestService.read();
+  const publicRoot = contentPublicRoot(manifest.resourceRoot);
+  const replacements = [];
+  for (const image of images) {
+    const buffer = Buffer.from(image.base64, "base64");
+    const check = validateContentImage({ mimeType: image.mime, size: buffer.length, buffer });
+    if (!check.ok) {
+      const error = new Error(`内嵌图片被拒绝：${check.error}`);
+      error.statusCode = 400;
+      throw error;
+    }
+    const name = newContentImageName(check.ext);
+    await r2Client.send(new PutObjectCommand({
+      Bucket: r2Bucket,
+      Key: `${contentImagePrefix(owner)}${name}`,
+      Body: buffer,
+      ContentType: image.mime,
+      CacheControl: "public, max-age=604800",
+    }));
+    replacements.push([image.uri, `${publicRoot}${owner}/${name}`]);
+  }
+  return { data: replaceDataUriImages(data, replacements), migrated: replacements.length };
 }
 
 /** 内容保存后删除不再被引用的本归属图片；失败不阻断发布，返回警告供界面提示。 */
