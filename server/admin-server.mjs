@@ -1476,6 +1476,7 @@ async function handleContentImageUpload(req, res, url) {
   }
   await new Promise((resolve) => {
     let done = false;
+    let sawFile = false;
     const respond = (status, body) => {
       if (done) return;
       done = true;
@@ -1484,6 +1485,7 @@ async function handleContentImageUpload(req, res, url) {
     };
     const busboy = Busboy({ headers: req.headers, limits: { files: 1, parts: 3, fileSize: CONTENT_IMAGE_MAX_BYTES } });
     busboy.on("file", (_name, file, info) => {
+      sawFile = true;
       const chunks = [];
       let size = 0;
       let overLimit = false;
@@ -1511,7 +1513,9 @@ async function handleContentImageUpload(req, res, url) {
       });
     });
     busboy.on("error", () => respond(400, { ok: false, error: "上传请求无效。" }));
-    busboy.on("finish", () => { if (!done) respond(400, { ok: false, error: "未收到图片文件。" }); });
+    // finish 只负责“从未出现文件”的兜底；文件处理是异步的（含 R2 上传），完成与否由文件回调自行响应。
+    busboy.on("finish", () => { if (!done && !sawFile) respond(400, { ok: false, error: "未收到图片文件。" }); });
+    req.on("aborted", () => respond(400, { ok: false, error: "上传已中断。" }));
     req.pipe(busboy);
   });
 }
