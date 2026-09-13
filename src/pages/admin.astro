@@ -2240,7 +2240,7 @@ async function loadMpUsersAdmin() {
             cache: { enable: false },
             toolbar: [...toolbarFor(mode), ...(imageSupport.extraToolbar || [])],
             toolbarConfig: { pin: false },
-            ...(imageSupport.upload || {}),
+            ...(imageSupport.upload ? { upload: imageSupport.upload } : {}),
             preview: {
               actions: ["desktop", "tablet", "mobile"],
               markdown: {
