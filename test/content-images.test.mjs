@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CONTENT_IMAGE_OWNERS,
+  sniffImageType,
   contentImagePrefix,
   contentPublicRoot,
   extractContentImageKeys,
@@ -58,4 +59,25 @@ test("owner whitelist guards the prefix helper", () => {
   assert.equal(contentImagePrefix("home"), "content/home/");
   assert.throws(() => contentImagePrefix("evil"));
   assert.ok(CONTENT_IMAGE_OWNERS.includes("reviews"));
+});
+
+const PNG_BYTES = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+
+test("sniffImageType detects real image signatures", () => {
+  assert.equal(sniffImageType(PNG_BYTES), "image/png");
+  assert.equal(sniffImageType(Buffer.from([0xff, 0xd8, 0xff, 0xe0])), "image/jpeg");
+  assert.equal(sniffImageType(Buffer.from("GIF89a1")), "image/gif");
+  assert.equal(sniffImageType(Buffer.concat([Buffer.from("RIFF0000"), Buffer.from("WEBP")])), "image/webp");
+  assert.equal(sniffImageType(Buffer.from("<?php echo 1;")), null);
+});
+
+test("validateContentImage rejects spoofed content types via magic bytes", () => {
+  const spoofed = validateContentImage({ mimeType: "image/png", size: 13, buffer: Buffer.from("<?php echo 1;") });
+  assert.equal(spoofed.ok, false);
+  assert.match(spoofed.error, /不是有效的图片/);
+  const mismatch = validateContentImage({ mimeType: "image/png", size: PNG_BYTES.length, buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(10)]) });
+  assert.equal(mismatch.ok, false);
+  assert.match(mismatch.error, /不一致/);
+  const good = validateContentImage({ mimeType: "image/png", size: PNG_BYTES.length, buffer: PNG_BYTES });
+  assert.equal(good.ok, true);
 });

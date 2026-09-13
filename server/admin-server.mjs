@@ -1493,7 +1493,8 @@ async function handleContentImageUpload(req, res, url) {
       file.on("data", (chunk) => { size += chunk.length; chunks.push(chunk); });
       file.on("end", async () => {
         if (overLimit) return respond(400, { ok: false, error: "图片超过 8MB 限制。" });
-        const check = validateContentImage({ mimeType: info.mimeType, size });
+        const body = Buffer.concat(chunks);
+        const check = validateContentImage({ mimeType: info.mimeType, size, buffer: body });
         if (!check.ok) return respond(400, { ok: false, error: check.error });
         const name = newContentImageName(check.ext);
         const key = `${contentImagePrefix(owner)}${name}`;
@@ -1501,7 +1502,7 @@ async function handleContentImageUpload(req, res, url) {
           await r2Client.send(new PutObjectCommand({
             Bucket: r2Bucket,
             Key: key,
-            Body: Buffer.concat(chunks),
+            Body: body,
             ContentType: info.mimeType,
             CacheControl: "public, max-age=604800",
           }));

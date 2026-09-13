@@ -30,11 +30,30 @@ export function contentPublicRoot(resourceRoot) {
   return root.replace(/\/resources\/$/, "/content/");
 }
 
-export function validateContentImage({ mimeType, size }) {
+/** 魔数嗅探：声明类型必须与实际文件头一致，防止伪装成图片上传任意内容。 */
+export function sniffImageType(buffer) {
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 6) {
+    const head = bytes.subarray(0, 6).toString("latin1");
+    if (head === "GIF87a" || head === "GIF89a") return "image/gif";
+  }
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString("latin1") === "RIFF" && bytes.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return null;
+}
+
+export function validateContentImage({ mimeType, size, buffer }) {
   const ext = IMAGE_MIME_TYPES[String(mimeType || "").toLowerCase()];
   if (!ext) return { ok: false, error: "仅支持 png / jpeg / webp / gif 图片。" };
   if (!Number.isFinite(size) || size <= 0 || size > CONTENT_IMAGE_MAX_BYTES) {
     return { ok: false, error: "图片大小需在 8MB 以内。" };
+  }
+  if (buffer !== undefined) {
+    const sniffed = sniffImageType(buffer);
+    if (!sniffed) return { ok: false, error: "文件内容不是有效的图片。" };
+    const declared = String(mimeType || "").toLowerCase() === "image/jpg" ? "image/jpeg" : String(mimeType || "").toLowerCase();
+    if (sniffed !== declared) return { ok: false, error: "文件内容与声明的图片类型不一致。" };
   }
   return { ok: true, ext };
 }
