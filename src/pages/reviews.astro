@@ -333,12 +333,47 @@ import "vditor/dist/index.css";
       })).sort((a, b) => b.reviews.length - a.reviews.length || b.average - a.average || a.key.localeCompare(b.key, "zh-CN"));
     }
 
+    // 评价搜索仅匹配课程名与老师：课程名分级(前缀/中间连续、按序全字、部分按序)，老师仅连续子串。
+    function matchRank(name, keyword) {
+      if (!keyword) return 0;
+      const at = name.indexOf(keyword);
+      if (at === 0) return 0;
+      if (at > 0) return 1;
+      if (keyword.length >= 2) {
+        let ki = 0;
+        for (let i = 0; i < name.length && ki < keyword.length; i += 1) {
+          if (name[i] === keyword[ki]) ki += 1;
+        }
+        if (ki === keyword.length) return 2;
+        let present = 0;
+        const unique = new Set(keyword);
+        for (const ch of unique) {
+          if (name.includes(ch)) present += 1;
+        }
+        if (present >= 2 && present * 3 >= unique.size * 2) return 3;
+      }
+      return null;
+    }
+
+    function rankGroup(group, keyword) {
+      if (!keyword) return 0;
+      const nameRank = matchRank(String(group.courseTitle || "").toLowerCase(), keyword);
+      if (nameRank !== null) return nameRank;
+      return String(group.teacher || "").toLowerCase().includes(keyword) ? 1 : null;
+    }
+
     function filteredGroups() {
       const keyword = search.value.trim().toLowerCase();
-      return groupedReviews().filter((group) => {
-        const indexText = `${group.courseTitle} ${group.teacher} ${group.key}`.toLowerCase();
-        return !keyword || indexText.includes(keyword);
-      });
+      if (!keyword) return groupedReviews();
+      const ranked = groupedReviews()
+        .map((group) => ({ group, rank: rankGroup(group, keyword) }))
+        .filter((item) => item.rank !== null);
+      const best = ranked.reduce((min, item) => Math.min(min, item.rank), 4);
+      if (best === 4) return [];
+      let partialShown = 0;
+      return ranked
+        .filter((item) => item.rank <= best && (item.rank < 3 || partialShown++ < 20))
+        .map((item) => item.group);
     }
 
     function renderIndex() {

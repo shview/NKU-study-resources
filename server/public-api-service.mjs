@@ -424,6 +424,19 @@ export class PublicApiService {
     };
   }
 
+  /**
+   * 前端本地搜索用的精简全量数据：课程库(名称)、目录池(名称+老师)、评价组(课程名+老师)。
+   * 字段刻意最小化，gzip 后约百 KB；GET 自动带 ETag/max-age，重复访问 304 近零流量。
+   */
+  searchData() {
+    const { manifest, groups } = this.snapshot();
+    return {
+      courses: manifest.courses.map((course) => ({ id: course.uid, name: course.title })),
+      catalog: (this.courseCatalog?.courses || []).map((entry) => ({ id: entry.id, name: entry.name, teachers: entry.teachers || [] })),
+      groups: groups.map((group) => ({ name: group.courseTitle, teacher: group.teacher })),
+    };
+  }
+
   async submitReview(body, context) {
     const { manifest } = this.snapshot();
     const courseUid = queryText(body?.course_id, 80);

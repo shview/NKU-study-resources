@@ -92,6 +92,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         data = service.serviceRateLimit(caller, body);
       } else if (req.method === "GET" && url.pathname === "/api/v1/search-index") data = service.searchIndex();
       else if (req.method === "GET" && url.pathname === "/api/v1/catalog") data = service.catalog(url.searchParams);
+      else if (req.method === "GET" && url.pathname === "/api/v1/search-data") data = service.searchData();
       else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);
       else if (req.method === "POST" && url.pathname === "/api/v1/auth/wechat") {

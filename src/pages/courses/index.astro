@@ -20,7 +20,7 @@ const coursesByTerm = courses.reduce((map, course) => {
   return map;
 }, new Map());
 
-const cardSearch = (course) => `${course.title} ${course.term} ${course.group} ${course.assessment ?? ""} ${(course.tags ?? []).join(" ")} ${course.summary ?? ""}`;
+const cardSearch = (course) => course.title;
 const cardTags = (course) => visibleCourseTags(course).join("|");
 const summaryText = (value) => String(value ?? "")
   .replace(/```[\s\S]*?```/g, " ")
@@ -193,11 +193,48 @@ const summaryText = (value) => String(value ?? "")
       pagination.append(prev, label, next);
     }
 
+    // 课程搜索仅匹配课程名，分级：0=前缀连续 1=中间连续 2=按序全字(子序列,缩写如"高数")
+    // 3=部分按序(命中≥2字且≥2/3)，仅当无更优结果时兜底且封顶20条。
+    function matchRank(name, keyword) {
+      if (!keyword) return 0;
+      const at = name.indexOf(keyword);
+      if (at === 0) return 0;
+      if (at > 0) return 1;
+      if (keyword.length >= 2) {
+        let ki = 0;
+        for (let i = 0; i < name.length && ki < keyword.length; i += 1) {
+          if (name[i] === keyword[ki]) ki += 1;
+        }
+        if (ki === keyword.length) return 2;
+        let present = 0;
+        const unique = new Set(keyword);
+        for (const ch of unique) {
+          if (name.includes(ch)) present += 1;
+        }
+        if (present >= 2 && present * 3 >= unique.size * 2) return 3;
+      }
+      return null;
+    }
+
     function applyFilters(resetPage = true) {
       const keyword = input.value.trim().toLowerCase();
       let visible = 0;
+      let partialShown = 0;
+      let bestRank = 4;
+      const ranks = [];
       for (const item of currentCards()) {
-        const matched = item.dataset.search.toLowerCase().includes(keyword) && matchesTags(item);
+        const rank = keyword ? matchRank(item.dataset.search.toLowerCase(), keyword) : 0;
+        ranks.push(rank);
+        if (rank !== null && rank < bestRank) bestRank = rank;
+      }
+      const cutoff = bestRank === 4 ? 99 : bestRank;
+      let index = 0;
+      for (const item of currentCards()) {
+        const rank = ranks[index];
+        index += 1;
+        const matched = keyword
+          ? rank !== null && rank <= cutoff && (rank < 3 || partialShown++ < 20) && matchesTags(item)
+          : matchesTags(item);
         item.dataset.filtered = String(matched);
         if (matched) visible += 1;
       }

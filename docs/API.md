@@ -18,6 +18,7 @@
 | `GET` | `/api/v1/home` | 公开 | 小程序首页数据 |
 | `GET` | `/api/v1/search-index` | 公开 | 完整、版本化的四类搜索快照 |
 | `GET` | `/api/v1/catalog` | 公开 | 选课手册课程目录（课程+教师，支持 q 搜索与分页） |
+| `GET` | `/api/v1/search-data` | 公开、ETag 缓存 | 前端本地搜索精简数据（课程库/目录池/评价组名称与老师） |
 | `GET` | `/api/v1/guides` | 公开 | 学习指南针指南列表（稳定五分类、facets、分页） |
 | `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |
 | `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |

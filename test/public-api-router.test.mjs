@@ -14,6 +14,7 @@ function serviceFixture() {
     course: (id) => ({ id }),
     resources: (id) => ({ course_id: id, items: [] }),
     reviewGroups: () => ({ items: [] }),
+    searchData: () => ({ courses: [], catalog: [], groups: [] }),
     reviewGroup: (key) => ({ group_key: key, items: [] }),
     assertReviewAttempt: () => {},
     assertMpAuthAttempt: () => true,
@@ -37,7 +38,7 @@ async function invoke(handler, method, pathname, headers = {}) {
 test("public router exposes exactly the documented route set and no management route", async () => {
   const handler = createPublicApiHandler({ service: serviceFixture(), readBody: async () => ({}), clientIp: () => "actor" });
   for (const route of [
-    "/api/v1/health", "/api/v1/home", "/api/v1/search-index", "/api/v1/guides", "/api/v1/guides/guide-id", "/api/v1/courses", "/api/v1/courses/course-uid",
+    "/api/v1/health", "/api/v1/home", "/api/v1/search-index", "/api/v1/guides", "/api/v1/guides/guide-id", "/api/v1/courses", "/api/v1/courses/course-uid", "/api/v1/search-data",
     "/api/v1/courses/course-uid/resources", "/api/v1/review-groups", "/api/v1/review-groups/group-key",
   ]) {
     const response = await invoke(handler, "GET", route);
@@ -151,4 +152,20 @@ test("web password change routes require a session and proxy to the service", as
   const response = await invoke(handler, "POST", "/api/v1/me/web-password/change");
   assert.equal(response.status, 200);
   assert.deepEqual(changed, { userId: 7, newPassword: "new-password-1" });
+});
+
+test("search-data returns compact searchable payload", async () => {
+  const service = serviceFixture();
+  service.searchData = () => ({
+    courses: [{ id: "uid-1", name: "高等数学A（上）" }],
+    catalog: [{ id: "cat-1", name: "中国近现代史纲要", teachers: ["朱洪斌"] }],
+    groups: [{ name: "高等数学A（上）", teacher: "祝文壮" }],
+  });
+  const handler = createPublicApiHandler({ service, readBody: async () => ({}), clientIp: () => "actor" });
+  const response = await invoke(handler, "GET", "/api/v1/search-data");
+  assert.equal(response.status, 200);
+  const data = JSON.parse(response.body).data;
+  assert.deepEqual(Object.keys(data), ["courses", "catalog", "groups"]);
+  assert.deepEqual(data.courses, [{ id: "uid-1", name: "高等数学A（上）" }]);
+  assert.match(String(response.headers.etag || ""), /^".+"$/);
 });
