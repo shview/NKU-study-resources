@@ -140,6 +140,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-reviews" type="button">保存评价设置</button>
+              <button class="button secondary clean-images" type="button" data-owner="reviews">清理未引用图片</button>
               <button class="button secondary" id="reload-reviews" type="button">重新加载</button>
               <button class="button secondary" id="logout-reviews" type="button">退出</button>
               <span class="muted" id="review-admin-status"></span>
@@ -234,6 +235,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-participate" type="button">保存并发布参与页</button>
+              <button class="button secondary clean-images" type="button" data-owner="participate">清理未引用图片</button>
               <button class="button secondary" id="reload-participate" type="button">重新加载</button>
               <span class="muted" id="participate-admin-status"></span>
             </div>
@@ -250,6 +252,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-feedback" type="button">保存反馈</button>
+              <button class="button secondary clean-images" type="button" data-owner="feedback">清理未引用图片</button>
               <button class="button secondary" id="reload-feedback" type="button">重新加载</button>
               <span class="muted" id="feedback-admin-status"></span>
             </div>
@@ -349,6 +352,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-about" type="button">保存并发布关于页</button>
+              <button class="button secondary clean-images" type="button" data-owner="about">清理未引用图片</button>
               <button class="button secondary" id="reload-about" type="button">重新加载</button>
               <span class="muted" id="about-admin-status"></span>
             </div>
@@ -365,6 +369,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-home" type="button">保存并发布首页</button>
+              <button class="button secondary clean-images" type="button" data-owner="home">清理未引用图片</button>
               <button class="button secondary" id="reload-home" type="button">重新加载</button>
               <span class="muted" id="home-admin-status"></span>
             </div>
@@ -381,6 +386,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-footer" type="button">保存并发布页脚</button>
+              <button class="button secondary clean-images" type="button" data-owner="footer">清理未引用图片</button>
               <button class="button secondary" id="reload-footer" type="button">重新加载</button>
               <span class="muted" id="footer-admin-status"></span>
             </div>
@@ -1830,6 +1836,8 @@ async function loadMpUsersAdmin() {
       ["POST /admin-api/manifest", "发布课程树"],
       ["POST /admin-api/manifest-draft", "保存课程树草稿"],
       ["POST /admin-api/upload", "上传课程文件"],
+      ["POST /admin-api/content-images", "上传内容图片"],
+      ["POST /admin-api/content-images/cleanup", "清理未引用内容图片"],
       ["POST /admin-api/sync-r2", "同步课程 R2"],
       ["POST /admin-api/sync-r2-all", "重建课程树"],
       ["POST /admin-api/r2-publish", "发布 R2 变更"],
@@ -2093,6 +2101,7 @@ async function loadMpUsersAdmin() {
       editor.dataset.markdownHeight = String(options.height ?? 320);
       editor.dataset.markdownPlaceholder = options.placeholder ?? "";
       editor.dataset.markdownMode = options.mode ?? "sv";
+      if (options.owner) editor.dataset.contentOwner = options.owner;
       editor.__markdownOnInput = onInput;
       fallback.addEventListener("input", () => onInput(fallback.value, fallback));
       shell.append(fallback, editor);
@@ -2146,6 +2155,71 @@ async function loadMpUsersAdmin() {
       });
     }
 
+    async function uploadContentImage(owner, file) {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch(`/admin-api/content-images?owner=${encodeURIComponent(owner)}`, {
+        method: "POST",
+        headers: { "x-nkustudy-admin-request": "1" },
+        body: form,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "图片上传失败");
+      return data.data.url;
+    }
+
+    function contentImageUploadConfig(node) {
+      const owner = node.dataset.contentOwner;
+      if (!owner) return {};
+      return {
+        upload: {
+          url: `/admin-api/content-images?owner=${encodeURIComponent(owner)}`,
+          accept: "image/png, image/jpeg, image/webp, image/gif",
+          multiple: false,
+          fieldName: "file",
+          max: 8 * 1024 * 1024,
+          headers: { "x-nkustudy-admin-request": "1" },
+          // 服务端返回 {ok,data:{url}}，转换为 vditor 契约 {code:0,data:{errFiles,urls}}
+          format: (files, responseText) => {
+            try {
+              const parsed = JSON.parse(responseText);
+              if (parsed?.ok && parsed.data?.url) {
+                return JSON.stringify({ code: 0, msg: "", data: { errFiles: [], urls: [parsed.data.url] } });
+              }
+              return JSON.stringify({ code: 1, msg: parsed?.error || "图片上传失败", data: { errFiles: files.map(() => ""), urls: [] } });
+            } catch {
+              return JSON.stringify({ code: 1, msg: "图片上传失败", data: { errFiles: [], urls: [] } });
+            }
+          },
+        },
+        extraToolbar: [{
+          hotkey: "",
+          name: "insert-image",
+          tipPosition: "s",
+          tip: "插入图片",
+          className: "vditor-toolbar__item--insert-image",
+          click() {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/png, image/jpeg, image/webp, image/gif";
+            input.onchange = async () => {
+              const file = input.files?.[0];
+              if (!file) return;
+              try {
+                const url = await uploadContentImage(node.dataset.contentOwner, file);
+                node.__markdownEditorRef?.insertValue(`
+![](${url})
+`);
+              } catch (error) {
+                alert(error.message || "图片上传失败");
+              }
+            };
+            input.click();
+          },
+        }],
+      };
+    }
+
     function mountMarkdownEditors(root, mode = "admin") {
       destroyMarkdownEditors(root);
       const editors = Array.from(root?.querySelectorAll?.("[data-markdown-editor]") ?? []);
@@ -2155,6 +2229,7 @@ async function loadMpUsersAdmin() {
         if (node.closest("[hidden]")) continue;
         const shell = node.closest(".markdown-shell");
         const fallback = shell?.querySelector(".markdown-fallback");
+        const imageSupport = contentImageUploadConfig(node);
         try {
           let editor;
           editor = new Vditor(node, {
@@ -2163,8 +2238,9 @@ async function loadMpUsersAdmin() {
             height: Number(node.dataset.markdownHeight || 320),
             placeholder: node.dataset.markdownPlaceholder || "",
             cache: { enable: false },
-            toolbar: toolbarFor(mode),
+            toolbar: [...toolbarFor(mode), ...(imageSupport.extraToolbar || [])],
             toolbarConfig: { pin: false },
+            ...(imageSupport.upload || {}),
             preview: {
               actions: ["desktop", "tablet", "mobile"],
               markdown: {
@@ -2173,6 +2249,7 @@ async function loadMpUsersAdmin() {
             },
             after() {
               const initialValue = node.dataset.markdownValue ?? "";
+              node.__markdownEditorRef = editor;
               editor?.setValue?.(initialValue);
               if (fallback) fallback.value = initialValue;
               enhanceVditorToolbar(node);
@@ -2413,7 +2490,7 @@ async function loadMpUsersAdmin() {
         numberField("评价最少字数", rules.minLength ?? 12, (value) => { rules.minLength = value; }),
         checkboxField("允许自定义课程名（关闭后只能从课程库/手册目录选课）", (rules.submissionOptions ??= {}).allowCustomCourse === true, (value) => { rules.submissionOptions.allowCustomCourse = value; }),
         checkboxField("允许自定义教师名（关闭后只能从手册教师列表选）", (rules.submissionOptions ??= {}).allowCustomTeacher !== false, (value) => { rules.submissionOptions.allowCustomTeacher = value; }),
-        markdownField("评价公告栏（支持 Markdown）", rules.announcement ?? "", (value) => { rules.announcement = value; }),
+        markdownField("评价公告栏（支持 Markdown，可插图）", rules.announcement ?? "", (value) => { rules.announcement = value; }, { owner: "reviews" }),
         markdownField("规则备注", rules.notes ?? "", (value) => { rules.notes = value; }, { height: 150 })
       );
 
@@ -2623,9 +2700,9 @@ async function loadMpUsersAdmin() {
           field("反馈页标题", feedbackState.title ?? "问题与建议", (value) => {
             feedbackState.title = value;
           }),
-          markdownField("反馈页公告（支持 Markdown）", feedbackState.announcement ?? "", (value) => {
+          markdownField("反馈页公告（支持 Markdown，可插图）", feedbackState.announcement ?? "", (value) => {
             feedbackState.announcement = value;
-          })
+          }, { owner: "feedback" })
         );
         feedbackRulesEditor.innerHTML = "";
       feedbackRulesEditor.append(
@@ -2867,7 +2944,7 @@ async function loadMpUsersAdmin() {
       participateAdminEditor.innerHTML = "";
       participateAdminEditor.append(
         field("标题", participateState.title ?? "参与贡献", (value) => { participateState.title = value; }),
-        markdownField("正文（支持 Markdown）", participateState.content ?? "", (value) => { participateState.content = value; }, { height: 360 })
+        markdownField("正文（支持 Markdown，可插图）", participateState.content ?? "", (value) => { participateState.content = value; }, { height: 360, owner: "participate" })
       );
       mountMarkdownEditors(participateAdminEditor);
     }
@@ -2889,9 +2966,9 @@ async function loadMpUsersAdmin() {
       aboutAdminEditor.innerHTML = "";
       aboutAdminEditor.append(
         field("标题", aboutState.title ?? "", (value) => { aboutState.title = value; }),
-        markdownField("正文（支持 Markdown）", aboutState.content ?? "", (value) => {
+        markdownField("正文（支持 Markdown，可插图）", aboutState.content ?? "", (value) => {
           aboutState.content = value;
-        }, { height: 360 })
+        }, { height: 360, owner: "about" })
       );
       mountMarkdownEditors(aboutAdminEditor);
     }
@@ -2912,7 +2989,7 @@ async function loadMpUsersAdmin() {
       if (!homeState) return;
       homeAdminEditor.innerHTML = "";
       homeAdminEditor.append(
-        markdownField("首页公告栏（支持 Markdown）", homeState.announcement ?? "", (value) => { homeState.announcement = value; })
+        markdownField("首页公告栏（支持 Markdown，可插图）", homeState.announcement ?? "", (value) => { homeState.announcement = value; }, { owner: "home" })
       );
       mountMarkdownEditors(homeAdminEditor);
     }
@@ -2941,7 +3018,7 @@ async function loadMpUsersAdmin() {
         checkboxField("访问量使用真实统计", footerState.useRealVisitCount !== false, (value) => { footerState.useRealVisitCount = value; }),
         field("本站总访问量（关闭真实统计时使用）", footerState.visitCount ?? "10411114", (value) => { footerState.visitCount = value; }),
         field("安全运行起始时间（北京时间，如 2025-07-15T16:00:00+08:00）", footerState.startedAt ?? "2022-01-01T00:00:00+08:00", (value) => { footerState.startedAt = value; }),
-        markdownField("版权文本", footerState.copyrightText ?? "© 2025 NKUStudy", (value) => { footerState.copyrightText = value; }, { height: 130 }),
+        markdownField("版权文本（支持 Markdown，可插图）", footerState.copyrightText ?? "© 2025 NKUStudy", (value) => { footerState.copyrightText = value; }, { height: 130, owner: "footer" }),
         markdownField("维护者链接（每行：[显示名](链接)，也可：显示名|链接）", maintainersValue, (value) => {
           footerState.maintainers = value
             .split(/\r?\n/)
@@ -4586,6 +4663,27 @@ async function loadMpUsersAdmin() {
       } catch (error) {
         feedbackAdminStatus.textContent = error.message;
       }
+    });
+
+    document.querySelectorAll(".clean-images").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const owner = button.dataset.owner;
+        if (!confirm(`扫描${owner} 内容当前未引用的图片并从 R2 删除？`)) return;
+        const label = button.textContent;
+        button.textContent = "清理中…";
+        button.disabled = true;
+        try {
+          const data = await api("/content-images/cleanup", { method: "POST", body: JSON.stringify({ owner }) });
+          button.textContent = label;
+          button.disabled = false;
+          const status = button.closest(".filter-row")?.querySelector(".muted");
+          if (status) status.textContent = `清理完成：扫描 ${data.scanned} 张，删除 ${data.removed} 张，保留引用中 ${data.kept} 张`;
+        } catch (error) {
+          button.textContent = label;
+          button.disabled = false;
+          alert(error.message || "清理失败");
+        }
+      });
     });
 
     document.querySelector("#save-feedback").addEventListener("click", async () => {

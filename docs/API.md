@@ -62,6 +62,8 @@
 | `POST` | `/admin-api/login` | 公开、限流 | 账号+密码登录并签发 Cookie |
 | `POST` | `/admin-api/logout` | 公开 | 清除管理员 Cookie |
 | `POST` | `/admin-api/upload` | Cookie（需相应权限） | 上传课程文件到 R2 |
+| `POST` | `/admin-api/content-images` | Cookie（content.edit） | 上传内容图片（关于/参与/公告等），multipart，归属白名单 owner |
+| `POST` | `/admin-api/content-images/cleanup` | Cookie（content.edit） | 清理指定归属未被引用的内容图片 |
 | `POST` | `/admin-api/sync-r2` | Cookie（需相应权限） | 从 R2 同步一门课程 |
 | `POST` | `/admin-api/sync-r2-all` | Cookie（需相应权限） | 从 R2 重建/合并全部课程树 |
 | `POST` | `/admin-api/delete-r2` | Cookie；已禁用 | 旧 R2 删除接口，固定 410 |
@@ -158,6 +160,7 @@
 - 除上传外，POST 请求应发送 `Content-Type: application/json` 和 UTF-8 JSON。当前服务按正文解析 JSON，并未依赖该请求头判断格式；调用方仍应正确设置请求头。
 - JSON 正文上限为 **2,000,000 字节**。无效 JSON、无效 UTF-8、请求中止返回 `400`；超限在旧接口和管理接口通常返回 `413`。公共 v1 路由会把正文读取失败统一映射为 `400 INVALID_JSON`，超限时底层还会关闭请求连接。
 - `/admin-api/upload` 使用 `multipart/form-data`，限制每次最多 20 个文件、20 个 multipart part、每个文件最多 100 MiB。
+- `/admin-api/content-images` 使用 `multipart/form-data`，单文件 ≤8MB，仅 png/jpeg/webp/gif，存入 R2 `content/<owner>/` 前缀；内容保存时自动删除不再引用的同归属图片。
 - 所有服务端 JSON 响应均为 `application/json; charset=utf-8`。`GET /admin-api/backup` 额外返回 `Content-Disposition: attachment`。
 
 ### 缓存、ETag、CORS

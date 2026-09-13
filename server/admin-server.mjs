@@ -22,6 +22,16 @@ import { MpAuthService } from "./mp-auth-service.mjs";
 import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import { createGuideAssistantService } from "./guide-assistant-service.mjs";
 import { createQwenProviderFromSettings } from "./qwen-provider.mjs";
+import {
+  CONTENT_IMAGE_MAX_BYTES,
+  CONTENT_IMAGE_OWNERS,
+  contentImagePrefix,
+  contentPublicRoot,
+  extractContentImageKeys,
+  newContentImageName,
+  orphanContentImageKeys,
+  validateContentImage,
+} from "./content-images.mjs";
 import { AiProviderStore } from "./ai-provider-store.mjs";
 import { buildCatalogCourseImports } from "./catalog-import.mjs";
 import { ServiceAuthStore } from "./service-auth-store.mjs";
@@ -918,7 +928,8 @@ function requireAdminMutationProvenance(req, res, url) {
     return false;
   }
   const contentType = String(req.headers["content-type"] || "").toLowerCase();
-  const expected = url.pathname === "/admin-api/upload" ? "multipart/form-data" : "application/json";
+  const multipartPaths = url.pathname === "/admin-api/upload" || url.pathname === "/admin-api/content-images";
+  const expected = multipartPaths ? "multipart/form-data" : "application/json";
   if (!contentType.startsWith(expected)) {
     json(res, 415, { ok: false, error: `Content-Type must be ${expected}.` });
     req.resume();
@@ -1450,6 +1461,61 @@ async function handleFeedbackSubmit(req, res) {
   json(res, 200, { ok: true });
 }
 
+/** 内容图片上传：content/<owner>/ 前缀、随机文件名、行内展示（无 attachment 头）、7 天缓存。 */
+async function handleContentImageUpload(req, res, url) {
+  if (!r2Client || !r2Bucket) {
+    json(res, 400, { ok: false, error: "R2 未配置，无法上传图片。" });
+    req.resume();
+    return;
+  }
+  const owner = String(url.searchParams.get("owner") || "");
+  if (!CONTENT_IMAGE_OWNERS.includes(owner)) {
+    json(res, 400, { ok: false, error: "未知的内容图片归属。" });
+    req.resume();
+    return;
+  }
+  await new Promise((resolve) => {
+    let done = false;
+    const respond = (status, body) => {
+      if (done) return;
+      done = true;
+      json(res, status, body);
+      resolve();
+    };
+    const busboy = Busboy({ headers: req.headers, limits: { files: 1, parts: 3, fileSize: CONTENT_IMAGE_MAX_BYTES } });
+    busboy.on("file", (_name, file, info) => {
+      const chunks = [];
+      let size = 0;
+      let overLimit = false;
+      file.on("limit", () => { overLimit = true; file.resume(); });
+      file.on("data", (chunk) => { size += chunk.length; chunks.push(chunk); });
+      file.on("end", async () => {
+        if (overLimit) return respond(400, { ok: false, error: "图片超过 8MB 限制。" });
+        const check = validateContentImage({ mimeType: info.mimeType, size });
+        if (!check.ok) return respond(400, { ok: false, error: check.error });
+        const name = newContentImageName(check.ext);
+        const key = `${contentImagePrefix(owner)}${name}`;
+        try {
+          await r2Client.send(new PutObjectCommand({
+            Bucket: r2Bucket,
+            Key: key,
+            Body: Buffer.concat(chunks),
+            ContentType: info.mimeType,
+            CacheControl: "public, max-age=604800",
+          }));
+          const manifest = await manifestService.read();
+          respond(200, { ok: true, data: { url: `${contentPublicRoot(manifest.resourceRoot)}${owner}/${name}`, key } });
+        } catch {
+          respond(500, { ok: false, error: "图片上传失败，请重试。" });
+        }
+      });
+    });
+    busboy.on("error", () => respond(400, { ok: false, error: "上传请求无效。" }));
+    busboy.on("finish", () => { if (!done) respond(400, { ok: false, error: "未收到图片文件。" }); });
+    req.pipe(busboy);
+  });
+}
+
 async function handleReviewSubmit(req, res) {
   const ip = clientIp(req);
   reviewSubmissionService.assertAttempt(ip);
@@ -1474,8 +1540,10 @@ async function readReviewStore() {
 
 async function updateReviewStore(next, expectedRevision) {
   let revision;
+  let beforeImages = null;
   const data = await jsonStore.update(reviewsPath, (persisted) => {
     const current = normalizeReviewData(persisted);
+    beforeImages = structuredClone(current);
     const currentRevision = manifestRevision(current);
     if (!expectedRevision) {
       const error = new Error("expectedRevision is required; reload reviews before saving.");
@@ -1491,7 +1559,8 @@ async function updateReviewStore(next, expectedRevision) {
     revision = manifestRevision(current);
     return current;
   }, { mode: 0o600 });
-  return { data, revision };
+  const cleanup = beforeImages ? await cleanupOrphanContentImages("reviews", beforeImages, data) : { removed: 0 };
+  return { data, revision, ...(cleanup.warning ? { contentImageWarning: cleanup.warning } : {}) };
 }
 
 async function uploadFileToR2({ course, section, filename, stream, mimeType, abortSignal }) {
@@ -2051,8 +2120,16 @@ async function readPublishedContent(filePath, normalize) {
 }
 
 async function publishContent(filePath, data, expectedRevision, normalize) {
+  const owner = path.basename(filePath, ".json");
+  const tracksImages = CONTENT_IMAGE_OWNERS.includes(owner);
+  const oldData = tracksImages ? jsonStore.readSync(filePath) : null;
   try {
-    return await contentPublishService.publish(filePath, data, { expectedRevision, normalize });
+    const result = await contentPublishService.publish(filePath, data, { expectedRevision, normalize });
+    if (result.ok && oldData) {
+      const cleanup = await cleanupOrphanContentImages(owner, oldData, result.data ?? data);
+      if (cleanup.warning) result.contentImageWarning = cleanup.warning;
+    }
+    return result;
   } catch (error) {
     return {
       ok: false,
@@ -2061,6 +2138,25 @@ async function publishContent(filePath, data, expectedRevision, normalize) {
       rolledBack: Boolean(error.publishRolledBack),
       currentRevision: error.currentRevision,
     };
+  }
+}
+
+/** 内容保存后删除不再被引用的本归属图片；失败不阻断发布，返回警告供界面提示。 */
+async function cleanupOrphanContentImages(owner, oldObject, nextObject) {
+  if (!r2Client || !r2Bucket) return { removed: 0 };
+  let orphans = [];
+  try {
+    const manifest = await manifestService.read();
+    orphans = orphanContentImageKeys(oldObject, nextObject, owner, contentPublicRoot(manifest.resourceRoot));
+  } catch {
+    return { removed: 0 };
+  }
+  if (!orphans.length) return { removed: 0 };
+  try {
+    await deleteExactR2Keys(orphans);
+    return { removed: orphans.length };
+  } catch {
+    return { removed: 0, warning: `有 ${orphans.length} 张未引用图片删除失败，可稍后在“清理未引用图片”中重试。` };
   }
 }
 
@@ -2221,6 +2317,31 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/admin-api/upload") {
       if (!requirePermission(req, account, "content.edit", res)) return;
       await runExclusiveR2Mutation({ queue: r2MutationQueue, mutate: () => handleUpload(req, res, url) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/content-images") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      await runExclusiveR2Mutation({ queue: r2MutationQueue, mutate: () => handleContentImageUpload(req, res, url) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/content-images/cleanup") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      const owner = String(body?.owner || "");
+      if (!CONTENT_IMAGE_OWNERS.includes(owner)) {
+        json(res, 400, { ok: false, error: "未知的内容图片归属。" });
+        return;
+      }
+      const filePath = path.join(dataDir, `${owner}.json`);
+      const current = jsonStore.readSync(filePath);
+      const manifest = await manifestService.read();
+      const referenced = extractContentImageKeys(current, owner, contentPublicRoot(manifest.resourceRoot));
+      const existing = await listR2Objects(contentImagePrefix(owner));
+      const orphans = existing.map((item) => item.Key).filter((key) => key && !key.endsWith("/") && !referenced.has(key));
+      await deleteExactR2Keys(orphans);
+      json(res, 200, { ok: true, data: { scanned: existing.length, removed: orphans.length, kept: referenced.size } });
       return;
     }
 
