@@ -871,10 +871,16 @@ button.tag[data-active="true"] {
 }
 
 .markdown-body img {
-  max-width: 100%;
+  /* 内容图默认上限，防止二维码等图片撑满版面；更小/更大用 url#w240 语法按图指定 */
+  max-width: min(480px, 100%);
   height: auto;
   border-radius: 10px;
   border: 1px solid var(--line-soft);
+}
+
+.vditor-preview img {
+  max-width: min(480px, 100%);
+  height: auto;
 }
 
 .markdown-body > :last-child {
