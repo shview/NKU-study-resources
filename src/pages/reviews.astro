@@ -368,11 +368,11 @@ import "vditor/dist/index.css";
       const ranked = groupedReviews()
         .map((group) => ({ group, rank: rankGroup(group, keyword) }))
         .filter((item) => item.rank !== null);
-      const best = ranked.reduce((min, item) => Math.min(min, item.rank), 4);
-      if (best === 4) return [];
+      if (!ranked.length) return [];
       let partialShown = 0;
       return ranked
-        .filter((item) => item.rank <= best && (item.rank < 3 || partialShown++ < 20))
+        .filter((item) => item.rank < 3 || partialShown++ < 20)
+        .sort((a, b) => a.rank - b.rank)
         .map((item) => item.group);
     }
 

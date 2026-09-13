@@ -220,20 +220,15 @@ const summaryText = (value) => String(value ?? "")
       const keyword = input.value.trim().toLowerCase();
       let visible = 0;
       let partialShown = 0;
-      let bestRank = 4;
-      const ranks = [];
+      const ranks = new Map();
       for (const item of currentCards()) {
         const rank = keyword ? matchRank(item.dataset.search.toLowerCase(), keyword) : 0;
-        ranks.push(rank);
-        if (rank !== null && rank < bestRank) bestRank = rank;
+        ranks.set(item, rank);
       }
-      const cutoff = bestRank === 4 ? 99 : bestRank;
-      let index = 0;
       for (const item of currentCards()) {
-        const rank = ranks[index];
-        index += 1;
+        const rank = ranks.get(item);
         const matched = keyword
-          ? rank !== null && rank <= cutoff && (rank < 3 || partialShown++ < 20) && matchesTags(item)
+          ? rank !== null && (rank < 3 || partialShown++ < 20) && matchesTags(item)
           : matchesTags(item);
         item.dataset.filtered = String(matched);
         if (matched) visible += 1;
