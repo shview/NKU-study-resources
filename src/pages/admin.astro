@@ -2179,16 +2179,19 @@ async function loadMpUsersAdmin() {
           fieldName: "file",
           max: 8 * 1024 * 1024,
           headers: { "x-nkustudy-admin-request": "1" },
-          // 服务端返回 {ok,data:{url}}，转换为 vditor 契约 {code:0,data:{errFiles,urls}}
-          format: (files, responseText) => {
+          // 服务端返回 {ok,data:{url}}；提供 success 时 vditor 跳过自身的 succMap 解析，由这里直接插入
+          success(_editorElement, responseText) {
             try {
               const parsed = JSON.parse(responseText);
               if (parsed?.ok && parsed.data?.url) {
-                return JSON.stringify({ code: 0, msg: "", data: { errFiles: [], urls: [parsed.data.url] } });
+                document.execCommand("insertHTML", false, `
+![](${parsed.data.url})
+`);
+                return;
               }
-              return JSON.stringify({ code: 1, msg: parsed?.error || "图片上传失败", data: { errFiles: files.map(() => ""), urls: [] } });
+              alert(parsed?.error || "图片上传失败");
             } catch {
-              return JSON.stringify({ code: 1, msg: "图片上传失败", data: { errFiles: [], urls: [] } });
+              alert("图片上传失败");
             }
           },
         },
