@@ -266,3 +266,25 @@ test("review groups merge punctuation variants and resolve catalog aliases", asy
   const groups2 = buildReviewGroups(manifest2, reviewData2, fakeCatalog);
   assert.equal(groups2[0].course?.id, "c2", "catalog alias resolution attaches unmatched titles");
 });
+
+test("about() returns sanitized about-page content for the mini-program", () => {
+  const manifest = { resourceRoot: "https://resources.nkustudy.top/resources/", courses: [] };
+  const reviews = { version: 1, rules: {}, reviews: [] };
+  const reviewSubmissionService = { assertAttempt() {}, async submit() { return { pending: true }; } };
+  const make = (readAbout) => new PublicApiService({
+    readManifest: () => structuredClone(manifest),
+    readReviews: () => structuredClone(reviews),
+    readHome: () => ({}),
+    readAbout,
+    reviewSubmissionService,
+  });
+  const data = make(() => ({ title: "关于 NKUStudy", content: "# 简介" + String.fromCharCode(10) + "正文内容", updated: "2026-09-18" })).about();
+  assert.equal(data.title, "关于 NKUStudy");
+  assert.equal(data.content.includes("正文内容"), true);
+  assert.equal(data.updated, "2026-09-18");
+
+  assert.throws(() => make(null).about(), /关于页暂未配置/);
+  const oversized = make(() => ({ title: "T".repeat(300), content: "X".repeat(7000), updated: "" })).about();
+  assert.equal(oversized.title.length, 120);
+  assert.equal(oversized.content.length, 6000);
+});

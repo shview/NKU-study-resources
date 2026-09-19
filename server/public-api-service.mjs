@@ -55,7 +55,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
+  constructor({ readManifest, readReviews, readHome, readAbout = null, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -64,6 +64,7 @@ export class PublicApiService {
     this.readManifest = readManifest;
     this.readReviews = readReviews;
     this.readHome = readHome;
+    this.readAbout = readAbout;
     this.learningCompass = learningCompass || createDefaultLearningCompassService();
     this.guideAssistant = guideAssistant;
     this.readVisitStats = readVisitStats;
@@ -86,6 +87,17 @@ export class PublicApiService {
   health() {
     this.snapshot();
     return { status: "ok" };
+  }
+
+  /** 关于页公开数据：与网页关于页同一数据源（后台"关于页面管理"），markdown 正文。 */
+  about() {
+    const about = this.readAbout?.();
+    if (!about || typeof about !== "object") throw new PublicApiError(503, "关于页暂未配置。", "ABOUT_NOT_CONFIGURED");
+    return {
+      title: String(about.title || "NKUStudy").slice(0, 120),
+      content: String(about.content || "").slice(0, 6000),
+      updated: String(about.updated || "").slice(0, 40),
+    };
   }
 
   home() {

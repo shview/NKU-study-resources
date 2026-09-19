@@ -259,6 +259,7 @@ const guideAssistantService = createGuideAssistantService({
   },
 });
 const publicApiService = new PublicApiService({
+  readAbout: () => jsonStore.readSync(aboutPath),
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
   readHome,
