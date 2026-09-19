@@ -45,7 +45,7 @@ export const manifest = readBuildData<Manifest>("manifest.json");
 export const courses = manifest.courses;
 
 export const repositoryUrl = `https://github.com/${manifest.repository}`;
-export const openListUrl = "https://pan.shview.top";
+export const openListUrl = "https://pan.nkustudy.top";
 
 export function isHiddenResource(file: ResourceFile) {
   const text = `${file.title ?? ""}/${file.path ?? ""}`.toLowerCase();
