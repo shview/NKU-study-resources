@@ -47,6 +47,8 @@ import { assertR2CleanupSafety, planR2ManifestMutation, planR2ObjectCopies, stri
 import { publishAfterR2Prepare, R2MutationQueue, runExclusiveR2Mutation, runSerializedR2Mutation } from "./r2-transaction.mjs";
 import { ReviewSubmissionService } from "./review-submission-service.mjs";
 import { preflightProductionRuntime, projectRoot, runtimeDataPathMap } from "./runtime-config.mjs";
+import { DEFAULT_DONATE_CONTENT } from "./default-donate.mjs";
+import { DonatePayStore } from "./donate-pay-store.mjs";
 import { StaticReleasePublisher } from "./static-release-publisher.mjs";
 
 const root = projectRoot;
@@ -60,6 +62,7 @@ const {
   reviews: reviewsPath,
   feedback: feedbackPath,
   about: aboutPath,
+  donate: donatePath,
   home: homePath,
   guides: guidesPath,
   participate: participatePath,
@@ -205,6 +208,7 @@ const reviewSubmissionService = new ReviewSubmissionService({
     }
   },
 });
+const donatePayStore = new DonatePayStore({ dataDir });
 const catalogPath2 = path.join(dataDir, "catalog.json");
 const courseCatalog = new CourseCatalogService({
   catalogPath: catalogPath2,
@@ -260,6 +264,8 @@ const guideAssistantService = createGuideAssistantService({
 });
 const publicApiService = new PublicApiService({
   readAbout: () => jsonStore.readSync(aboutPath),
+  readDonate: () => readDonate(),
+  donatePayReady: () => donatePayStore.ready(),
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
   readHome,
@@ -1194,6 +1200,30 @@ function normalizeAbout(data) {
   return {
     title: cleanText(data.title, 120) || "NKUStudy",
     content,
+  };
+}
+
+const DEFAULT_DONATE_AMOUNTS = DEFAULT_DONATE_CONTENT.amounts;
+
+function readDonate() {
+  let raw = null;
+  try {
+    raw = readJsonFile(donatePath);
+  } catch {
+    raw = null;
+  }
+  return raw && typeof raw === 'object' && Object.keys(raw).length ? raw : structuredClone(DEFAULT_DONATE_CONTENT);
+}
+
+function normalizeDonate(data) {
+  const amounts = (Array.isArray(data.amounts) ? data.amounts : DEFAULT_DONATE_AMOUNTS)
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 10000)
+    .slice(0, 6);
+  return {
+    title: cleanText(data.title, 120) || '捐助支持',
+    content: cleanText(data.content, 6000),
+    amounts: amounts.length ? [...new Set(amounts)].sort((a, b) => a - b) : DEFAULT_DONATE_AMOUNTS,
   };
 }
 
@@ -2515,6 +2545,38 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const result = await publishContent(footerPath, body.data || {}, body.expectedRevision, normalizeFooter);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/donate") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      json(res, 200, { ok: true, ...await readPublishedContent(donatePath, normalizeDonate) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/donate") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      const result = await publishContent(donatePath, body.data || {}, body.expectedRevision, normalizeDonate);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/donate-pay") {
+      if (!requirePermission(req, account, "services.manage", res)) return;
+      json(res, 200, { ok: true, data: donatePayStore.masked() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/donate-pay") {
+      if (!requirePermission(req, account, "services.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const data = await donatePayStore.update(body || {});
+        json(res, 200, { ok: true, data });
+      } catch (error) {
+        json(res, 400, { ok: false, error: String(error.message || "支付配置无效。") });
+      }
       return;
     }
 

@@ -94,6 +94,18 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       else if (req.method === "GET" && url.pathname === "/api/v1/catalog") data = service.catalog(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/search-data") data = service.searchData();
       else if (req.method === "GET" && url.pathname === "/api/v1/about") data = service.about();
+      else if (req.method === "GET" && url.pathname === "/api/v1/donate") data = service.donate();
+      else if (req.method === "POST" && url.pathname === "/api/v1/donate/pay") {
+        if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(authorizationOf(req));
+        const body = await readJsonBody(req);
+        const amount = Number(body?.amount);
+        if (!Number.isFinite(amount) || amount < 1 || amount > 10000) throw new PublicApiError(400, "捐助金额需在 1-10000 元之间。", "INVALID_DONATE_AMOUNT");
+        if (typeof service.createDonateOrder !== "function" || !service.donatePayReady?.()) {
+          throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
+        }
+        data = await service.createDonateOrder(user, amount);
+      }
       else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);
       else if (req.method === "POST" && url.pathname === "/api/v1/auth/wechat") {

@@ -20,6 +20,8 @@
 | `GET` | `/api/v1/catalog` | 公开 | 选课手册课程目录（课程+教师，支持 q 搜索与分页） |
 | `GET` | `/api/v1/search-data` | 公开、ETag 缓存 | 前端本地搜索精简数据（课程库/目录池/评价组名称与老师） |
 | `GET` | `/api/v1/about` | 公开、ETag 缓存 | 关于页内容（标题+markdown 正文，与网页关于页同源） |
+| `GET` | `/api/v1/donate` | 公开、ETag 缓存 | 捐助页内容（标题/markdown 正文/预设金额/支付是否可用） |
+| `POST` | `/api/v1/donate/pay` | Bearer Token | 小程序捐助支付下单（未配置商户时 503 DONATE_PAY_NOT_CONFIGURED） |
 | `GET` | `/api/v1/guides` | 公开 | 学习指南针指南列表（稳定五分类、facets、分页） |
 | `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |
 | `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |
@@ -84,6 +86,10 @@
 | `GET` | `/admin-api/footer` | Cookie（需相应权限） | 读取页脚内容和 revision |
 | `POST` | `/admin-api/footer` | Cookie（需相应权限） | 发布页脚内容 |
 | `GET` | `/admin-api/about` | Cookie（需相应权限） | 读取关于页内容和 revision |
+| `GET` | `/admin-api/donate` | Cookie（content.read） | 读取捐助页内容与预设金额 |
+| `POST` | `/admin-api/donate` | Cookie（content.edit） | 保存并发布捐助页 |
+| `GET` | `/admin-api/donate-pay` | Cookie（services.manage） | 读取微信支付配置（脱敏） |
+| `POST` | `/admin-api/donate-pay` | Cookie（services.manage） | 保存微信支付商户配置 |
 | `POST` | `/admin-api/about` | Cookie（需相应权限） | 发布关于页内容 |
 | `GET` | `/admin-api/participate` | Cookie（需相应权限） | 读取参与贡献页和 revision |
 | `POST` | `/admin-api/participate` | Cookie（需相应权限） | 发布参与贡献页 |

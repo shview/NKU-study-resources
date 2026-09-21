@@ -55,7 +55,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readAbout = null, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
+  constructor({ readManifest, readReviews, readHome, readAbout = null, readDonate = null, donatePayReady = null, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -65,6 +65,8 @@ export class PublicApiService {
     this.readReviews = readReviews;
     this.readHome = readHome;
     this.readAbout = readAbout;
+    this.readDonate = readDonate;
+    this.donatePayReady = donatePayReady || (() => false);
     this.learningCompass = learningCompass || createDefaultLearningCompassService();
     this.guideAssistant = guideAssistant;
     this.readVisitStats = readVisitStats;
@@ -97,6 +99,22 @@ export class PublicApiService {
       title: String(about.title || "NKUStudy").slice(0, 120),
       content: String(about.content || "").slice(0, 6000),
       updated: String(about.updated || "").slice(0, 40),
+    };
+  }
+
+  /** 捐助页公开数据：文案与预设金额来自后台"捐助页面管理"；pay_enabled 提示小程序支付是否可用。 */
+  donate() {
+    const donate = this.readDonate?.();
+    if (!donate || typeof donate !== "object") throw new PublicApiError(503, "捐助页暂未配置。", "DONATE_NOT_CONFIGURED");
+    const amounts = (Array.isArray(donate.amounts) ? donate.amounts : [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value >= 1 && value <= 10000)
+      .slice(0, 6);
+    return {
+      title: String(donate.title || "捐助支持").slice(0, 120),
+      content: String(donate.content || "").slice(0, 6000),
+      amounts: [...new Set(amounts)].sort((a, b) => a - b),
+      pay_enabled: this.donatePayReady(),
     };
   }
 

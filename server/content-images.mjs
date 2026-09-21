@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
  * R2 独立前缀 content/<owner>/，与课程资料 resources/ 隔离；
  * 归属白名单 = 内容 JSON 文件名，删除对比只在同归属内进行，避免误删他页引用。
  */
-export const CONTENT_IMAGE_OWNERS = Object.freeze(["home", "about", "participate", "footer", "reviews", "feedback"]);
+export const CONTENT_IMAGE_OWNERS = Object.freeze(["home", "about", "participate", "footer", "reviews", "feedback", "links", "donate"]);
 
 const IMAGE_MIME_TYPES = Object.freeze({
   "image/png": "png",

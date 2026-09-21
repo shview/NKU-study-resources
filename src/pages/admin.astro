@@ -43,6 +43,7 @@ import "vditor/dist/index.css";
         <button class="button secondary" type="button" data-admin-tab="editor-settings">编辑器设置</button>
         <button class="button secondary" type="button" data-admin-tab="stats">访问统计</button>
         <button class="button secondary" type="button" data-admin-tab="about">关于页面</button>
+        <button class="button secondary" type="button" data-admin-tab="donate">捐助页面</button>
         <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
         <button class="button secondary" type="button" data-admin-tab="accounts">账号管理</button>
         <button class="button secondary" type="button" data-admin-tab="service-keys">服务密钥</button>
@@ -357,6 +358,36 @@ import "vditor/dist/index.css";
               <span class="muted" id="about-admin-status"></span>
             </div>
             <div class="admin-form" id="about-admin-editor"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="donate-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>捐助页面管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-donate" type="button">保存并发布捐助页</button>
+              <button class="button secondary clean-images" type="button" data-owner="donate">清理未引用图片</button>
+              <button class="button secondary" id="reload-donate" type="button">重新加载</button>
+              <span class="muted" id="donate-admin-status"></span>
+            </div>
+            <div class="admin-form" id="donate-admin-editor"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
+            <h2>微信支付设置</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-donate-pay" type="button">保存支付配置</button>
+              <span class="muted" id="donate-pay-status"></span>
+            </div>
+            <div class="admin-form" id="donate-pay-editor"></div>
+            <p class="field-hint">填入微信支付商户号（APIv3）并勾选启用后，小程序捐助的支付功能才会真正下单。商户私钥仅服务器保存（0600），不回显。</p>
           </div>
         </div>
       </div>
@@ -850,6 +881,10 @@ import "vditor/dist/index.css";
     const participateAdminStatus = document.querySelector("#participate-admin-status");
     const aboutAdminPanel = document.querySelector("#about-admin-panel");
     const aboutAdminEditor = document.querySelector("#about-admin-editor");
+    const donateAdminEditor = document.querySelector("#donate-admin-editor");
+    const donatePayEditor = document.querySelector("#donate-pay-editor");
+    let donateState = null;
+    let donatePayState = null;
     const aboutAdminStatus = document.querySelector("#about-admin-status");
     const homeAdminPanel = document.querySelector("#home-admin-panel");
     const homeAdminEditor = document.querySelector("#home-admin-editor");
@@ -1328,6 +1363,49 @@ import "vditor/dist/index.css";
       aboutState = data.data;
       contentRevisions.set("about", data.revision);
       renderAboutAdmin();
+    }
+
+    async function loadDonateAdmin() {
+      const data = await api("/donate");
+      donateState = data.data;
+      contentRevisions.set("donate", data.revision);
+      renderDonateAdmin();
+      loadDonatePay();
+    }
+
+    async function loadDonatePay() {
+      try {
+        const data = await api("/donate-pay");
+        donatePayState = data.data;
+        renderDonatePay();
+      } catch (error) {
+        donatePayEditor.innerHTML = `<p class="muted">支付配置需「服务密钥」权限：${error.message}</p>`;
+      }
+    }
+
+    function renderDonateAdmin() {
+      if (!donateState) return;
+      donateAdminEditor.innerHTML = "";
+      donateAdminEditor.append(
+        field("标题", donateState.title ?? "", (value) => { donateState.title = value; }),
+        field("预设金额（元，逗号分隔，最多6个）", (donateState.amounts ?? []).join(", "), (value) => {
+          donateState.amounts = value.split(/[,，]/).map((item) => Number(item.trim())).filter((item) => Number.isFinite(item) && item > 0);
+        }),
+        markdownField("正文（支持 Markdown，可插图）", donateState.content ?? "", (value) => { donateState.content = value; }, { height: 360, owner: "donate" })
+      );
+      mountMarkdownEditors(donateAdminEditor);
+    }
+
+    function renderDonatePay() {
+      if (!donatePayState) return;
+      donatePayEditor.innerHTML = "";
+      donatePayEditor.append(
+        checkboxField("启用支付（配置齐全并勾选后小程序捐助才可支付）", donatePayState.enabled === true, (value) => { donatePayState.enabled = value; }),
+        field(`商户号 mchid${donatePayState.mchid ? "（已设 " + donatePayState.mchid + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.mchid = value.trim(); }),
+        field(`小程序 AppID${donatePayState.appid ? "（已设 " + donatePayState.appid + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.appid = value.trim(); }),
+        field(`证书序列号${donatePayState.serialNo ? "（已设 " + donatePayState.serialNo + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.serialNo = value.trim(); }),
+        field("商户 APIv3 私钥（留空=保持不变）", "", (value) => { if (value.trim()) donatePayState.privateKey = value.trim(); })
+      );
     }
 
     async function loadHomeAdmin() {
@@ -1838,6 +1916,10 @@ async function loadMpUsersAdmin() {
       ["POST /admin-api/upload", "上传课程文件"],
       ["POST /admin-api/content-images", "上传内容图片"],
       ["POST /admin-api/content-images/cleanup", "清理未引用内容图片"],
+      ["GET /admin-api/donate", "读取捐助页"],
+      ["POST /admin-api/donate", "保存捐助页"],
+      ["GET /admin-api/donate-pay", "读取支付配置(脱敏)"],
+      ["POST /admin-api/donate-pay", "保存支付配置"],
       ["POST /admin-api/sync-r2", "同步课程 R2"],
       ["POST /admin-api/sync-r2-all", "重建课程树"],
       ["POST /admin-api/r2-publish", "发布 R2 变更"],
@@ -4455,6 +4537,15 @@ async function loadMpUsersAdmin() {
             aboutAdminStatus.textContent = error.message;
           }
         }
+        if (tab === "donate" && !donateState) {
+          donateAdminStatus.textContent = "加载中...";
+          try {
+            await loadDonateAdmin();
+            donateAdminStatus.textContent = "";
+          } catch (error) {
+            donateAdminStatus.textContent = error.message;
+          }
+        }
         if (tab === "home" && !homeState) {
           homeAdminStatus.textContent = "加载中...";
           try {
@@ -4746,6 +4837,37 @@ async function loadMpUsersAdmin() {
         participateAdminStatus.textContent = error.message;
       }
     });
+
+    document.querySelector("#save-donate").addEventListener("click", async () => {
+      donateAdminStatus.textContent = "保存中...";
+      try {
+        const data = await api("/donate", {
+          method: "POST",
+          body: JSON.stringify({ data: donateState, expectedRevision: contentRevisions.get("donate") }),
+        });
+        donateState = data.data;
+        contentRevisions.set("donate", data.revision);
+        renderDonateAdmin();
+        donateAdminStatus.textContent = "已保存并发布";
+      } catch (error) {
+        donateAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-donate-pay").addEventListener("click", async () => {
+      const status = document.querySelector("#donate-pay-status");
+      status.textContent = "保存中...";
+      try {
+        const data = await api("/donate-pay", { method: "POST", body: JSON.stringify(donatePayState || {}) });
+        donatePayState = data.data;
+        renderDonatePay();
+        status.textContent = "支付配置已保存";
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-donate").addEventListener("click", async () => { donateAdminStatus.textContent = "加载中..."; try { await loadDonateAdmin(); donateAdminStatus.textContent = ""; } catch (error) { donateAdminStatus.textContent = error.message; } });
 
     document.querySelector("#reload-about").addEventListener("click", async () => {
       aboutAdminStatus.textContent = "加载中...";
