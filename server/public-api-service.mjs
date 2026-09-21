@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { jsapiPrepay, miniPayParams } from "./wxpay-v3.mjs";
+import { jsapiPrepay, miniPayParams, nativePrepay } from "./wxpay-v3.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import {
@@ -56,7 +56,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readAbout = null, readDonate = null, donatePayReady = null, donatePayStore = null, donateOrderStore = null, notifyBase = "", learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
+  constructor({ readManifest, readReviews, readHome, readAbout = null, readDonate = null, donatePayReady = null, donatePayStore = null, donateOrderStore = null, notifyBase = "", wxpayFetch = undefined, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -71,6 +71,7 @@ export class PublicApiService {
     this.donatePayStore = donatePayStore;
     this.donateOrderStore = donateOrderStore;
     this.notifyBase = String(notifyBase || "").replace(/\/+$/, "");
+    this.wxpayFetch = wxpayFetch;
     this.learningCompass = learningCompass || createDefaultLearningCompassService();
     this.guideAssistant = guideAssistant;
     this.readVisitStats = readVisitStats;
@@ -136,6 +137,7 @@ export class PublicApiService {
     let prepayId;
     try {
       prepayId = await jsapiPrepay({
+        fetchImpl: this.wxpayFetch,
         config,
         appid: config.appid,
         description: "NKUStudy 捐助支持",
@@ -150,6 +152,34 @@ export class PublicApiService {
     }
     this.donateOrderStore.create({ outTradeNo, userId: user.id, amountTotal });
     return miniPayParams({ appid: config.appid, prepayId, privateKeyPem: config.privateKey });
+  }
+
+  /** 网页端 Native 扫码捐助：无需登录/openid，返回 code_url 由前端渲染二维码；同一回调入账。 */
+  async createDonateOrderNative({ userId = 0, amount } = {}) {
+    if (!this.donatePayStore || !this.donateOrderStore) throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
+    const config = this.donatePayStore.config();
+    const amountTotal = Math.round(Number(amount) * 100);
+    if (!Number.isSafeInteger(amountTotal) || amountTotal < 100 || amountTotal > 1000000) {
+      throw new PublicApiError(400, "捐助金额需在 1-10000 元之间。", "INVALID_DONATE_AMOUNT");
+    }
+    const outTradeNo = `DON${Date.now()}${randomBytes(4).toString("hex").toUpperCase()}`;
+    let codeUrl;
+    try {
+      codeUrl = await nativePrepay({ config, description: "NKUStudy 捐助支持", outTradeNo, amountTotal, notifyUrl: `${this.notifyBase}/api/v1/donate/notify`, fetchImpl: this.wxpayFetch });
+    } catch (error) {
+      console.error(`[donate] native prepay failed: ${error.message} ${error.detail || ""}`);
+      throw new PublicApiError(502, "支付下单失败，请稍后重试。", "DONATE_PREPAY_FAILED");
+    }
+    this.donateOrderStore.create({ outTradeNo, userId: Number(userId) || 0, amountTotal });
+    return { code_url: codeUrl, out_trade_no: outTradeNo, amount };
+  }
+
+  /** 网页端轮询订单状态（随机单号仅发起人可见）。 */
+  donateOrderStatus(outTradeNo) {
+    if (!this.donateOrderStore) throw new PublicApiError(503, "支付功能暂未开通。", "DONATE_PAY_NOT_CONFIGURED");
+    const order = this.donateOrderStore.get(String(outTradeNo || "").slice(0, 40));
+    if (!order) throw new PublicApiError(404, "订单不存在。", "DONATE_ORDER_NOT_FOUND");
+    return { status: order.status, amount: order.amount_total / 100 };
   }
 
   home() {

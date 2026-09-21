@@ -22,6 +22,8 @@
 | `GET` | `/api/v1/about` | 公开、ETag 缓存 | 关于页内容（标题+markdown 正文，与网页关于页同源） |
 | `GET` | `/api/v1/donate` | 公开、ETag 缓存 | 捐助页内容（标题/markdown 正文/预设金额/支付是否可用） |
 | `POST` | `/api/v1/donate/pay` | Bearer Token | 小程序捐助支付下单（未配置商户时 503 DONATE_PAY_NOT_CONFIGURED） |
+| `POST` | `/api/v1/donate/pay-native` | 公开（网页会话可选） | 网页 Native 扫码捐助下单，返回 code_url |
+| `GET` | `/api/v1/donate/order-status` | 公开 | 按随机单号轮询支付状态 |
 | `POST` | `/api/v1/donate/notify` | 微信支付服务器回调 | 支付结果通知（验签+解密+幂等入账），仅微信支付服务器调用 |
 | `GET` | `/api/v1/guides` | 公开 | 学习指南针指南列表（稳定五分类、facets、分页） |
 | `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |

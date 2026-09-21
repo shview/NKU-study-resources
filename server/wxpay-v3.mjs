@@ -65,6 +65,46 @@ export async function jsapiPrepay({ config, appid, description, outTradeNo, amou
   return parsed.prepay_id;
 }
 
+/** Native 扫码支付下单（网页端）：成功返回 code_url（weixin://wxpay/...），用户扫码付款。 */
+export async function nativePrepay({ config, description, outTradeNo, amountTotal, notifyUrl, fetchImpl = fetch }) {
+  const url = "https://api.mch.weixin.qq.com/v3/pay/transactions/native";
+  const body = JSON.stringify({
+    appid: config.appid,
+    mchid: config.mchid,
+    description,
+    out_trade_no: outTradeNo,
+    notify_url: notifyUrl,
+    amount: { total: amountTotal, currency: "CNY" },
+  });
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const nonce = randomBytes(16).toString("hex");
+  const authorization = buildAuthorization({
+    mchid: config.mchid,
+    serialNo: config.serialNo,
+    privateKeyPem: config.privateKey,
+    method: "POST",
+    pathWithQuery: "/v3/pay/transactions/native",
+    timestamp,
+    nonce,
+    body,
+  });
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: authorization, "User-Agent": "nkustudy-donate" },
+    body,
+  });
+  const text = await response.text();
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch { parsed = null; }
+  if (!response.ok || !parsed?.code_url) {
+    const error = new Error(`WXPAY_NATIVE_FAILED:${response.status}:${parsed?.code || "UNKNOWN"}`);
+    error.status = response.status;
+    error.detail = parsed?.message || text.slice(0, 200);
+    throw error;
+  }
+  return parsed.code_url;
+}
+
 /** 小程序拉起支付参数：paySign = RSA-SHA256(appid\ntimeStamp\nnonceStr\npackage\n)。 */
 export function miniPayParams({ appid, prepayId, privateKeyPem }) {
   const timeStamp = String(Math.floor(Date.now() / 1000));

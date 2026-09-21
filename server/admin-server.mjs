@@ -2592,6 +2592,12 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/admin-api/donate") {
       if (!requirePermission(req, account, "content.read", res)) return;
+      // 首次读取自愈：donate.json 尚未保存过时用默认文案初始化，避免 ENOENT
+      try {
+        jsonStore.readSync(donatePath);
+      } catch {
+        await jsonStore.update(donatePath, () => normalizeDonate(structuredClone(DEFAULT_DONATE_CONTENT)), { initialize: normalizeDonate(structuredClone(DEFAULT_DONATE_CONTENT)), mode: 0o600 });
+      }
       json(res, 200, { ok: true, ...await readPublishedContent(donatePath, normalizeDonate) });
       return;
     }

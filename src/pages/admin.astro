@@ -881,6 +881,8 @@ import "vditor/dist/index.css";
     const participateAdminStatus = document.querySelector("#participate-admin-status");
     const aboutAdminPanel = document.querySelector("#about-admin-panel");
     const aboutAdminEditor = document.querySelector("#about-admin-editor");
+    const donateAdminPanel = document.querySelector("#donate-admin-panel");
+    const donateAdminStatus = document.querySelector("#donate-admin-status");
     const donateAdminEditor = document.querySelector("#donate-admin-editor");
     const donatePayEditor = document.querySelector("#donate-pay-editor");
     let donateState = null;
@@ -972,6 +974,7 @@ import "vditor/dist/index.css";
       home: "content.edit",
       footer: "content.edit",
       about: "content.edit",
+      donate: "content.edit",
       "editor-settings": "content.edit",
       backup: "backup.manage",
       accounts: "accounts.manage",
@@ -4432,6 +4435,7 @@ async function loadMpUsersAdmin() {
         editorSettingsAdminPanel.hidden = tab !== "editor-settings";
         statsAdminPanel.hidden = tab !== "stats";
         aboutAdminPanel.hidden = tab !== "about";
+        donateAdminPanel.hidden = tab !== "donate";
         backupAdminPanel.hidden = tab !== "backup";
         accountsAdminPanel.hidden = tab !== "accounts";
         mpUsersAdminPanel.hidden = tab !== "mp-users";

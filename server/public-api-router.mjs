@@ -95,6 +95,20 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       else if (req.method === "GET" && url.pathname === "/api/v1/search-data") data = service.searchData();
       else if (req.method === "GET" && url.pathname === "/api/v1/about") data = service.about();
       else if (req.method === "GET" && url.pathname === "/api/v1/donate") data = service.donate();
+      else if (req.method === "POST" && url.pathname === "/api/v1/donate/pay-native") {
+        const body = await readJsonBody(req);
+        const amount = Number(body?.amount);
+        if (!Number.isFinite(amount) || amount < 1 || amount > 10000) throw new PublicApiError(400, "捐助金额需在 1-10000 元之间。", "INVALID_DONATE_AMOUNT");
+        if (typeof service.createDonateOrderNative !== "function" || !service.donatePayReady?.()) {
+          throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
+        }
+        // 网页会话可选：有 cookie 就记录归属，扫码付款本身不需要登录
+        const webUser = mpAuthService ? mpAuthService.verifyToken(authorizationOf(req)) : null;
+        data = await service.createDonateOrderNative({ userId: webUser?.id || 0, amount });
+      }
+      else if (req.method === "GET" && url.pathname === "/api/v1/donate/order-status") {
+        data = service.donateOrderStatus(url.searchParams.get("out_trade_no"));
+      }
       else if (req.method === "POST" && url.pathname === "/api/v1/donate/pay") {
         if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const user = mpAuthService.requireUser(authorizationOf(req));

@@ -185,3 +185,40 @@ test("createDonateOrder: full flow with stubbed prepay fetch", async () => {
   }
   orders.close();
 });
+
+test("createDonateOrderNative: no login needed, returns code_url and records order; order-status tracks it", async () => {
+  const { DonateOrderStore } = await import("../server/donate-order-store.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nkustudy-native-"));
+  const orders = new DonateOrderStore({ dbPath: path.join(dir, "o.sqlite") });
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const privPem = privateKey.export({ type: "pkcs8", format: "pem" });
+  const payStore = { config: () => ({ mchid: "m", appid: "a", serialNo: "s", privateKey: privPem, apiV3Key: "k".repeat(32), publicKey: "p" }), ready: () => true };
+  const wxpayFetch = async () => ({ ok: true, text: async () => JSON.stringify({ code_url: "weixin://wxpay/bizpayurl?pr=fake" }) });
+  const service = new PublicApiService({
+    readManifest: () => ({ resourceRoot: "https://resources.nkustudy.top/resources/", courses: [] }),
+    readReviews: () => ({ version: 1, rules: {}, reviews: [] }),
+    readHome: () => ({}),
+    reviewSubmissionService: { assertAttempt() {}, async submit() { return { pending: true }; } },
+    donatePayStore: payStore,
+    donateOrderStore: orders,
+    notifyBase: "https://nkustudy.top",
+    wxpayFetch,
+  });
+  try {
+    const result = await service.createDonateOrderNative({ userId: 0, amount: 15 });
+    assert.equal(result.code_url, "weixin://wxpay/bizpayurl?pr=fake");
+    assert.equal(result.amount, 15);
+    const row = orders.listRecent(1)[0];
+    assert.equal(row.amount_total, 1500);
+    assert.equal(row.user_id, 0);
+    const status = service.donateOrderStatus(row.out_trade_no);
+    assert.equal(status.status, "pending");
+    assert.equal(status.amount, 15);
+    orders.markPaid({ outTradeNo: row.out_trade_no, amountTotal: 1500, transactionId: "t" });
+    assert.equal(service.donateOrderStatus(row.out_trade_no).status, "paid");
+    assert.throws(() => service.donateOrderStatus("NOPE"), /订单不存在/);
+  } finally {
+  }
+  orders.close();
+});
