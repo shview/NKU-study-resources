@@ -1404,7 +1404,9 @@ import "vditor/dist/index.css";
         field(`商户号 mchid${donatePayState.mchid ? "（已设 " + donatePayState.mchid + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.mchid = value.trim(); }),
         field(`小程序 AppID${donatePayState.appid ? "（已设 " + donatePayState.appid + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.appid = value.trim(); }),
         field(`证书序列号${donatePayState.serialNo ? "（已设 " + donatePayState.serialNo + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.serialNo = value.trim(); }),
-        field("商户 APIv3 私钥（留空=保持不变）", "", (value) => { if (value.trim()) donatePayState.privateKey = value.trim(); })
+        field("商户 APIv3 私钥（留空=保持不变）", "", (value) => { if (value.trim()) donatePayState.privateKey = value.trim(); }),
+        field("APIv3 密钥（32位，留空=保持不变）", "", (value) => { if (value.trim()) donatePayState.apiV3Key = value.trim(); }),
+        field("支付公钥 PEM（公钥模式，留空=保持不变）", "", (value) => { if (value.trim()) donatePayState.publicKey = value.trim(); })
       );
     }
 

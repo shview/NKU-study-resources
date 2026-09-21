@@ -242,6 +242,12 @@ export class MpAuthService {
     return this.#issueToken(row, timestamp);
   }
 
+  /** 供微信支付等内部流程取用户 openid；不进入任何公共 DTO。 */
+  getOpenid(userId) {
+    const row = this.selectUserById.get(Number(userId));
+    return row?.openid || null;
+  }
+
   webLogin({ nickname, password }, { now = this.now() } = {}) {
     const name = cleanNickname(nickname);
     if (!name || !password) throw new PublicApiError(400, "请填写昵称和密码。", "INVALID_CREDENTIALS");

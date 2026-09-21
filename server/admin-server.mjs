@@ -49,6 +49,8 @@ import { ReviewSubmissionService } from "./review-submission-service.mjs";
 import { preflightProductionRuntime, projectRoot, runtimeDataPathMap } from "./runtime-config.mjs";
 import { DEFAULT_DONATE_CONTENT } from "./default-donate.mjs";
 import { DonatePayStore } from "./donate-pay-store.mjs";
+import { DonateOrderStore } from "./donate-order-store.mjs";
+import { decryptAes256Gcm, verifyNotifySignature } from "./wxpay-v3.mjs";
 import { StaticReleasePublisher } from "./static-release-publisher.mjs";
 
 const root = projectRoot;
@@ -209,6 +211,7 @@ const reviewSubmissionService = new ReviewSubmissionService({
   },
 });
 const donatePayStore = new DonatePayStore({ dataDir });
+const donateOrderStore = new DonateOrderStore({ dbPath: runtime.stateDbPath });
 const catalogPath2 = path.join(dataDir, "catalog.json");
 const courseCatalog = new CourseCatalogService({
   catalogPath: catalogPath2,
@@ -265,6 +268,9 @@ const guideAssistantService = createGuideAssistantService({
 const publicApiService = new PublicApiService({
   readAbout: () => jsonStore.readSync(aboutPath),
   readDonate: () => readDonate(),
+  donatePayStore,
+  donateOrderStore,
+  notifyBase: adminOrigin,
   donatePayReady: () => donatePayStore.ready(),
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
@@ -1495,6 +1501,37 @@ async function handleFeedbackSubmit(req, res) {
   json(res, 200, { ok: true });
 }
 
+/** 微信支付回调：原始报文验签（支付公钥）→ AES-GCM 解密 → 幂等置 paid。 */
+async function handleDonateNotify(req, res) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const body = Buffer.concat(chunks).toString("utf8");
+  const respond = (status, payload) => json(res, status, payload);
+  try {
+    const ok = verifyNotifySignature({
+      publicKeyPem: donatePayStore.config().publicKey,
+      timestamp: req.headers["wechatpay-timestamp"],
+      nonce: req.headers["wechatpay-nonce"],
+      body,
+      signature: req.headers["wechatpay-signature"],
+    });
+    if (!ok) return respond(401, { code: "FAIL", message: "签名验证失败" });
+    const parsed = JSON.parse(body);
+    if (parsed.event_type !== "TRANSACTION.SUCCESS") return respond(200, { code: "SUCCESS" });
+    const resource = decryptAes256Gcm(donatePayStore.config().apiV3Key, parsed.resource || {});
+    const marked = donateOrderStore.markPaid({
+      outTradeNo: String(resource.out_trade_no || ""),
+      amountTotal: Number(resource.amount && resource.amount.total),
+      transactionId: String(resource.transaction_id || "") || null,
+    });
+    if (!marked) return respond(500, { code: "FAIL", message: "订单不存在或金额不符" });
+    return respond(200, { code: "SUCCESS" });
+  } catch (error) {
+    console.error(`[donate] notify failed: ${error.message}`);
+    return respond(500, { code: "FAIL", message: "处理失败" });
+  }
+}
+
 /** 内容图片上传：content/<owner>/ 前缀、随机文件名、行内展示（无 attachment 头）、7 天缓存。 */
 async function handleContentImageUpload(req, res, url) {
   if (!r2Client || !r2Bucket) {
@@ -2274,6 +2311,11 @@ const server = createServer(async (req, res) => {
   let url;
   try {
     url = new URL(req.url || "/", `http://${req.headers.host}`);
+    if (req.method === "POST" && url.pathname === "/api/v1/donate/notify") {
+      await handleDonateNotify(req, res);
+      return;
+    }
+
     if (await handlePublicApi(req, res, url)) return;
     if (url.pathname.startsWith("/review-api/")) {
       if (req.method === "GET" && url.pathname === "/review-api/reviews") {

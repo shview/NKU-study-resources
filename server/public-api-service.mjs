@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { jsapiPrepay, miniPayParams } from "./wxpay-v3.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import {
@@ -55,7 +56,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readAbout = null, readDonate = null, donatePayReady = null, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
+  constructor({ readManifest, readReviews, readHome, readAbout = null, readDonate = null, donatePayReady = null, donatePayStore = null, donateOrderStore = null, notifyBase = "", learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -67,6 +68,9 @@ export class PublicApiService {
     this.readAbout = readAbout;
     this.readDonate = readDonate;
     this.donatePayReady = donatePayReady || (() => false);
+    this.donatePayStore = donatePayStore;
+    this.donateOrderStore = donateOrderStore;
+    this.notifyBase = String(notifyBase || "").replace(/\/+$/, "");
     this.learningCompass = learningCompass || createDefaultLearningCompassService();
     this.guideAssistant = guideAssistant;
     this.readVisitStats = readVisitStats;
@@ -116,6 +120,36 @@ export class PublicApiService {
       amounts: [...new Set(amounts)].sort((a, b) => a - b),
       pay_enabled: this.donatePayReady(),
     };
+  }
+
+  /** 小程序捐助下单：JSAPI v3，返回 wx.requestPayment 所需参数；订单先落库 pending，回调置 paid。 */
+  async createDonateOrder(user, amount) {
+    if (!this.donatePayStore || !this.donateOrderStore) throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
+    const config = this.donatePayStore.config();
+    const openid = this.mpAuthService?.getOpenid?.(user.id);
+    if (!openid) throw new PublicApiError(400, "当前账号缺少微信支付身份，请重新登录后再试。", "OPENID_MISSING");
+    const amountTotal = Math.round(Number(amount) * 100);
+    if (!Number.isSafeInteger(amountTotal) || amountTotal < 100 || amountTotal > 1000000) {
+      throw new PublicApiError(400, "捐助金额需在 1-10000 元之间。", "INVALID_DONATE_AMOUNT");
+    }
+    const outTradeNo = `DON${Date.now()}${randomBytes(4).toString("hex").toUpperCase()}`;
+    let prepayId;
+    try {
+      prepayId = await jsapiPrepay({
+        config,
+        appid: config.appid,
+        description: "NKUStudy 捐助支持",
+        outTradeNo,
+        amountTotal,
+        openid,
+        notifyUrl: `${this.notifyBase}/api/v1/donate/notify`,
+      });
+    } catch (error) {
+      console.error(`[donate] prepay failed: ${error.message} ${error.detail || ""}`);
+      throw new PublicApiError(502, "支付下单失败，请稍后重试。", "DONATE_PREPAY_FAILED");
+    }
+    this.donateOrderStore.create({ outTradeNo, userId: user.id, amountTotal });
+    return miniPayParams({ appid: config.appid, prepayId, privateKeyPem: config.privateKey });
   }
 
   home() {
