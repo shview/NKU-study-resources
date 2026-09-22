@@ -918,6 +918,31 @@ button.tag[data-active="true"] {
   margin-top: 4px;
 }
 
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 14px;
+  font-size: 0.92em;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  text-align: left;
+}
+.markdown-body th {
+  background: var(--surface-soft);
+  font-weight: 700;
+}
+.markdown-body blockquote {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-left: 4px solid var(--line);
+  background: var(--surface-soft);
+  border-radius: 8px;
+  color: inherit;
+}
+
 .markdown-body a {
   color: var(--primary);
   font-weight: 750;
@@ -2368,14 +2393,47 @@ details.resource-subsection summary::-webkit-details-marker {
   vertical-align: middle;
 }
 
-/* ===== 后台侧边栏两级导航（P0） ===== */
-#admin-app { display: flex; gap: 18px; align-items: flex-start; }
-.admin-nav { flex: 0 0 190px; position: sticky; top: 16px; display: flex; flex-direction: column; gap: 12px; }
-.admin-nav-group { display: flex; flex-direction: column; }
-.admin-nav-group-head { text-align: left; border: none; background: none; font-weight: 800; font-size: 0.82em; color: var(--muted); padding: 6px 8px; cursor: pointer; }
+/* ===== 后台侧边栏两级导航（P0，主题化） ===== */
+#admin-app { display: flex; gap: 0; align-items: flex-start; }
+.admin-nav {
+  flex: 0 0 210px; position: sticky; top: 16px; align-self: flex-start;
+  display: flex; flex-direction: column; gap: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 0 0 1px rgba(148,163,184,.08), 0 10px 26px rgba(15,23,42,.05);
+  padding: 12px 10px; margin-right: 20px;
+}
+#admin-app[data-nav-collapsed="1"] { flex-direction: row; }
+#admin-app[data-nav-collapsed="1"] .admin-nav { flex: 0 0 auto; width: 46px; padding: 10px 6px; align-items: center; }
+#admin-app[data-nav-collapsed="1"] .admin-nav-group-head,
+#admin-app[data-nav-collapsed="1"] .admin-nav-items,
+#admin-app[data-nav-collapsed="1"] .admin-nav-flat-toggle { display: none; }
+.admin-nav-collapse {
+  border: none; background: none; cursor: pointer; font-size: 0.8em;
+  color: var(--muted); text-align: left; padding: 4px 8px; border-radius: 8px;
+}
+.admin-nav-collapse:hover { background: var(--surface-soft); }
+.admin-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.admin-nav-group-head {
+  text-align: left; border: none; background: none; font-weight: 800;
+  font-size: 0.72em; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); padding: 8px 10px 4px; cursor: pointer;
+}
 .admin-nav-items { display: flex; flex-direction: column; gap: 2px; }
 .admin-nav-group--collapsed .admin-nav-items { display: none; }
-.admin-nav-item { text-align: left; justify-content: flex-start; min-height: 34px; font-size: 0.88em; }
-.admin-nav-item--locked, .admin-nav-item--locked:hover { opacity: 0.45; cursor: not-allowed; }
-.admin-nav-flat-toggle { border: none; background: none; color: var(--muted); font-size: 0.78em; text-align: left; padding: 8px; cursor: pointer; }
-@media (max-width: 900px) { #admin-app { flex-direction: column; } .admin-nav { position: static; flex: none; width: 100%; } .admin-nav-items { flex-direction: row; flex-wrap: wrap; } }
+.admin-nav-item {
+  text-align: left; justify-content: flex-start; min-height: 36px;
+  font-size: 0.88em; border: none; background: none; border-radius: 10px;
+  color: var(--text); font-weight: 600; padding: 7px 12px; cursor: pointer;
+}
+.admin-nav-item:hover { background: var(--surface-soft); }
+.admin-nav-item.secondary { color: var(--muted); }
+.admin-nav-item:not(.secondary) { background: rgba(75,31,111,0.10); color: var(--primary); }
+.admin-nav-item--locked, .admin-nav-item--locked:hover { opacity: 0.4; cursor: not-allowed; background: none; }
+.admin-nav-flat-toggle { border: none; background: none; color: var(--muted); font-size: 0.75em; text-align: left; padding: 8px 10px; cursor: pointer; }
+.admin-nav-flat-toggle:hover { background: var(--surface-soft); border-radius: 8px; }
+@media (max-width: 900px) {
+  #admin-app { flex-direction: column; }
+  .admin-nav { position: static; flex: none; width: 100%; margin-right: 0; }
+  .admin-nav-items { flex-direction: row; flex-wrap: wrap; }
+  #admin-app[data-nav-collapsed="1"] .admin-nav { width: 100%; flex-direction: row; }
+}

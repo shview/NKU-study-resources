@@ -383,6 +383,30 @@ import "vditor/dist/index.css";
         </div>
       </div>
 
+      <div id="reports-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header split-header">
+            <h2>举报处置</h2>
+            <span class="muted" id="reports-admin-status"></span>
+          </div>
+          <div class="panel-body">
+            <p class="field-hint" style="margin: 0 0 12px;">违法有害信息举报与内容投诉。举报内容不公开展示；处置动作自动记录处理人与时间，并可封禁提交账号（封禁在「小程序用户」执行）。</p>
+            <div class="filter-row" style="margin-bottom: 12px;">
+              <input class="searchbar" id="reports-search" type="search" placeholder="搜索举报标题/内容/对象" style="flex:1;min-width:220px;" />
+              <select class="searchbar" id="reports-status-filter" style="max-width: 140px;">
+                <option value="all">全部状态</option>
+                <option value="pending">待审核</option>
+                <option value="processing">处理中</option>
+                <option value="completed">已处理</option>
+                <option value="rejected">不成立</option>
+                <option value="parked">搁置</option>
+              </select>
+            </div>
+            <div id="reports-list"></div>
+          </div>
+        </div>
+      </div>
+
       <div id="law-admin-panel" hidden>
         <div class="panel">
           <div class="panel-header">
@@ -943,6 +967,8 @@ import "vditor/dist/index.css";
     const aboutAdminEditor = document.querySelector("#about-admin-editor");
     const donateAdminPanel = document.querySelector("#donate-admin-panel");
     const privacyAdminPanel = document.querySelector("#privacy-admin-panel");
+    const reportsAdminPanel = document.querySelector("#reports-admin-panel");
+    const reportsList = document.querySelector("#reports-list");
     const lawAdminPanel = document.querySelector("#law-admin-panel");
     const donateAdminStatus = document.querySelector("#donate-admin-status");
     const privacyAdminEditor = document.querySelector("#privacy-admin-editor");
@@ -1045,6 +1071,7 @@ import "vditor/dist/index.css";
       about: "content.edit",
       donate: "content.edit",
       privacy: "content.edit",
+      reports: "content.moderate",
       law: "law.manage",
       "editor-settings": "content.edit",
       backup: "backup.manage",
@@ -1437,6 +1464,76 @@ import "vditor/dist/index.css";
       aboutState = data.data;
       contentRevisions.set("about", data.revision);
       renderAboutAdmin();
+    }
+
+    function reportsFiltered() {
+      const keyword = String(document.querySelector("#reports-search")?.value || "").trim().toLowerCase();
+      const status = document.querySelector("#reports-status-filter")?.value || "all";
+      return (feedbackState?.items ?? [])
+        .filter((item) => item.type === "report" || item.type === "complaint")
+        .filter((item) => status === "all" || String(item.status || "pending") === status)
+        .filter((item) => !keyword || `${item.title} ${item.content} ${item.report_target || ""} ${item.report_url || ""}`.toLowerCase().includes(keyword));
+    }
+
+    function renderReportsAdmin() {
+      if (!reportsList) return;
+      if (!feedbackState) {
+        reportsList.innerHTML = '<p class="empty">加载中…（数据来自反馈库）</p>';
+        loadFeedbackAdmin().then(() => renderReportsAdmin()).catch(() => {});
+        return;
+      }
+      const items = reportsFiltered();
+      if (!items.length) {
+        reportsList.innerHTML = '<p class="empty">暂无举报。</p>';
+        return;
+      }
+      const esc = (v) => String(v ?? "").replace(/[<>&"]/g, "");
+      const typeLabels = { report: "违法举报", complaint: "内容投诉" };
+      reportsList.innerHTML = items.map((item, index) => `
+        <div class="review-admin-item" data-report-index="${index}">
+          <div class="course-meta">
+            <span class="pill">${esc(typeLabels[item.type] || item.type)}</span>
+            <span class="pill">${esc(item.status || "pending")}</span>
+            ${item.handled_by ? `<span class="pill">处理人 ${esc(item.handled_by)} · ${esc(item.handled_at || "")}</span>` : ""}
+          </div>
+          <h3 style="margin: 10px 0 4px;">${esc(item.title)}</h3>
+          ${item.report_url || item.report_target ? `<p class="muted" style="font-size:0.85em;">被举报对象：${esc(item.report_target || "")} ${esc(item.report_url || "")}</p>` : ""}
+          <p>${esc(item.content)}</p>
+          <small class="muted">${esc(item.createdAt || "")} · 提交账号 user_id=${esc(item.user_id ?? "-")}</small>
+          <div class="filter-row" style="margin-top: 10px;" data-ops="${index}">
+            <select class="searchbar report-status-select" style="max-width: 150px;">
+              <option value="pending" ${item.status === "pending" ? "selected" : ""}>待审核</option>
+              <option value="processing" ${item.status === "processing" ? "selected" : ""}>处理中</option>
+              <option value="completed" ${item.status === "completed" ? "selected" : ""}>已处理</option>
+              <option value="rejected" ${item.status === "rejected" ? "selected" : ""}>不成立</option>
+              <option value="parked" ${item.status === "parked" ? "selected" : ""}>搁置</option>
+            </select>
+            <button class="button save-report" type="button">保存处置</button>
+            <span class="muted report-save-status"></span>
+          </div>
+        </div>
+      `).join("");
+      for (const row of reportsList.querySelectorAll("[data-ops]")) {
+        const item = items[Number(row.dataset.ops)];
+        row.querySelector(".save-report").addEventListener("click", async () => {
+          const status = row.querySelector(".report-status-select").value;
+          const statusEl = row.querySelector(".report-save-status");
+          statusEl.textContent = "保存中...";
+          item.status = status;
+          item.handled_by = sessionState?.username || "admin";
+          item.handled_at = new Date().toISOString();
+          item.updatedAt = item.handled_at;
+          try {
+            const data = await api("/feedback", { method: "POST", body: JSON.stringify({ data: feedbackState, expectedRevision: contentRevisions.get("feedback") }) });
+            feedbackState = data.data;
+            contentRevisions.set("feedback", data.revision);
+            statusEl.textContent = "已保存";
+            renderReportsAdmin();
+          } catch (error) {
+            statusEl.textContent = error.message;
+          }
+        });
+      }
     }
 
     async function loadPrivacyAdmin() {
@@ -4716,12 +4813,12 @@ async function loadMpUsersAdmin() {
     // ===== 侧边栏两级导航（P0）：分组渲染 + 无权限置灰 + 折叠/扁平记忆 =====
     const ADMIN_NAV_CONFIG = [
       { label: "内容管理", items: [
-        ["resources", "课程资源"], ["reviews", "评价审核"], ["feedback", "反馈与举报"],
+        ["resources", "课程资源"], ["reviews", "评价审核"],
         ["home", "首页设置"], ["about", "关于页面"], ["participate", "参与页面"],
         ["links", "友链页面"], ["footer", "页脚设置"], ["donate", "捐助页面"], ["privacy", "隐私与协议"],
       ] },
       { label: "用户与安全", items: [
-        ["mp-users", "小程序用户"], ["accounts", "账号与权限"], ["audit", "审计日志"], ["law", "依法调取"],
+        ["mp-users", "小程序用户"], ["accounts", "账号与权限"], ["feedback", "反馈管理"], ["reports", "举报处置"], ["audit", "审计日志"], ["law", "依法调取"],
       ] },
       { label: "系统设置", items: [
         ["service-keys", "服务密钥"], ["ai", "AI 问答"], ["notify", "通知设置"],
@@ -4774,6 +4871,20 @@ async function loadMpUsersAdmin() {
           nav.append(groupEl);
         }
       }
+      const collapseToggle = document.createElement("button");
+      collapseToggle.type = "button";
+      collapseToggle.className = "admin-nav-collapse";
+      const collapsedNow = document.querySelector("#admin-app")?.dataset.navCollapsed === "1";
+      collapseToggle.textContent = collapsedNow ? "» 展开菜单" : "« 收起菜单";
+      collapseToggle.title = "整体收起/展开侧边栏";
+      collapseToggle.addEventListener("click", () => {
+        const app = document.querySelector("#admin-app");
+        const next = app?.dataset.navCollapsed === "1" ? "0" : "1";
+        if (app) app.dataset.navCollapsed = next;
+        localStorage.setItem("nkustudy-admin-nav-collapsed-all", next);
+        collapseToggle.textContent = next === "1" ? "» 展开菜单" : "« 收起菜单";
+      });
+      nav.append(collapseToggle);
       const modeToggle = document.createElement("button");
       modeToggle.type = "button";
       modeToggle.className = "admin-nav-flat-toggle";
@@ -4786,6 +4897,11 @@ async function loadMpUsersAdmin() {
       bindAdminNavState();
       bindAdminTabButtons();
     }
+
+    (function applyNavCollapsedMemory() {
+      const app = document.querySelector("#admin-app");
+      if (app && localStorage.getItem("nkustudy-admin-nav-collapsed-all") === "1") app.dataset.navCollapsed = "1";
+    })();
 
     /** 登录态变化后刷新置灰与当前高亮 */
     function bindAdminNavState() {
@@ -4832,6 +4948,7 @@ async function loadMpUsersAdmin() {
         aboutAdminPanel.hidden = tab !== "about";
         donateAdminPanel.hidden = tab !== "donate";
         privacyAdminPanel.hidden = tab !== "privacy";
+        reportsAdminPanel.hidden = tab !== "reports";
         lawAdminPanel.hidden = tab !== "law";
         backupAdminPanel.hidden = tab !== "backup";
         accountsAdminPanel.hidden = tab !== "accounts";
@@ -4943,6 +5060,9 @@ async function loadMpUsersAdmin() {
         if (tab === "privacy" && !privacyState) {
           privacyAdminStatus.textContent = "加载中...";
           try { await loadPrivacyAdmin(); privacyAdminStatus.textContent = ""; } catch (error) { privacyAdminStatus.textContent = error.message; }
+        }
+        if (tab === "reports") {
+          renderReportsAdmin();
         }
         if (tab === "law") {
           document.querySelector("#law-admin-status").textContent = "";
@@ -5265,6 +5385,10 @@ async function loadMpUsersAdmin() {
       privacyAdminStatus.textContent = "加载中...";
       try { await loadPrivacyAdmin(); privacyAdminStatus.textContent = ""; } catch (error) { privacyAdminStatus.textContent = error.message; }
     });
+    for (const selector of ["#reports-search", "#reports-status-filter"]) {
+      document.querySelector(selector)?.addEventListener("input", () => renderReportsAdmin());
+      document.querySelector(selector)?.addEventListener("change", () => renderReportsAdmin());
+    }
     document.querySelector("#law-query-run").addEventListener("click", () => runLawQuery());
     document.querySelector("#law-export-run").addEventListener("click", () => runLawQuery({ exportJson: true }));
     document.querySelector("#law-log-refresh").addEventListener("click", () => renderLawLogs([]));
