@@ -117,6 +117,9 @@ const footer = {
                     item.url ? <a href={item.url} target="_blank" rel="noreferrer">{item.label}</a> : <span>{item.label}</span>
                   ))}
                 </span>
+                <span class="footer-maintainers">
+                  <a href="/privacy/">隐私政策与用户协议</a>
+                </span>
               </p>
             )}
           </footer>
@@ -161,6 +164,7 @@ const footer = {
             <p style="text-align:center;margin:0;font-size:0.85em;"><a href="#" id="auth-show-login" style="color:var(--primary);">已有账号？登录</a></p>
           </form>
         </div>
+        <p style="text-align:center;font-size:0.78em;color:var(--muted);margin:10px 0 0;">登录/注册即表示同意<a href="/privacy/" style="color:inherit;text-decoration:underline;">《隐私政策与用户协议》</a></p>
         <p id="auth-status" style="text-align:center;font-size:0.85em;color:#dc2626;margin:8px 0 0;"></p>
       </dialog>
       <script>

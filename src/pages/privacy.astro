@@ -1,0 +1,31 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { readBuildData } from "../lib/runtime-data";
+import { markdownToHtml } from "../lib/markdown";
+import { DEFAULT_PRIVACY_CONTENT } from "../../server/default-privacy.mjs";
+
+let privacy = { ...DEFAULT_PRIVACY_CONTENT };
+try {
+  const saved = readBuildData("privacy.json");
+  if (saved && typeof saved === "object" && Object.keys(saved).length) privacy = { ...privacy, ...saved };
+} catch {
+  // privacy.json 尚未保存过时使用默认文案；后台保存并发布会重建本页
+}
+---
+
+<Layout title={privacy.title || "隐私政策与用户协议"} eyebrow="Privacy">
+  <section class="content">
+    <article class="panel">
+      <div class="panel-header split-header">
+        <h2>{privacy.title || "隐私政策与用户协议"}</h2>
+        <div class="header-actions">
+          <a class="button secondary" href="/feedback/">投诉举报</a>
+          <a class="button secondary" href="/admin/" target="_blank" rel="noreferrer">管理</a>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="markdown-body" set:html={markdownToHtml(privacy.content || "")} />
+      </div>
+    </article>
+  </section>
+</Layout>

@@ -46,6 +46,7 @@ function publicUser(row) {
     avatar_url: row.avatar_url || "",
     email: row.email || "",
     has_web_password: Boolean(row.web_password_hash),
+    phone_verified: Boolean(row.phone_verified_at),
     created_at: row.created_at,
     last_login_at: row.last_login_at || null,
   };
@@ -108,6 +109,8 @@ export class MpAuthService {
         openid TEXT UNIQUE,
         nickname TEXT NOT NULL DEFAULT '',
         avatar_url TEXT NOT NULL DEFAULT '',
+        phone TEXT NOT NULL DEFAULT '',
+        phone_verified_at INTEGER,
         created_at INTEGER NOT NULL,
         last_login_at INTEGER,
         login_count INTEGER NOT NULL DEFAULT 0,
@@ -127,12 +130,15 @@ export class MpAuthService {
     if (!userColumns.includes("blocked")) this.db.exec("ALTER TABLE mp_users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0");
     if (!userColumns.includes("web_password_hash")) this.db.exec("ALTER TABLE mp_users ADD COLUMN web_password_hash TEXT");
     if (!userColumns.includes("email")) this.db.exec("ALTER TABLE mp_users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+    if (!userColumns.includes("phone")) this.db.exec("ALTER TABLE mp_users ADD COLUMN phone TEXT NOT NULL DEFAULT ''");
+    if (!userColumns.includes("phone_verified_at")) this.db.exec("ALTER TABLE mp_users ADD COLUMN phone_verified_at INTEGER");
     this.insertUser = this.db.prepare("INSERT INTO mp_users(openid, created_at) VALUES (?, ?)");
     this.selectUserByOpenid = this.db.prepare("SELECT * FROM mp_users WHERE openid = ?");
     this.selectUserById = this.db.prepare("SELECT * FROM mp_users WHERE id = ?");
     this.markLogin = this.db.prepare("UPDATE mp_users SET last_login_at = ?, login_count = login_count + 1 WHERE id = ?");
     this.updateProfileStmt = this.db.prepare("UPDATE mp_users SET nickname = ?, avatar_url = ? WHERE id = ?");
     this.selectByNickname = this.db.prepare("SELECT * FROM mp_users WHERE nickname = ? COLLATE NOCASE");
+    this.selectByPhone = this.db.prepare("SELECT * FROM mp_users WHERE phone = ?");
     this.updateNickname = this.db.prepare("UPDATE mp_users SET nickname = ? WHERE id = ?");
     this.updateWebPassword = this.db.prepare("UPDATE mp_users SET web_password_hash = ? WHERE id = ?");
     this.bindOpenid = this.db.prepare("UPDATE mp_users SET openid = ? WHERE id = ?");
@@ -302,6 +308,23 @@ export class MpAuthService {
     this.updateWebPassword.run(hashWebPassword(secret), account.id);
     this.#secureDatabaseFiles();
     return true;
+  }
+
+  /** 手机号实名验证（公安评估）：记录手机号与验证时间，供 UGC 门禁与依法调取。 */
+  setVerifiedPhone(userId, phone, { now = this.now() } = {}) {
+    const account = this.selectUserById.get(Number(userId));
+    if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    this.db.prepare("UPDATE mp_users SET phone = ?, phone_verified_at = ? WHERE id = ?").run(String(phone).slice(0, 20), Number(now), account.id);
+    return this.selectUserById.get(account.id);
+  }
+
+  isPhoneVerified(userId) {
+    const account = this.selectUserById.get(Number(userId));
+    return Boolean(account?.phone_verified_at);
+  }
+
+  findByPhone(phone) {
+    return this.selectByPhone.get(String(phone).slice(0, 20)) || null;
   }
 
   bindOpenidToUser(userId, openid) {

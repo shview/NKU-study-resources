@@ -78,3 +78,5 @@ public/resources/
 Thumbs.db
 img-e2e-local.mjs
 img-e2e-raw.mjs
+patch-*.py
+fix-*.py

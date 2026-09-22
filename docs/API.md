@@ -44,6 +44,7 @@
 | `POST` | `/api/v1/service/blacklist` | 服务密钥 | 批量查询用户黑名单状态（≤100 个） |
 | `POST` | `/api/v1/service/rate-limit` | 服务密钥 | 通用固定窗口限流（按服务命名空间隔离） |
 | `POST` | `/api/v1/auth/wechat` | 公开、限流 | 小程序微信登录（code 换 token） |
+| `POST` | `/api/v1/auth/phone-verify` | Bearer Token、限流 | 微信手机号验证（getPhoneNumber code 换手机号，达标实名） |
 | `POST` | `/api/v1/auth/web-register` | 公开、限流 | 网页注册（昵称+密码） |
 | `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码，签发 httpOnly 会话 cookie；空请求用于恢复会话） |
 | `POST` | `/api/v1/auth/logout` | Bearer Token | 注销小程序登录令牌 |
@@ -93,6 +94,10 @@
 | `POST` | `/admin-api/donate` | Cookie（content.edit） | 保存并发布捐助页 |
 | `GET` | `/admin-api/donate-pay` | Cookie（services.manage） | 读取微信支付配置（脱敏） |
 | `GET` | `/admin-api/donate-stats` | Cookie（content.read） | 捐赠统计（总额/来源分布/最近订单） |
+| `GET` | `/admin-api/privacy` | Cookie（content.read） | 读取隐私政策 |
+| `POST` | `/admin-api/privacy` | Cookie（content.edit） | 发布隐私政策 |
+| `GET` | `/admin-api/law-query` | Cookie（law.manage） | 依法调取：按账号/内容聚合证据（每次留痕） |
+| `GET` | `/admin-api/law-export` | Cookie（law.manage） | 依法调取：导出 JSON（每次留痕） |
 | `POST` | `/admin-api/donate-pay` | Cookie（services.manage） | 保存微信支付商户配置 |
 | `POST` | `/admin-api/about` | Cookie（需相应权限） | 发布关于页内容 |
 | `GET` | `/admin-api/participate` | Cookie（需相应权限） | 读取参与贡献页和 revision |

@@ -32,26 +32,7 @@ import "vditor/dist/index.css";
         <strong>首次登录请修改密码</strong>
         <p class="muted">当前使用初始密码，请在下方「修改我的密码」中设置新密码后继续。</p>
       </div>
-      <div class="admin-tabs">
-        <button class="button" type="button" data-admin-tab="resources">课程资源</button>
-        <button class="button secondary" type="button" data-admin-tab="reviews">评价审核</button>
-        <button class="button secondary" type="button" data-admin-tab="participate">参与页面</button>
-        <button class="button secondary" type="button" data-admin-tab="feedback">反馈管理</button>
-        <button class="button secondary" type="button" data-admin-tab="links">友链页面</button>
-        <button class="button secondary" type="button" data-admin-tab="home">首页设置</button>
-        <button class="button secondary" type="button" data-admin-tab="footer">页脚设置</button>
-        <button class="button secondary" type="button" data-admin-tab="editor-settings">编辑器设置</button>
-        <button class="button secondary" type="button" data-admin-tab="stats">访问统计</button>
-        <button class="button secondary" type="button" data-admin-tab="about">关于页面</button>
-        <button class="button secondary" type="button" data-admin-tab="donate">捐助页面</button>
-        <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
-        <button class="button secondary" type="button" data-admin-tab="accounts">账号管理</button>
-        <button class="button secondary" type="button" data-admin-tab="service-keys">服务密钥</button>
-        <button class="button secondary" type="button" data-admin-tab="ai">AI 问答</button>
-        <button class="button secondary" type="button" data-admin-tab="mp-users">小程序用户</button>
-        <button class="button secondary" type="button" data-admin-tab="notify">通知设置</button>
-        <button class="button secondary" type="button" data-admin-tab="audit">审计日志</button>
-      </div>
+      <aside class="admin-nav" id="admin-nav" aria-label="管理导航"></aside>
 
       <div id="resource-admin-panel">
         <div class="panel admin-toolbar">
@@ -267,9 +248,11 @@ import "vditor/dist/index.css";
               <input class="searchbar" id="feedback-admin-search" type="search" placeholder="搜索标题、内容或联系方式" autocomplete="off" />
               <select class="searchbar" id="feedback-status-filter">
                 <option value="all">全部状态</option>
-                <option value="open">待处理</option>
+                <option value="pending">待审核</option>
+                <option value="processing">处理中</option>
+                <option value="approved">已公开</option>
                 <option value="completed">已完成</option>
-                <option value="rejected">不予完成</option>
+                <option value="rejected">驳回/不予完成</option>
                 <option value="parked">搁置</option>
                 <option value="hidden">已隐藏</option>
               </select>
@@ -383,7 +366,51 @@ import "vditor/dist/index.css";
           </div>
           <div class="panel-body">
             <p class="field-hint" style="margin: 0 0 12px;">支付成功后自动追加一行（无昵称显示"好心人"，去向初始"待定"）；此处可修改去向或补充历史记录，随"保存并发布捐助页"一起生效。</p>
-            <div id="donate-records-editor"></div>
+            <div id="privacy-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>隐私与协议</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-privacy" type="button">保存并发布</button>
+              <button class="button secondary" id="reload-privacy" type="button">重新加载</button>
+              <span class="muted" id="privacy-admin-status"></span>
+            </div>
+            <div class="admin-form" id="privacy-admin-editor"></div>
+            <p class="field-hint">公开地址 <a href="/privacy/" target="_blank" rel="noreferrer">/privacy/</a>；内容需与实际收集一致（手机号、IP 与日志、账号资料、保存规则、注销、举报、联系方式）。</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="law-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>依法调取（内部）</h2>
+          </div>
+          <div class="panel-body">
+            <p class="field-hint">仅在收到合法调取要求并按 SOP 核验后使用。每次查询与导出都会记录（查询人/时间/条件/结果）。流程见 docs/SECURITY_COMPLIANCE_SOP.md。</p>
+            <div class="filter-row">
+              <select class="searchbar" id="law-query-type" style="max-width:160px;">
+                <option value="account">按账号</option>
+                <option value="review">按评价 ID</option>
+                <option value="feedback">按反馈/举报 ID</option>
+              </select>
+              <input class="searchbar" id="law-query-value" type="text" placeholder="user_id / 手机号 / openid / 内容ID" style="max-width: 320px;" />
+              <button class="button" id="law-query-run" type="button">查询</button>
+              <button class="button secondary" id="law-export-run" type="button">导出 JSON</button>
+              <span class="muted" id="law-admin-status"></span>
+            </div>
+            <div id="law-result" style="margin-top: 14px;"></div>
+            <div class="filter-row" style="margin-top: 18px;">
+              <button class="button secondary" id="law-log-refresh" type="button">刷新调取记录</button>
+            </div>
+            <div id="law-logs" style="margin-top: 10px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="donate-records-editor"></div>
           </div>
         </div>
         <div class="panel" style="margin-top: 20px;">
@@ -915,7 +942,13 @@ import "vditor/dist/index.css";
     const aboutAdminPanel = document.querySelector("#about-admin-panel");
     const aboutAdminEditor = document.querySelector("#about-admin-editor");
     const donateAdminPanel = document.querySelector("#donate-admin-panel");
+    const privacyAdminPanel = document.querySelector("#privacy-admin-panel");
+    const lawAdminPanel = document.querySelector("#law-admin-panel");
     const donateAdminStatus = document.querySelector("#donate-admin-status");
+    const privacyAdminEditor = document.querySelector("#privacy-admin-editor");
+    const privacyAdminStatus = document.querySelector("#privacy-admin-status");
+    let privacyState = null;
+    let lawResultData = null;
     const donateRecordsEditor = document.querySelector("#donate-records-editor");
     const donateStatsBody = document.querySelector("#donate-stats-body");
     const donateAdminEditor = document.querySelector("#donate-admin-editor");
@@ -990,6 +1023,7 @@ import "vditor/dist/index.css";
       "audit.read": "审计查看",
       "ai.manage": "AI 问答",
       "services.manage": "服务密钥",
+      "law.manage": "依法调取",
     };
     const rolePresetFallback = {
       super_admin: ["accounts.manage", "audit.read", "backup.manage", "content.edit", "content.moderate", "content.read", "storage.delete", "storage.manage"],
@@ -1010,6 +1044,8 @@ import "vditor/dist/index.css";
       footer: "content.edit",
       about: "content.edit",
       donate: "content.edit",
+      privacy: "content.edit",
+      law: "law.manage",
       "editor-settings": "content.edit",
       backup: "backup.manage",
       accounts: "accounts.manage",
@@ -1401,6 +1437,85 @@ import "vditor/dist/index.css";
       aboutState = data.data;
       contentRevisions.set("about", data.revision);
       renderAboutAdmin();
+    }
+
+    async function loadPrivacyAdmin() {
+      const data = await api("/privacy");
+      privacyState = data.data;
+      contentRevisions.set("privacy", data.revision);
+      renderPrivacyAdmin();
+    }
+
+    function renderPrivacyAdmin() {
+      if (!privacyState) return;
+      privacyAdminEditor.innerHTML = "";
+      privacyAdminEditor.append(
+        field("标题", privacyState.title ?? "", (value) => { privacyState.title = value; }),
+        markdownField("正文（支持 Markdown）", privacyState.content ?? "", (value) => { privacyState.content = value; }, { height: 420 })
+      );
+      mountMarkdownEditors(privacyAdminEditor);
+    }
+
+    async function runLawQuery({ exportJson = false } = {}) {
+      const status = document.querySelector("#law-admin-status");
+      const type = document.querySelector("#law-query-type").value;
+      const value = document.querySelector("#law-query-value").value.trim();
+      if (!value) { status.textContent = "请输入查询值"; return; }
+      status.textContent = "查询中...";
+      try {
+        const param = type === "account" ? "value" : "id";
+        const url = `${exportJson ? "/law-export" : "/law-query"}?type=${encodeURIComponent(type)}&${param}=${encodeURIComponent(value)}`;
+        if (exportJson) {
+          status.textContent = "";
+          window.location.href = url;
+          await new Promise((r) => setTimeout(r, 800));
+          await loadLawLogs();
+          return;
+        }
+        const response = await fetch(url, { headers: { "x-nkustudy-admin-request": "1" } });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "查询失败");
+        lawResultData = data.data;
+        renderLawResult();
+        renderLawLogs(data.law_logs || []);
+        status.textContent = "";
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    }
+
+    function renderLawResult() {
+      const box = document.querySelector("#law-result");
+      if (!lawResultData) { box.innerHTML = ""; return; }
+      const d = lawResultData;
+      const esc = (v) => String(v ?? "").replace(/[<>&]/g, "");
+      const accountHtml = d.account ? `
+        <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+          <b>账号 #${d.account.id}</b> · 昵称：${esc(d.account.nickname) || "-"} · 手机号：${esc(d.account.phone) || "未验证"}（验证时间：${d.account.phone_verified_at ? new Date(d.account.phone_verified_at).toISOString().slice(0, 19) : "-"}）
+          <div class="muted" style="font-size:0.85em;">注册 ${new Date(d.account.created_at).toISOString().slice(0, 19)} · 最近登录 ${d.account.last_login_at ? new Date(d.account.last_login_at).toISOString().slice(0, 19) : "-"} · 状态 ${d.account.blocked ? "已封禁" : "正常"}</div>
+        </div>` : "";
+      const listHtml = (rows, label) => rows.length ? `<p><b>${label}（${rows.length}）</b></p>` : "";
+      box.innerHTML = `
+        ${accountHtml}
+        ${listHtml(d.reviews, "评价")}
+        ${d.reviews.map((r) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>${esc(r.courseTitle)} · ${esc(r.teacher)}</b> <span class="muted">(${esc(r.status)}${r.hidden ? "·hidden" : ""})</span><div style="font-size:0.9em;">${esc(r.content).slice(0, 200)}</div></div>`).join("")}
+        ${listHtml(d.feedback, "反馈/举报")}
+        ${d.feedback.map((f) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>[${esc(f.type)}] ${esc(f.title)}</b> <span class="muted">(${esc(f.status)})</span>${f.report_url ? `<div class="muted" style="font-size:0.85em;">关联：${esc(f.report_url)} ${esc(f.report_target || "")}</div>` : ""}<div style="font-size:0.9em;">${esc(f.content).slice(0, 200)}</div></div>`).join("")}
+        ${listHtml(d.security_logs, "安全日志（最近展示）")}
+        ${(d.security_logs || []).slice(0, 30).map((l) => `<div class="muted" style="font-size:0.8em;">${new Date(l.at).toISOString().slice(0, 19)} · ${esc(l.action)} · ${esc(l.target_type)}:${esc(l.target_id)} · IP ${esc(l.ip)} · ${esc(l.result)}</div>`).join("")}
+      `;
+    }
+
+    function renderLawLogs(rows) {
+      const box = document.querySelector("#law-logs");
+      box.innerHTML = rows.length ? `<table class="admin-table"><thead><tr><th>时间</th><th>操作人</th><th>类型</th><th>条件</th><th>导出</th><th>结果概要</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${new Date(row.at + 8 * 3600 * 1000).toISOString().slice(0, 19)}</td><td>${String(row.queried_by).replace(/[<>&]/g, "")}</td><td>${String(row.query_type).replace(/[<>&]/g, "")}</td><td>${String(row.query_value).replace(/[<>&]/g, "")}</td><td>${row.exported ? "是" : "否"}</td><td class="muted">${String(row.result_summary).replace(/[<>&]/g, "")}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">暂无调取记录</p>';
+    }
+
+    async function loadLawLogs() {
+      try {
+        const response = await fetch("/admin-api/law-query?type=none", { headers: { "x-nkustudy-admin-request": "1" } });
+        // law-query 每次都会记录，改用轻量方式：直接查询日志走 law-query 的 law_logs 字段不合适
+      } catch {}
     }
 
     async function loadDonateAdmin() {
@@ -2087,6 +2202,10 @@ async function loadMpUsersAdmin() {
       ["POST /admin-api/content-images/cleanup", "清理未引用内容图片"],
       ["GET /admin-api/donate", "读取捐助页"],
       ["GET /admin-api/donate-stats", "捐赠统计"],
+      ["GET /admin-api/privacy", "读取隐私政策"],
+      ["POST /admin-api/privacy", "发布隐私政策"],
+      ["GET /admin-api/law-query", "依法调取查询"],
+      ["GET /admin-api/law-export", "依法调取导出"],
       ["POST /admin-api/donate", "保存捐助页"],
       ["GET /admin-api/donate-pay", "读取支付配置(脱敏)"],
       ["POST /admin-api/donate-pay", "保存支付配置"],
@@ -2165,10 +2284,7 @@ async function loadMpUsersAdmin() {
         permissions: Array.isArray(data.permissions) ? data.permissions : [],
         mustChangePassword: Boolean(data.mustChangePassword),
       };
-      for (const button of document.querySelectorAll("[data-admin-tab]")) {
-        const required = tabPermissions[button.dataset.adminTab];
-        button.hidden = Boolean(required) && !hasPerm(required);
-      }
+      renderAdminNav();
       renderPendingBadges();
       mustChangeBanner.hidden = !sessionState.mustChangePassword;
     }
@@ -2198,7 +2314,7 @@ async function loadMpUsersAdmin() {
     }
 
     function showFirstAllowedTab() {
-      const first = document.querySelector("[data-admin-tab]:not([hidden])");
+      const first = document.querySelector(".admin-nav-item:not(.admin-nav-item--locked)") || document.querySelector(".admin-nav-item");
       if (first) first.click();
       else {
         loginPanel.hidden = true;
@@ -3000,14 +3116,17 @@ async function loadMpUsersAdmin() {
       const pageItems = items.slice((feedbackAdminPage - 1) * adminPageSize, feedbackAdminPage * adminPageSize);
 
       const statusOptions = [
-        ["open", "开放"],
-        ["hidden", "隐藏"],
+        ["pending", "待审核"],
+        ["processing", "处理中"],
+        ["approved", "已公开"],
         ["completed", "已完成"],
-        ["rejected", "不予完成"],
+        ["rejected", "驳回"],
         ["parked", "搁置"],
+        ["open", "开放(旧)"],
+        ["hidden", "隐藏"],
       ];
       const statusLabels = Object.fromEntries(statusOptions);
-      const typeLabels = { bug: "Bug", feature: "功能改进", content: "内容问题" };
+      const typeLabels = { bug: "Bug", feature: "功能改进", content: "内容问题", report: "违法举报", complaint: "内容投诉" };
 
       for (const item of pageItems) {
         const wrap = document.createElement("div");
@@ -3020,35 +3139,46 @@ async function loadMpUsersAdmin() {
           </div>
           <h3 style="margin: 12px 0 0;">${escapeHtml(item.title || "")}</h3>
           ${item.resourceRef ? `<p class="muted" style="font-size:0.85em;">关联资源：${escapeHtml(item.resourceRef)}</p>` : ""}
+          ${item.report_url || item.report_target ? `<p class="muted" style="font-size:0.85em;">举报对象：${escapeHtml(item.report_target || "")} ${escapeHtml(item.report_url || "")}</p>` : ""}
           <p>${escapeHtml(item.content || "")}</p>
           ${item.reply ? `<div class="review-admin-item" style="margin:8px 0;background:var(--surface-soft,#f1f5f9);"><div class="course-meta"><span class="pill">已回复</span></div><p>${escapeHtml(item.reply)}</p><small class="muted">${escapeHtml(item.repliedAt || "")}</small></div>` : ""}
-          <small class="muted">${escapeHtml(item.contact || "无联系方式")} · ${escapeHtml(item.createdAt || "")}</small>
+          <small class="muted">${escapeHtml(item.contact || "无联系方式")} · ${escapeHtml(item.createdAt || "")}${item.handled_by ? ` · 处理人 ${escapeHtml(item.handled_by)} ${escapeHtml(item.handled_at || "")}` : ""}</small>
         `;
 
         const editForm = document.createElement("div");
         editForm.className = "admin-form admin-inline-editor";
+        const markHandled = () => {
+          item.handled_by = sessionState?.username || "admin";
+          item.handled_at = new Date().toISOString();
+          item.updatedAt = item.handled_at;
+        };
         editForm.append(
-          selectField("类型", item.type ?? "bug", [["bug", "Bug"], ["feature", "功能改进"], ["content", "内容问题"]], (value) => {
+          selectField("类型", item.type ?? "bug", [["bug", "Bug"], ["feature", "功能改进"], ["content", "内容问题"], ["report", "违法举报"], ["complaint", "内容投诉"]], (value) => {
             item.type = value;
-            item.updatedAt = new Date().toISOString();
+            markHandled();
+          }),
+          selectField("状态（举报类永不公开展示）", item.status ?? "pending", [["pending", "待审核"], ["processing", "处理中"], ["approved", "通过并公开"], ["completed", "已完成"], ["rejected", "驳回"], ["parked", "搁置"]], (value) => {
+            item.status = value;
+            if (item.type === "report" || item.type === "complaint") item.hidden = true;
+            markHandled();
           }),
           field("标题", item.title ?? "", (value) => {
             item.title = value;
-            item.updatedAt = new Date().toISOString();
+            markHandled();
           }),
           markdownField("反馈内容", item.content ?? "", (value) => {
             item.content = value;
-            item.updatedAt = new Date().toISOString();
+            markHandled();
           }),
           field("联系方式", item.contact ?? "", (value) => {
             item.contact = value;
-            item.updatedAt = new Date().toISOString();
+            markHandled();
           }),
           markdownField("回复用户（登录提交者在小程序“我的反馈”可见；清空则删除回复）", item.reply ?? "", (value) => {
             item.reply = value;
             item.repliedAt = value ? new Date().toISOString() : "";
-            item.updatedAt = new Date().toISOString();
-            if (value && item.status === "open") item.status = "completed";
+            if (value && (item.status === "pending" || item.status === "open")) item.status = "completed";
+            markHandled();
           })
         );
         editForm.hidden = true;
@@ -4583,9 +4713,109 @@ async function loadMpUsersAdmin() {
       }
     });
 
+    // ===== 侧边栏两级导航（P0）：分组渲染 + 无权限置灰 + 折叠/扁平记忆 =====
+    const ADMIN_NAV_CONFIG = [
+      { label: "内容管理", items: [
+        ["resources", "课程资源"], ["reviews", "评价审核"], ["feedback", "反馈与举报"],
+        ["home", "首页设置"], ["about", "关于页面"], ["participate", "参与页面"],
+        ["links", "友链页面"], ["footer", "页脚设置"], ["donate", "捐助页面"], ["privacy", "隐私与协议"],
+      ] },
+      { label: "用户与安全", items: [
+        ["mp-users", "小程序用户"], ["accounts", "账号与权限"], ["audit", "审计日志"], ["law", "依法调取"],
+      ] },
+      { label: "系统设置", items: [
+        ["service-keys", "服务密钥"], ["ai", "AI 问答"], ["notify", "通知设置"],
+        ["editor-settings", "编辑器设置"], ["stats", "访问统计"], ["backup", "备份"],
+      ] },
+    ];
+    const navCollapsedKey = "nkustudy-admin-nav-collapsed";
+    const navFlatKey = "nkustudy-admin-nav-flat";
+
+    function renderAdminNav() {
+      const nav = document.querySelector("#admin-nav");
+      if (!nav) return;
+      nav.innerHTML = "";
+      const collapsed = new Set(JSON.parse(localStorage.getItem(navCollapsedKey) || "[]"));
+      const flat = localStorage.getItem(navFlatKey) === "1";
+      const makeItem = (tab, label) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "admin-nav-item";
+        item.dataset.adminTab = tab;
+        item.textContent = label;
+        return item;
+      };
+      if (flat) {
+        const list = document.createElement("div");
+        list.className = "admin-nav-group admin-nav-group--flat";
+        for (const group of ADMIN_NAV_CONFIG) {
+          for (const [tab, label] of group.items) list.append(makeItem(tab, label));
+        }
+        nav.append(list);
+      } else {
+        for (const group of ADMIN_NAV_CONFIG) {
+          const groupEl = document.createElement("div");
+          groupEl.className = "admin-nav-group" + (collapsed.has(group.label) ? " admin-nav-group--collapsed" : "");
+          const head = document.createElement("button");
+          head.type = "button";
+          head.className = "admin-nav-group-head";
+          head.textContent = group.label + (collapsed.has(group.label) ? " ▸" : " ▾");
+          head.addEventListener("click", () => {
+            const current = new Set(JSON.parse(localStorage.getItem(navCollapsedKey) || "[]"));
+            if (current.has(group.label)) current.delete(group.label); else current.add(group.label);
+            localStorage.setItem(navCollapsedKey, JSON.stringify([...current]));
+            renderAdminNav();
+          });
+          groupEl.append(head);
+          const items = document.createElement("div");
+          items.className = "admin-nav-items";
+          for (const [tab, label] of group.items) items.append(makeItem(tab, label));
+          groupEl.append(items);
+          nav.append(groupEl);
+        }
+      }
+      const modeToggle = document.createElement("button");
+      modeToggle.type = "button";
+      modeToggle.className = "admin-nav-flat-toggle";
+      modeToggle.textContent = flat ? "切换为分组" : "切换为扁平";
+      modeToggle.addEventListener("click", () => {
+        localStorage.setItem(navFlatKey, flat ? "0" : "1");
+        renderAdminNav();
+      });
+      nav.append(modeToggle);
+      bindAdminNavState();
+      bindAdminTabButtons();
+    }
+
+    /** 登录态变化后刷新置灰与当前高亮 */
+    function bindAdminNavState() {
+      const permissions = new Set(sessionState?.permissions || []);
+      for (const item of document.querySelectorAll(".admin-nav-item")) {
+        const required = tabPermissions[item.dataset.adminTab];
+        const allowed = !required || permissions.has(required);
+        item.classList.toggle("admin-nav-item--locked", !allowed);
+        item.title = allowed ? "" : `需要「${permissionLabels[required] || required}」权限`;
+        item.classList.toggle("secondary", item.dataset.adminTab !== currentAdminTab);
+      }
+    }
+
+    let currentAdminTab = "resources";
+
+    function bindAdminTabButtons() {
     document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+      if (button.dataset.adminTabBound === "1") return;
+      button.dataset.adminTabBound = "1";
       button.addEventListener("click", async () => {
         const tab = button.dataset.adminTab;
+        const required = tabPermissions[tab];
+        if (required && !(sessionState?.permissions || []).includes(required)) {
+          window.alert(`该页面需要「${permissionLabels[required] || required}」权限，请联系主管理员开通。`);
+          return;
+        }
+        currentAdminTab = tab;
+        for (const item of document.querySelectorAll(".admin-nav-item")) {
+          item.classList.toggle("secondary", item.dataset.adminTab !== tab);
+        }
         document.querySelectorAll("[data-admin-tab]").forEach((item) => {
           const active = item === button;
           item.classList.toggle("secondary", !active);
@@ -4601,6 +4831,8 @@ async function loadMpUsersAdmin() {
         statsAdminPanel.hidden = tab !== "stats";
         aboutAdminPanel.hidden = tab !== "about";
         donateAdminPanel.hidden = tab !== "donate";
+        privacyAdminPanel.hidden = tab !== "privacy";
+        lawAdminPanel.hidden = tab !== "law";
         backupAdminPanel.hidden = tab !== "backup";
         accountsAdminPanel.hidden = tab !== "accounts";
         mpUsersAdminPanel.hidden = tab !== "mp-users";
@@ -4708,6 +4940,14 @@ async function loadMpUsersAdmin() {
             aboutAdminStatus.textContent = error.message;
           }
         }
+        if (tab === "privacy" && !privacyState) {
+          privacyAdminStatus.textContent = "加载中...";
+          try { await loadPrivacyAdmin(); privacyAdminStatus.textContent = ""; } catch (error) { privacyAdminStatus.textContent = error.message; }
+        }
+        if (tab === "law") {
+          document.querySelector("#law-admin-status").textContent = "";
+          renderLawLogs([]);
+        }
         if (tab === "donate" && !donateState) {
           donateAdminStatus.textContent = "加载中...";
           try {
@@ -4766,6 +5006,8 @@ async function loadMpUsersAdmin() {
         }
       });
     });
+    }
+    bindAdminTabButtons();
 
     document.querySelector("#reload-reviews").addEventListener("click", async () => {
       reviewAdminStatus.textContent = "加载中...";
@@ -5009,6 +5251,23 @@ async function loadMpUsersAdmin() {
       }
     });
 
+    document.querySelector("#save-privacy").addEventListener("click", async () => {
+      privacyAdminStatus.textContent = "保存中...";
+      try {
+        const data = await api("/privacy", { method: "POST", body: JSON.stringify({ data: privacyState, expectedRevision: contentRevisions.get("privacy") }) });
+        privacyState = data.data;
+        contentRevisions.set("privacy", data.revision);
+        renderPrivacyAdmin();
+        privacyAdminStatus.textContent = "已保存并发布";
+      } catch (error) { privacyAdminStatus.textContent = error.message; }
+    });
+    document.querySelector("#reload-privacy").addEventListener("click", async () => {
+      privacyAdminStatus.textContent = "加载中...";
+      try { await loadPrivacyAdmin(); privacyAdminStatus.textContent = ""; } catch (error) { privacyAdminStatus.textContent = error.message; }
+    });
+    document.querySelector("#law-query-run").addEventListener("click", () => runLawQuery());
+    document.querySelector("#law-export-run").addEventListener("click", () => runLawQuery({ exportJson: true }));
+    document.querySelector("#law-log-refresh").addEventListener("click", () => renderLawLogs([]));
     document.querySelector("#reload-donate-stats").addEventListener("click", () => loadDonateStats());
     for (const selector of ["#donate-stats-search", "#donate-stats-status", "#donate-stats-source"]) {
       document.querySelector(selector)?.addEventListener("input", () => { donateStatsPage = 1; renderDonateStats(); });

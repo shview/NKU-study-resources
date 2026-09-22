@@ -58,10 +58,28 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     ],
   }), "utf8");
   const wxMock = http.createServer((req, res) => {
-    const code = new URL(req.url || "/", "http://127.0.0.1").searchParams.get("js_code");
+    const url = new URL(req.url || "/", "http://127.0.0.1");
     res.setHeader("content-type", "application/json");
-    if (code === "mp-good-code") res.end(JSON.stringify({ openid: "integration-openid-1" }));
-    else res.end(JSON.stringify({ errcode: 40029, errmsg: "invalid code" }));
+    if (url.pathname === "/sns/jscode2session") {
+      const code = url.searchParams.get("js_code");
+      if (code === "mp-good-code") res.end(JSON.stringify({ openid: "integration-openid-1" }));
+      else res.end(JSON.stringify({ errcode: 40029, errmsg: "invalid code" }));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/cgi-bin/stable_token") {
+      res.end(JSON.stringify({ access_token: "integration-at", expires_in: 7200 }));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/wxa/business/getuserphonenumber") {
+      let raw = "";
+      req.on("data", (chunk) => { raw += chunk; });
+      req.on("end", () => {
+        if (raw.includes("phone-ok")) res.end(JSON.stringify({ errcode: 0, phone_info: { phoneNumber: "13800001234" } }));
+        else res.end(JSON.stringify({ errcode: 40029, errmsg: "invalid code" }));
+      });
+      return;
+    }
+    res.end(JSON.stringify({ errcode: -1, errmsg: "unsupported" }));
   });
   await new Promise((resolve) => wxMock.listen(0, "127.0.0.1", resolve));
   const wxMockPort = wxMock.address().port;
@@ -77,6 +95,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     WECHAT_APPID: "wx-integration-appid",
     WECHAT_APPSECRET: "integration-secret-value",
     MP_CODE2SESSION_URL: `http://127.0.0.1:${wxMockPort}/sns/jscode2session`,
+    MP_WXAPI_BASE: `http://127.0.0.1:${wxMockPort}`,
     ADMIN_ORIGIN: `http://127.0.0.1:${port}`,
     ADMIN_HOST: "127.0.0.1",
     ADMIN_PORT: String(port),
@@ -189,9 +208,29 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const reviewsLoaded = await (await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, { headers: { cookie } })).json();
   const feedbackLoaded = await (await fetch(`http://127.0.0.1:${port}/admin-api/feedback`, { headers: { cookie } })).json();
 
-  const reviewResponse = await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
+  // 公安合规：UGC 需已登录且手机号已验证
+  const mpLoginForUgc = await (await fetch(`http://127.0.0.1:${port}/api/v1/auth/wechat`, {
     method: "POST",
     headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "mp-good-code" }),
+  })).json();
+  assert.equal(mpLoginForUgc.code, 0);
+  const ugcAuth = { authorization: `Bearer ${mpLoginForUgc.data.token}` };
+  assert.equal((await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ courseTitle: "Fixture course", teacher: "t", rating: 5, content: "anonymous must be rejected now." }),
+  })).status, 401, "匿名评价投稿必须被拒");
+  const phoneVerify = await fetch(`http://127.0.0.1:${port}/api/v1/auth/phone-verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...ugcAuth },
+    body: JSON.stringify({ code: "phone-ok" }),
+  });
+  assert.equal(phoneVerify.status, 200, "手机号验证接口");
+
+  const reviewResponse = await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({
       courseTitle: "Fixture course",
       teacher: "Fixture teacher",
@@ -204,11 +243,13 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const feedbackResponse = await fetch(`http://127.0.0.1:${port}/feedback-api/submit`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({ title: "Fixture feedback", content: "Synthetic feedback content." }),
   });
   assert.equal(feedbackResponse.status, 200);
   assert.equal((await feedbackResponse.json()).ok, true);
+  const feedbackAfterSubmit = await (await fetch(`http://127.0.0.1:${port}/admin-api/feedback`, { headers: { cookie } })).json();
+  assert.equal(feedbackAfterSubmit.data.items[0].status, "pending", "反馈默认待审核不公开展示");
   const staleReviews = await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, {
     method: "POST",
     headers: adminHeaders({ "content-type": "application/json", cookie }),
@@ -274,7 +315,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const mpUsersAdmin = await (await fetch(`http://127.0.0.1:${port}/admin-api/mp-users`, { headers: { cookie } })).json();
   assert.equal(mpUsersAdmin.ok, true);
   assert.equal(mpUsersAdmin.data.total, 1);
-  assert.equal(mpUsersAdmin.data.users[0].login_count, 1);
+  assert.equal(mpUsersAdmin.data.users[0].login_count, 2, "本轮含 UGC 门禁的前置登录，同一账号共登录两次");
   assert.equal(mpUsersAdmin.data.users[0].nickname, "集成测试用户");
   assert.equal(JSON.stringify(mpUsersAdmin).includes("integration-openid-1"), false, "admin list must only expose masked openid");
 
@@ -319,7 +360,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   });
   assert.equal(boundReview.status, 200);
   const myReviews = await (await fetch(`http://127.0.0.1:${port}/api/v1/me/reviews`, { headers: mpAuth2 })).json();
-  assert.equal(myReviews.data.total, 1);
+  assert.equal(myReviews.data.total, 2, "含本轮实名门禁流程提交的一条 + 原绑定流程一条");
   assert.equal(myReviews.data.items[0].teacher_name, "Fixture bound teacher");
   assert.equal(JSON.stringify(myReviews.data.items[0]).includes("ipHash"), false);
 
@@ -340,7 +381,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const strictWebsiteCustomCourse = await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({ courseTitle: "自定义不存在课程", teacher: "谁", rating: 5, content: "Custom course must be rejected while the toggle is off." }),
   });
   assert.equal(strictWebsiteCustomCourse.status, 400);
@@ -348,7 +389,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const catalogReviewBadTeacher = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({ catalog_course_id: "cat-test-1", teacher: "不存在老师", rating: 5, body: "Catalog validation test content long enough." }),
   });
   assert.equal(catalogReviewBadTeacher.status, 400);
@@ -356,7 +397,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const catalogReviewOk = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({ catalog_course_id: "cat-test-1", teacher: "张宇", rating: 5, body: "Catalog course review content long enough for validation." }),
   });
   assert.equal(catalogReviewOk.status, 200);
@@ -364,7 +405,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const catalogReviewFreeTeacher = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({ catalog_course_id: "cat-test-2", teacher: "任意新老师", rating: 4, body: "Teacher list empty so free text is allowed here." }),
   });
   assert.equal(catalogReviewFreeTeacher.status, 200);
@@ -381,7 +422,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const catalogReviewCustomTeacher = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({ catalog_course_id: "cat-test-1", teacher: "手册外的代课老师", rating: 4, body: "Custom teacher allowed when the toggle is on via rules." }),
   });
   if (catalogReviewCustomTeacher.status !== 200 && catalogReviewCustomTeacher.status !== 429) {
@@ -390,7 +431,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const catalogReviewMissing = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({ catalog_course_id: "cat-nope", teacher: "张宇", rating: 5, body: "Missing catalog course must be rejected." }),
   });
   assert.equal(catalogReviewMissing.status, 404);
@@ -403,7 +444,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
 
   const publicReviewResponse = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({
       course_id: "11111111-1111-4111-8111-111111111111",
       teacher: "Fixture mini-program teacher",

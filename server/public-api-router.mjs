@@ -52,7 +52,7 @@ export function decodePathPart(value) {
   }
 }
 
-export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp } = {}) {
+export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp, securityLog = null, phoneVerifier = null } = {}) {
   if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
   async function requireService(req) {
     if (!serviceAuthStore) throw new PublicApiError(503, "服务间接口暂未开放。", "SERVICE_AUTH_NOT_CONFIGURED");
@@ -137,6 +137,26 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       } else if (req.method === "GET" && url.pathname === "/api/v1/me") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         data = { user: mpAuthService.requireUser(authorizationOf(req)) };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/auth/phone-verify") {
+        if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "操作过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
+        const user = mpAuthService.requireUser(authorizationOf(req));
+        let body;
+        try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
+        const code = String(body?.code || "").slice(0, 128);
+        if (!code) throw new PublicApiError(400, "缺少微信手机号授权码。", "INVALID_PHONE_CODE");
+        if (!phoneVerifier || !phoneVerifier.configured) throw new PublicApiError(503, "手机号验证暂未配置。", "PHONE_VERIFY_NOT_CONFIGURED");
+        let phone;
+        try {
+          phone = await phoneVerifier.getPhoneNumber(code);
+        } catch (error) {
+          console.error(`[phone-verify] wechat failed: ${error.message} ${error.detail || ""}`);
+          securityLog?.record({ userId: user.id, action: "phone.verify", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "error" });
+          throw new PublicApiError(502, "手机号验证失败，请重新授权。", "PHONE_VERIFY_FAILED");
+        }
+        mpAuthService.setVerifiedPhone(user.id, phone);
+        securityLog?.record({ userId: user.id, action: "phone.verify", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
+        data = { ok: true, phone_masked: String(phone).slice(0, 3) + "****" + String(phone).slice(-4) };
       } else if (req.method === "POST" && url.pathname === "/api/v1/me/profile") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const user = mpAuthService.requireUser(authorizationOf(req));
@@ -147,6 +167,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
           throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
         }
         data = { user: mpAuthService.updateProfile(user, { nickname: body.nickname, avatarUrl: body.avatar_url }) };
+        securityLog?.record({ userId: user.id, action: "profile.update", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok", detail: `nickname=${String(body?.nickname || "").slice(0, 40)}` });
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/logout") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const revoked = mpAuthService.revoke(authorizationOf(req));
@@ -269,6 +290,12 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 data = await service.guideAssistantAnswer(user.id, body);
               } else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
                 const ip = clientIp(req);
+                // 公安合规：公开 UGC 必须已登录且完成手机号验证
+                if (!mpAuthService || !authUser) throw new PublicApiError(401, "发布评价请先登录。", "AUTH_REQUIRED");
+                if (typeof mpAuthService.isPhoneVerified === "function" && !mpAuthService.isPhoneVerified(authUser.id)) {
+                  securityLog?.record({ userId: authUser.id, action: "ugc.blocked_no_phone", path: url.pathname, ip, userAgent: req.headers["user-agent"] || "", result: "rejected" });
+                  throw new PublicApiError(403, "发布内容需先完成手机号验证。", "PHONE_VERIFY_REQUIRED");
+                }
                 service.assertReviewAttempt(ip);
                 let body;
                 try {
@@ -276,7 +303,8 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 } catch {
                   throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
                 }
-                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: authUser?.id || null, notify });
+                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: authUser.id, notify });
+                securityLog?.record({ userId: authUser.id, action: "review.submit", targetType: "review", targetId: data?.reviewId || "", path: url.pathname, ip, userAgent: req.headers["user-agent"] || "", result: data?.pending ? "pending" : "ok" });
               } else {
                 throw new PublicApiError(404, "接口不存在。", "NOT_FOUND");
               }

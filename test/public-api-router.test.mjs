@@ -44,7 +44,22 @@ test("public router exposes exactly the documented route set and no management r
     const response = await invoke(handler, "GET", route);
     assert.equal(response.status, 200, route);
   }
-  assert.equal((await invoke(handler, "POST", "/api/v1/reviews")).status, 200);
+  assert.equal((await invoke(handler, "POST", "/api/v1/reviews")).status, 401, "未登录禁止发布评价（公安合规）");
+  {
+    const authedHandler = createPublicApiHandler({
+      service: serviceFixture(),
+      mpAuthService: {
+        verifyToken: (auth) => (/^Bearer ok/.test(String(auth || "")) ? { id: 9, nickname: "u" } : null),
+        isPhoneVerified: () => true,
+      },
+      readBody: async () => ({}),
+      clientIp: () => "actor",
+    });
+    const req2 = { method: "POST", headers: { authorization: "Bearer " + "ok".repeat(20) } };
+    const res2 = { headers: {}, writableEnded: false, destroyed: false, status: 0, body: "", writeHead(s, h) { this.status = s; }, end(b) { this.body = b; this.writableEnded = true; } };
+    await authedHandler(req2, res2, new URL("/api/v1/reviews", "https://nkustudy.top"));
+    assert.equal(res2.status, 200, "已登录且手机号已验证可投稿");
+  }
   for (const route of ["/api/v1/admin", "/api/v1/admin-api/manifest", "/api/v1/auth/wechat", "/api/v1/favorites", "/api/v1/reports"]) {
     assert.equal((await invoke(handler, "GET", route)).status, 404, route);
   }

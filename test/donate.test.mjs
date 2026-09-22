@@ -260,3 +260,21 @@ test("DonateOrderStore stores nickname/remark/source and summary groups by sourc
   assert.equal(s.by_source.native, undefined, "native 未支付不计入");
   store.close();
 });
+
+test("UserSecurityLogStore records with raw ip, queries by user/target, prunes only old entries", async () => {
+  const { UserSecurityLogStore, SECURITY_LOG_KEEP_DAYS } = await import("../server/user-security-log-store.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nkustudy-usl-"));
+  const store = new UserSecurityLogStore({ dbPath: path.join(dir, "usl.sqlite") });
+  const now = Date.now();
+  store.record({ at: now, userId: 7, action: "review.submit", targetType: "review", targetId: "r1", path: "/api/v1/reviews", ip: "1.2.3.4", userAgent: "UA/1", result: "pending" });
+  store.record({ at: now - (SECURITY_LOG_KEEP_DAYS + 10) * 24 * 3600 * 1000, userId: 8, action: "old.entry", ip: "5.6.7.8" });
+  assert.equal(store.byUser(7).length, 1);
+  const row = store.byUser(7)[0];
+  assert.equal(row.ip, "1.2.3.4");
+  assert.equal(row.ip_hash.length, 24);
+  assert.equal(store.byTarget("review", "r1").length, 1);
+  assert.equal(store.prune(now), 1, "仅清理超期记录");
+  assert.equal(store.byUser(8).length, 0);
+  assert.equal(store.byUser(7).length, 1, "6 个月内的保留");
+  store.close();
+});

@@ -2367,3 +2367,15 @@ details.resource-subsection summary::-webkit-details-marker {
   text-align: center;
   vertical-align: middle;
 }
+
+/* ===== 后台侧边栏两级导航（P0） ===== */
+#admin-app { display: flex; gap: 18px; align-items: flex-start; }
+.admin-nav { flex: 0 0 190px; position: sticky; top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.admin-nav-group { display: flex; flex-direction: column; }
+.admin-nav-group-head { text-align: left; border: none; background: none; font-weight: 800; font-size: 0.82em; color: var(--muted); padding: 6px 8px; cursor: pointer; }
+.admin-nav-items { display: flex; flex-direction: column; gap: 2px; }
+.admin-nav-group--collapsed .admin-nav-items { display: none; }
+.admin-nav-item { text-align: left; justify-content: flex-start; min-height: 34px; font-size: 0.88em; }
+.admin-nav-item--locked, .admin-nav-item--locked:hover { opacity: 0.45; cursor: not-allowed; }
+.admin-nav-flat-toggle { border: none; background: none; color: var(--muted); font-size: 0.78em; text-align: left; padding: 8px; cursor: pointer; }
+@media (max-width: 900px) { #admin-app { flex-direction: column; } .admin-nav { position: static; flex: none; width: 100%; } .admin-nav-items { flex-direction: row; flex-wrap: wrap; } }

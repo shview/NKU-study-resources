@@ -52,6 +52,10 @@ import { DonatePayStore } from "./donate-pay-store.mjs";
 import { DonateOrderStore } from "./donate-order-store.mjs";
 import { decryptAes256Gcm, verifyNotifySignature } from "./wxpay-v3.mjs";
 import { appendDonateRecord, normalizeRecords } from "./donate-records.mjs";
+import { UserSecurityLogStore } from "./user-security-log-store.mjs";
+import { LawEnforcementLogStore } from "./law-enforcement-store.mjs";
+import { DEFAULT_PRIVACY_CONTENT } from "./default-privacy.mjs";
+import { createWechatPhoneVerifier, maskPhone } from "./wechat-phone.mjs";
 import { StaticReleasePublisher } from "./static-release-publisher.mjs";
 
 const root = projectRoot;
@@ -66,6 +70,7 @@ const {
   feedback: feedbackPath,
   about: aboutPath,
   donate: donatePath,
+  privacy: privacyPath,
   home: homePath,
   guides: guidesPath,
   participate: participatePath,
@@ -157,6 +162,9 @@ function migrateServiceKeyPermission() {
       if (account.permissions.includes("accounts.manage") && !account.permissions.includes("services.manage")) {
         accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "services.manage"] });
       }
+      if (account.permissions.includes("accounts.manage") && !account.permissions.includes("law.manage")) {
+        accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "law.manage"], enabled: account.enabled, mustChangePassword: account.mustChangePassword });
+      }
       if (account.permissions.includes("services.manage") && !account.permissions.includes("ai.manage")) {
         accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "ai.manage"] });
       }
@@ -212,6 +220,10 @@ const reviewSubmissionService = new ReviewSubmissionService({
   },
 });
 const donatePayStore = new DonatePayStore({ dataDir });
+const securityLogStore = new UserSecurityLogStore({ dbPath: runtime.stateDbPath });
+const lawLogStore = new LawEnforcementLogStore({ dbPath: runtime.stateDbPath });
+const wechatPhoneVerifier = createWechatPhoneVerifier({ appid: process.env.WECHAT_APPID, secret: process.env.WECHAT_APPSECRET });
+setInterval(() => { try { securityLogStore.prune(); } catch {} }, 24 * 3600 * 1000).unref();
 const donateOrderStore = new DonateOrderStore({ dbPath: runtime.stateDbPath });
 const catalogPath2 = path.join(dataDir, "catalog.json");
 const courseCatalog = new CourseCatalogService({
@@ -339,7 +351,9 @@ const consumeServiceQuota = (caller) => {
   });
   return result.allowed === true;
 };
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp });
+const handlePublicApi = createPublicApiHandler({
+  securityLog: securityLogStore,
+  phoneVerifier: wechatPhoneVerifier, service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -936,6 +950,23 @@ function requirePermission(req, account, permission, res) {
   return false;
 }
 
+/** 公安合规门禁：公开 UGC（评价/反馈/举报）必须已登录且完成手机号验证。 */
+function requirePhoneVerifiedUgcUser(req, res, ip) {
+  const authUser = mpAuthService ? mpAuthService.verifyToken(req.headers.authorization) : null;
+  if (!mpAuthService || !authUser) {
+    json(res, 401, { ok: false, error: "发布内容请先登录。", code: "AUTH_REQUIRED" });
+    req.resume();
+    return null;
+  }
+  if (mpAuthService.isPhoneVerified && !mpAuthService.isPhoneVerified(authUser.id)) {
+    securityLogStore.record({ userId: authUser.id, action: "ugc.blocked_no_phone", path: req.url, ip, userAgent: req.headers["user-agent"] || "", result: "rejected" });
+    json(res, 403, { ok: false, error: "发布内容需先完成手机号验证（小程序-我的-手机号验证）。", code: "PHONE_VERIFY_REQUIRED" });
+    req.resume();
+    return null;
+  }
+  return authUser;
+}
+
 function requireAdminMutationProvenance(req, res, url) {
   const origin = String(req.headers.origin || "");
   const fetchSite = String(req.headers["sec-fetch-site"] || "");
@@ -1212,6 +1243,23 @@ function normalizeAbout(data) {
 
 const DEFAULT_DONATE_AMOUNTS = DEFAULT_DONATE_CONTENT.amounts;
 
+function readPrivacy() {
+  let raw = null;
+  try {
+    raw = readJsonFile(privacyPath);
+  } catch {
+    raw = null;
+  }
+  return raw && typeof raw === "object" && Object.keys(raw).length ? raw : structuredClone(DEFAULT_PRIVACY_CONTENT);
+}
+
+function normalizePrivacy(data) {
+  return {
+    title: cleanText(data.title, 120) || "隐私政策与用户协议",
+    content: cleanText(data.content, 12000),
+  };
+}
+
 function readDonate() {
   let raw = null;
   try {
@@ -1404,6 +1452,7 @@ function visibleFeedback() {
     },
     items: data.items
     .filter((item) => item.status !== "hidden" && !item.hidden)
+    .filter((item) => (item.status === "approved" || item.status === "completed") && !["report", "complaint"].includes(item.type))
     .map(publicFeedback),
   };
 }
@@ -1451,11 +1500,15 @@ async function handleFeedbackSubmit(req, res) {
     return;
   }
 
+  const ugcUser = requirePhoneVerifiedUgcUser(req, res, ip);
+  if (!ugcUser) return;
   const title = cleanText(body.title, 120);
   const content = cleanText(body.content, 2000);
   const type = cleanText(body.type, 40) || "bug";
   const contact = cleanText(body.contact, 120);
   const resourceRef = cleanText(body.resourceRef, 200);
+  const reportUrl = cleanText(body.reportUrl, 300);
+  const reportTarget = cleanText(body.reportTarget, 120);
   if (!title || content.length < Number(rules.minLength || 5)) {
     json(res, 400, { ok: false, error: "请填写标题，并补充更完整的反馈内容。" });
     return;
@@ -1479,17 +1532,21 @@ async function handleFeedbackSubmit(req, res) {
     }
   }
 
+  const isReport = type === "report" || type === "complaint";
+  const itemId = `feedback-${Date.now()}-${randomBytes(4).toString("hex")}`;
   await jsonStore.update(feedbackPath, (current) => {
     current.items = Array.isArray(current.items) ? current.items : [];
     current.items.unshift({
-      id: `feedback-${Date.now()}-${randomBytes(4).toString("hex")}`,
+      id: itemId,
       title,
       content,
       type,
       contact,
       ...(resourceRef ? { resourceRef } : {}),
-      ...(authUser ? { user_id: authUser.id } : {}),
-      status: "open",
+      ...(reportUrl ? { report_url: reportUrl } : {}),
+      ...(reportTarget ? { report_target: reportTarget } : {}),
+      user_id: ugcUser.id,
+      status: "pending",
       hidden: false,
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -1499,7 +1556,8 @@ async function handleFeedbackSubmit(req, res) {
     current.updated = today();
     return current;
   });
-  Promise.resolve(notifyModerators({ type: "feedback.pending", title, feedbackType: type, content, resourceRef })).catch(() => {});
+  securityLogStore.record({ userId: ugcUser.id, action: isReport ? "report.submit" : "feedback.submit", targetType: "feedback", targetId: itemId, path: "/feedback-api/submit", ip, userAgent: req.headers["user-agent"] || "", result: "pending", detail: isReport ? `type=${type} target=${reportTarget || reportUrl || "-"}` : "" });
+  Promise.resolve(notifyModerators({ type: isReport ? "report.pending" : "feedback.pending", title, feedbackType: type, content, resourceRef })).catch(() => {});
   json(res, 200, { ok: true });
 }
 
@@ -1602,7 +1660,10 @@ async function handleContentImageUpload(req, res, url) {
 async function handleReviewSubmit(req, res) {
   const ip = clientIp(req);
   reviewSubmissionService.assertAttempt(ip);
-  const result = await reviewSubmissionService.submit(await readPublicBody(req), { clientIp: ip, userAgent: req.headers["user-agent"] });
+  const ugcUser = requirePhoneVerifiedUgcUser(req, res, ip);
+  if (!ugcUser) return;
+  const result = await reviewSubmissionService.submit(await readPublicBody(req), { clientIp: ip, userAgent: req.headers["user-agent"], userId: ugcUser.id });
+  securityLogStore.record({ userId: ugcUser.id, action: "review.submit", targetType: "review", targetId: (result && result.reviewId) || "", path: "/review-api/submit", ip, userAgent: req.headers["user-agent"] || "", result: result?.pending ? "pending" : "ok" });
   if (result.notify) {
     Promise.resolve(notifyModerators({
       type: "review.pending",
@@ -2290,6 +2351,19 @@ async function cleanupOrphanContentImages(owner, oldObject, nextObject) {
   }
 }
 
+/** 一次性迁移：反馈公开语义变更（open→approved），举报类一律非公开。 */
+function migrateFeedbackForModeration() {
+  jsonStore.update(feedbackPath, (current) => {
+    let changed = false;
+    for (const item of current.items || []) {
+      if (item.type === "report" || item.type === "complaint") { item.status = item.status === "open" ? "pending" : item.status; changed = true; continue; }
+      if (item.status === "open") { item.status = "approved"; changed = true; }
+    }
+    if (changed) current.updated = today();
+    return current;
+  }).catch(() => {});
+}
+
 async function initializeRuntimeData() {
   const initializable = new Map([
     [reviewsPath, defaultReviews],
@@ -2313,6 +2387,8 @@ await staticReleasePublisher.recoverStartup();
 await manifestService.recoverStartup();
 await contentPublishService.recoverStartup();
 await initializeRuntimeData();
+
+migrateFeedbackForModeration();
 
 const server = createServer(async (req, res) => {
   let url;
@@ -2614,6 +2690,98 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const result = await publishContent(donatePath, body.data || {}, body.expectedRevision, normalizeDonate);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/privacy") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      try { jsonStore.readSync(privacyPath); } catch {
+        await jsonStore.update(privacyPath, () => normalizePrivacy(structuredClone(DEFAULT_PRIVACY_CONTENT)), { initialize: normalizePrivacy(structuredClone(DEFAULT_PRIVACY_CONTENT)), mode: 0o600 });
+      }
+      json(res, 200, { ok: true, ...await readPublishedContent(privacyPath, normalizePrivacy) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/privacy") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      const result = await publishContent(privacyPath, body.data || {}, body.expectedRevision, normalizePrivacy);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
+      return;
+    }
+
+    /** 依法调取：聚合账号/内容/日志/处置证据。每次调用均留痕。 */
+    async function buildLawQueryResult(params) {
+      const type = String(params.get("type") || "account");
+      const result = { query: { type, at: new Date().toISOString() }, account: null, reviews: [], feedback: [], security_logs: [], admin_audit: [] };
+      const reviewsData = readReviews();
+      const feedbackData = readFeedback();
+      let user = null;
+      if (type === "account") {
+        const value = String(params.get("value") || "").trim();
+        if (/^\d+$/.test(value)) user = mpAuthService.selectUserByIdPublic ? null : null;
+        // 按形态识别：纯数字→user_id；1开头11位→手机号；wx开头/长度28+→openid
+        const db = mpAuthService.db;
+        if (/^\d{1,10}$/.test(value)) user = db.prepare("SELECT * FROM mp_users WHERE id = ?").get(Number(value));
+        else if (/^1\d{10}$/.test(value)) user = db.prepare("SELECT * FROM mp_users WHERE phone = ?").get(value);
+        else user = db.prepare("SELECT * FROM mp_users WHERE openid = ?").get(value);
+        if (!user) throw Object.assign(new Error("未找到该账号。"), { statusCode: 404 });
+        result.account = { id: user.id, nickname: user.nickname, phone: user.phone || "", phone_verified_at: user.phone_verified_at || null, openid: user.openid, created_at: user.created_at, last_login_at: user.last_login_at, blocked: user.blocked === 1, login_count: user.login_count };
+        result.reviews = (reviewsData.reviews || []).filter((review) => Number(review.user_id) === user.id);
+        result.feedback = (feedbackData.items || []).filter((item) => Number(item.user_id) === user.id);
+        result.security_logs = securityLogStore.byUser(user.id, { limit: 300 });
+        result.admin_audit = accountsStore.searchAudit ? accountsStore.searchAudit({ keyword: String(user.id), limit: 100 }) : [];
+      } else if (type === "review") {
+        const id = String(params.get("id") || "").trim();
+        const review = (reviewsData.reviews || []).find((item) => item.id === id);
+        if (!review) throw Object.assign(new Error("未找到该评价。"), { statusCode: 404 });
+        result.reviews = [review];
+        result.security_logs = securityLogStore.byTarget("review", id, { limit: 100 });
+        if (review.user_id) {
+          const db = mpAuthService.db;
+          const u = db.prepare("SELECT * FROM mp_users WHERE id = ?").get(Number(review.user_id));
+          if (u) result.account = { id: u.id, nickname: u.nickname, phone: u.phone || "", phone_verified_at: u.phone_verified_at || null, openid: u.openid, created_at: u.created_at, blocked: u.blocked === 1 };
+        }
+      } else if (type === "feedback") {
+        const id = String(params.get("id") || "").trim();
+        const item = (feedbackData.items || []).find((entry) => entry.id === id);
+        if (!item) throw Object.assign(new Error("未找到该反馈/举报。"), { statusCode: 404 });
+        result.feedback = [item];
+        result.security_logs = securityLogStore.byTarget("feedback", id, { limit: 100 });
+        if (item.user_id) {
+          const db = mpAuthService.db;
+          const u = db.prepare("SELECT * FROM mp_users WHERE id = ?").get(Number(item.user_id));
+          if (u) result.account = { id: u.id, nickname: u.nickname, phone: u.phone || "", phone_verified_at: u.phone_verified_at || null, openid: u.openid, created_at: u.created_at, blocked: u.blocked === 1 };
+        }
+      } else {
+        throw Object.assign(new Error("查询类型无效。"), { statusCode: 400 });
+      }
+      return result;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/law-query") {
+      if (!requirePermission(req, account, "law.manage", res)) return;
+      try {
+        const result = await buildLawQueryResult(url.searchParams);
+        lawLogStore.record({ queriedBy: account.username, queryType: url.searchParams.get("type") || "", queryValue: url.searchParams.get("value") || url.searchParams.get("id") || "", exported: false, resultSummary: `reviews=${result.reviews.length} feedback=${result.feedback.length} logs=${result.security_logs.length}` });
+        json(res, 200, { ok: true, data: result, law_logs: lawLogStore.listRecent(20) });
+      } catch (error) {
+        json(res, Number(error.statusCode) || 500, { ok: false, error: String(error.message || "查询失败。") });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/law-export") {
+      if (!requirePermission(req, account, "law.manage", res)) return;
+      try {
+        const result = await buildLawQueryResult(url.searchParams);
+        lawLogStore.record({ queriedBy: account.username, queryType: url.searchParams.get("type") || "", queryValue: url.searchParams.get("value") || url.searchParams.get("id") || "", exported: true, resultSummary: `export reviews=${result.reviews.length} feedback=${result.feedback.length} logs=${result.security_logs.length}` });
+        const body = JSON.stringify({ exported_at: new Date().toISOString(), exported_by: account.username, ...result }, null, 2);
+        res.writeHead(200, { "content-type": "application/json; charset=utf-8", "content-disposition": `attachment; filename="law-export-${Date.now()}.json"`, "cache-control": "no-store" });
+        res.end(body);
+      } catch (error) {
+        json(res, Number(error.statusCode) || 500, { ok: false, error: String(error.message || "导出失败。") });
+      }
       return;
     }
 

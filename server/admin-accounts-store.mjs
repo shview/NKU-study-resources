@@ -11,6 +11,7 @@ export const ADMIN_PERMISSION_POINTS = Object.freeze([
   "content.edit",
   "content.moderate",
   "content.read",
+  "law.manage",
   "services.manage",
   "storage.delete",
   "storage.manage",
