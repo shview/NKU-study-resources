@@ -63,7 +63,7 @@ export class DonateOrderStore {
   }
 
   listRecent(limit = 50) {
-    return this.db.prepare("SELECT * FROM donate_orders ORDER BY created_at DESC LIMIT ?").all(Math.min(500, Math.max(1, Number(limit) || 50)));
+    return this.db.prepare("SELECT * FROM donate_orders ORDER BY created_at DESC LIMIT ?").all(Math.min(2000, Math.max(1, Number(limit) || 50)));
   }
 
   summary() {

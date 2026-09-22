@@ -393,9 +393,21 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button secondary" id="reload-donate-stats" type="button">刷新统计</button>
+              <input class="searchbar" id="donate-stats-search" type="search" placeholder="搜索单号 / 昵称 / 备注 / 交易号 / 金额" style="max-width: 280px;" />
+              <select class="searchbar" id="donate-stats-status" style="max-width: 130px;">
+                <option value="all">全部状态</option>
+                <option value="paid">已支付</option>
+                <option value="pending">待支付</option>
+              </select>
+              <select class="searchbar" id="donate-stats-source" style="max-width: 140px;">
+                <option value="all">全部来源</option>
+                <option value="jsapi">小程序</option>
+                <option value="native">网页扫码</option>
+              </select>
               <span class="muted" id="donate-stats-status"></span>
             </div>
             <div id="donate-stats-body" style="margin-top: 14px;"></div>
+            <div class="filter-row" id="donate-stats-pager" style="margin-top: 10px;"></div>
           </div>
         </div>
         <div class="panel" style="margin-top: 20px;">
@@ -1473,28 +1485,83 @@ import "vditor/dist/index.css";
       donateRecordsEditor.append(add);
     }
 
+    let donateStatsRows = [];
+    let donateStatsPage = 1;
+    const DONATE_STATS_PAGE_SIZE = 50;
+
     async function loadDonateStats() {
       const status = document.querySelector("#donate-stats-status");
       if (status) status.textContent = "加载中...";
       try {
         const data = await api("/donate-stats");
-        const s = data.data.summary;
-        const yuan = (fen) => (fen / 100).toFixed(2);
-        const sourceLabel = { jsapi: "小程序", native: "网页扫码" };
-        const sources = Object.entries(s.by_source).map(([key, value]) => `${sourceLabel[key] || key} ${value.count} 笔 / ¥${yuan(value.total_fen)}`).join("，") || "暂无";
-        const recent = (data.data.recent || []).map((row) => {
-          const date = new Date(Number(row.created_at) + 8 * 3600 * 1000).toISOString().slice(0, 10);
-          return `<tr><td>${date}</td><td>¥${yuan(row.amount_total)}</td><td>${sourceLabel[row.source] || row.source || "-"}</td><td>${(row.nickname || "").replace(/[<>&]/g, "") || "-"}</td><td>${(row.remark || "").replace(/[<>&]/g, "") || "-"}</td><td>${row.status === "paid" ? "已支付" : "待支付"}</td></tr>`;
-        }).join("");
-        donateStatsBody.innerHTML = `
-          <p style="margin:0 0 8px;"><b>累计入账 ${s.paid_count} 笔 / ¥${yuan(s.paid_total_fen)}</b>（${sources}；待支付 ${s.pending_count} 笔）</p>
-          <table class="admin-table" style="margin-top:8px;"><thead><tr><th>日期</th><th>金额</th><th>来源</th><th>昵称</th><th>备注</th><th>状态</th></tr></thead><tbody>${recent || '<tr><td colspan="6" class="muted">暂无订单</td></tr>'}</tbody></table>
-        `;
+        donateOrderSummaryCache = data.data.summary;
+        donateStatsRows = data.data.recent || [];
+        donateStatsPage = 1;
+        renderDonateStats(donateOrderSummaryCache);
         if (status) status.textContent = "";
       } catch (error) {
         if (status) status.textContent = error.message;
       }
     }
+
+    function donateStatsFiltered() {
+      const keyword = String(document.querySelector("#donate-stats-search")?.value || "").trim().toLowerCase();
+      const statusFilter = document.querySelector("#donate-stats-status")?.value || "all";
+      const sourceFilter = document.querySelector("#donate-stats-source")?.value || "all";
+      return donateStatsRows.filter((row) => {
+        if (statusFilter !== "all" && row.status !== statusFilter) return false;
+        if (sourceFilter !== "all" && (row.source || "") !== sourceFilter) return false;
+        if (!keyword) return true;
+        const date = new Date(Number(row.created_at) + 8 * 3600 * 1000).toISOString().slice(0, 10);
+        return [row.out_trade_no, row.transaction_id, row.nickname, row.remark, String(date), String(row.amount_total / 100)]
+          .map((value) => String(value || "").toLowerCase())
+          .some((value) => value.includes(keyword));
+      });
+    }
+
+    function renderDonateStats(summary) {
+      const yuan = (fen) => (fen / 100).toFixed(2);
+      const sourceLabel = { jsapi: "小程序", native: "网页扫码" };
+      const s = summary || donateOrderSummaryCache;
+      const filtered = donateStatsFiltered();
+      const pages = Math.max(1, Math.ceil(filtered.length / DONATE_STATS_PAGE_SIZE));
+      if (donateStatsPage > pages) donateStatsPage = pages;
+      const slice = filtered.slice((donateStatsPage - 1) * DONATE_STATS_PAGE_SIZE, donateStatsPage * DONATE_STATS_PAGE_SIZE);
+      const rows = slice.map((row) => {
+        const date = new Date(Number(row.created_at) + 8 * 3600 * 1000).toISOString().slice(0, 10);
+        const esc = (value) => String(value || "").replace(/[<>&"]/g, "");
+        return `<tr><td>${date}</td><td>¥${yuan(row.amount_total)}</td><td>${sourceLabel[row.source] || row.source || "-"}</td><td>${esc(row.nickname) || "-"}</td><td>${esc(row.remark) || "-"}</td><td>${row.status === "paid" ? "已支付" : "待支付"}</td><td class="muted" style="font-size:12px;">${esc(row.out_trade_no)}</td></tr>`;
+      }).join("");
+      if (s) {
+        const sources = Object.entries(s.by_source).map(([key, value]) => `${sourceLabel[key] || key} ${value.count} 笔 / ¥${yuan(value.total_fen)}`).join("，") || "暂无";
+        donateStatsBody.innerHTML = `
+          <p style="margin:0 0 8px;"><b>累计入账 ${s.paid_count} 笔 / ¥${yuan(s.paid_total_fen)}</b>（${sources}；待支付 ${s.pending_count} 笔）</p>
+          <table class="admin-table" style="margin-top:8px;"><thead><tr><th>日期</th><th>金额</th><th>来源</th><th>昵称</th><th>备注</th><th>状态</th><th>订单号</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="muted">没有匹配的订单</td></tr>'}</tbody></table>
+        `;
+      }
+      const pager = document.querySelector("#donate-stats-pager");
+      if (pager) {
+        pager.innerHTML = "";
+        const prev = document.createElement("button");
+        prev.type = "button";
+        prev.className = "button secondary";
+        prev.textContent = "上一页";
+        prev.disabled = donateStatsPage <= 1;
+        prev.addEventListener("click", () => { donateStatsPage -= 1; renderDonateStats(); });
+        const next = document.createElement("button");
+        next.type = "button";
+        next.className = "button secondary";
+        next.textContent = "下一页";
+        next.disabled = donateStatsPage >= pages;
+        next.addEventListener("click", () => { donateStatsPage += 1; renderDonateStats(); });
+        const label = document.createElement("span");
+        label.className = "muted";
+        label.textContent = `第 ${donateStatsPage} / ${pages} 页，筛选后 ${filtered.length} 笔（共 ${donateStatsRows.length} 笔）`;
+        pager.append(prev, label, next);
+      }
+    }
+
+    let donateOrderSummaryCache = null;
 
     function renderDonatePay() {
       if (!donatePayState) return;
@@ -4943,6 +5010,10 @@ async function loadMpUsersAdmin() {
     });
 
     document.querySelector("#reload-donate-stats").addEventListener("click", () => loadDonateStats());
+    for (const selector of ["#donate-stats-search", "#donate-stats-status", "#donate-stats-source"]) {
+      document.querySelector(selector)?.addEventListener("input", () => { donateStatsPage = 1; renderDonateStats(); });
+      document.querySelector(selector)?.addEventListener("change", () => { donateStatsPage = 1; renderDonateStats(); });
+    }
 
     document.querySelector("#save-donate").addEventListener("click", async () => {
       donateAdminStatus.textContent = "保存中...";

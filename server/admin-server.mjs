@@ -2619,7 +2619,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/admin-api/donate-stats") {
       if (!requirePermission(req, account, "content.read", res)) return;
-      json(res, 200, { ok: true, data: { summary: donateOrderStore.summary(), recent: donateOrderStore.listRecent(20) } });
+      json(res, 200, { ok: true, data: { summary: donateOrderStore.summary(), recent: donateOrderStore.listRecent(Number(url.searchParams.get("limit")) || 2000) } });
       return;
     }
 
