@@ -104,7 +104,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         }
         // 网页会话可选：有 cookie 就记录归属，扫码付款本身不需要登录
         const webUser = mpAuthService ? mpAuthService.verifyToken(authorizationOf(req)) : null;
-        data = await service.createDonateOrderNative({ userId: webUser?.id || 0, amount });
+        data = await service.createDonateOrderNative({ userId: webUser?.id || 0, amount, nickname: body?.nickname, remark: body?.remark });
       }
       else if (req.method === "GET" && url.pathname === "/api/v1/donate/order-status") {
         data = service.donateOrderStatus(url.searchParams.get("out_trade_no"));
@@ -118,7 +118,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         if (typeof service.createDonateOrder !== "function" || !service.donatePayReady?.()) {
           throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
         }
-        data = await service.createDonateOrder(user, amount);
+        data = await service.createDonateOrder(user, amount, { nickname: body?.nickname, remark: body?.remark });
       }
       else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);

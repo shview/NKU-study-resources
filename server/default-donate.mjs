@@ -34,4 +34,5 @@ export const DEFAULT_DONATE_CONTENT = Object.freeze({
     "感谢每一位资料贡献者、维护者和支持者。",
   ].join("\n"),
   amounts: DEFAULT_DONATE_AMOUNTS,
+  records: [],
 });

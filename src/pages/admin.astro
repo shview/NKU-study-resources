@@ -379,6 +379,27 @@ import "vditor/dist/index.css";
         </div>
         <div class="panel" style="margin-top: 20px;">
           <div class="panel-header">
+            <h2>捐赠记录（公开表：时间 / 昵称 / 去向）</h2>
+          </div>
+          <div class="panel-body">
+            <p class="field-hint" style="margin: 0 0 12px;">支付成功后自动追加一行（无昵称显示"好心人"，去向初始"待定"）；此处可修改去向或补充历史记录，随"保存并发布捐助页"一起生效。</p>
+            <div id="donate-records-editor"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
+            <h2>捐赠统计</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button secondary" id="reload-donate-stats" type="button">刷新统计</button>
+              <span class="muted" id="donate-stats-status"></span>
+            </div>
+            <div id="donate-stats-body" style="margin-top: 14px;"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
             <h2>微信支付设置</h2>
           </div>
           <div class="panel-body">
@@ -883,6 +904,8 @@ import "vditor/dist/index.css";
     const aboutAdminEditor = document.querySelector("#about-admin-editor");
     const donateAdminPanel = document.querySelector("#donate-admin-panel");
     const donateAdminStatus = document.querySelector("#donate-admin-status");
+    const donateRecordsEditor = document.querySelector("#donate-records-editor");
+    const donateStatsBody = document.querySelector("#donate-stats-body");
     const donateAdminEditor = document.querySelector("#donate-admin-editor");
     const donatePayEditor = document.querySelector("#donate-pay-editor");
     let donateState = null;
@@ -1374,6 +1397,7 @@ import "vditor/dist/index.css";
       contentRevisions.set("donate", data.revision);
       renderDonateAdmin();
       loadDonatePay();
+      loadDonateStats();
     }
 
     async function loadDonatePay() {
@@ -1397,6 +1421,79 @@ import "vditor/dist/index.css";
         markdownField("正文（支持 Markdown，可插图）", donateState.content ?? "", (value) => { donateState.content = value; }, { height: 360, owner: "donate" })
       );
       mountMarkdownEditors(donateAdminEditor);
+      renderDonateRecords();
+    }
+
+    function renderDonateRecords() {
+      if (!donateRecordsEditor) return;
+      if (!Array.isArray(donateState.records)) donateState.records = [];
+      donateRecordsEditor.innerHTML = "";
+      const ensure = (row) => {
+        if (!row || typeof row !== "object") return { date: "", nickname: "", usage: "" };
+        return row;
+      };
+      donateState.records.forEach((rawRow, index) => {
+        const row = ensure(rawRow);
+        const line = document.createElement("div");
+        line.className = "filter-row";
+        line.style.marginBottom = "8px";
+        const make = (value, placeholder, onInput) => {
+          const input = document.createElement("input");
+          input.className = "searchbar";
+          input.style.minHeight = "36px";
+          input.value = String(value ?? "");
+          input.placeholder = placeholder;
+          input.addEventListener("input", () => onInput(input.value));
+          return input;
+        };
+        const dateInput = make(row.date, "2026-09-22", (value) => { row.date = value.slice(0, 10); });
+        dateInput.style.maxWidth = "140px";
+        const nickInput = make(row.nickname, "昵称（空=好心人）", (value) => { row.nickname = value.slice(0, 32); });
+        nickInput.style.maxWidth = "160px";
+        const usageInput = make(row.usage, "去向（初始待定）", (value) => { row.usage = value.slice(0, 40); });
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "button secondary";
+        del.textContent = "删除";
+        del.addEventListener("click", () => {
+          donateState.records.splice(index, 1);
+          renderDonateRecords();
+        });
+        line.append(dateInput, nickInput, usageInput, del);
+        donateRecordsEditor.append(line);
+      });
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "button secondary";
+      add.textContent = "添加记录";
+      add.addEventListener("click", () => {
+        donateState.records.push({ date: "", nickname: "", usage: "" });
+        renderDonateRecords();
+      });
+      donateRecordsEditor.append(add);
+    }
+
+    async function loadDonateStats() {
+      const status = document.querySelector("#donate-stats-status");
+      if (status) status.textContent = "加载中...";
+      try {
+        const data = await api("/donate-stats");
+        const s = data.data.summary;
+        const yuan = (fen) => (fen / 100).toFixed(2);
+        const sourceLabel = { jsapi: "小程序", native: "网页扫码" };
+        const sources = Object.entries(s.by_source).map(([key, value]) => `${sourceLabel[key] || key} ${value.count} 笔 / ¥${yuan(value.total_fen)}`).join("，") || "暂无";
+        const recent = (data.data.recent || []).map((row) => {
+          const date = new Date(Number(row.created_at) + 8 * 3600 * 1000).toISOString().slice(0, 10);
+          return `<tr><td>${date}</td><td>¥${yuan(row.amount_total)}</td><td>${sourceLabel[row.source] || row.source || "-"}</td><td>${(row.nickname || "").replace(/[<>&]/g, "") || "-"}</td><td>${(row.remark || "").replace(/[<>&]/g, "") || "-"}</td><td>${row.status === "paid" ? "已支付" : "待支付"}</td></tr>`;
+        }).join("");
+        donateStatsBody.innerHTML = `
+          <p style="margin:0 0 8px;"><b>累计入账 ${s.paid_count} 笔 / ¥${yuan(s.paid_total_fen)}</b>（${sources}；待支付 ${s.pending_count} 笔）</p>
+          <table class="admin-table" style="margin-top:8px;"><thead><tr><th>日期</th><th>金额</th><th>来源</th><th>昵称</th><th>备注</th><th>状态</th></tr></thead><tbody>${recent || '<tr><td colspan="6" class="muted">暂无订单</td></tr>'}</tbody></table>
+        `;
+        if (status) status.textContent = "";
+      } catch (error) {
+        if (status) status.textContent = error.message;
+      }
     }
 
     function renderDonatePay() {
@@ -1922,6 +2019,7 @@ async function loadMpUsersAdmin() {
       ["POST /admin-api/content-images", "上传内容图片"],
       ["POST /admin-api/content-images/cleanup", "清理未引用内容图片"],
       ["GET /admin-api/donate", "读取捐助页"],
+      ["GET /admin-api/donate-stats", "捐赠统计"],
       ["POST /admin-api/donate", "保存捐助页"],
       ["GET /admin-api/donate-pay", "读取支付配置(脱敏)"],
       ["POST /admin-api/donate-pay", "保存支付配置"],
@@ -4843,6 +4941,8 @@ async function loadMpUsersAdmin() {
         participateAdminStatus.textContent = error.message;
       }
     });
+
+    document.querySelector("#reload-donate-stats").addEventListener("click", () => loadDonateStats());
 
     document.querySelector("#save-donate").addEventListener("click", async () => {
       donateAdminStatus.textContent = "保存中...";

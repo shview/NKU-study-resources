@@ -19,12 +19,23 @@ export class DonateOrderStore {
         status TEXT NOT NULL DEFAULT 'pending',
         transaction_id TEXT,
         created_at INTEGER NOT NULL,
-        paid_at INTEGER
+        paid_at INTEGER,
+        nickname TEXT NOT NULL DEFAULT '',
+        remark TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL DEFAULT ''
       );
       CREATE INDEX IF NOT EXISTS donate_orders_user_idx ON donate_orders(user_id, created_at);
     `);
+    // 旧表迁移：补齐新列（已存在则忽略）
+    for (const column of ["nickname", "remark", "source"]) {
+      try {
+        this.db.exec(`ALTER TABLE donate_orders ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+      } catch {
+        // 列已存在
+      }
+    }
     this.insertOrder = this.db.prepare(
-      "INSERT INTO donate_orders (out_trade_no, user_id, amount_total, status, created_at) VALUES (?, ?, ?, 'pending', ?)"
+      "INSERT INTO donate_orders (out_trade_no, user_id, amount_total, status, created_at, nickname, remark, source) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)"
     );
     this.selectOrder = this.db.prepare("SELECT * FROM donate_orders WHERE out_trade_no = ?");
     this.markPaidStmt = this.db.prepare(
@@ -32,8 +43,8 @@ export class DonateOrderStore {
     );
   }
 
-  create({ outTradeNo, userId, amountTotal, now = Date.now() }) {
-    this.insertOrder.run(outTradeNo, Number(userId), Math.round(amountTotal), now);
+  create({ outTradeNo, userId, amountTotal, now = Date.now(), nickname = "", remark = "", source = "" }) {
+    this.insertOrder.run(outTradeNo, Number(userId), Math.round(amountTotal), now, String(nickname).slice(0, 32), String(remark).slice(0, 200), String(source).slice(0, 16));
     return this.selectOrder.get(outTradeNo);
   }
 
@@ -57,7 +68,14 @@ export class DonateOrderStore {
 
   summary() {
     const paid = this.db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(amount_total), 0) AS total FROM donate_orders WHERE status = 'paid'").get();
-    return { paid_count: paid.count, paid_total_fen: paid.total };
+    const pending = this.db.prepare("SELECT COUNT(*) AS count FROM donate_orders WHERE status = 'pending'").get();
+    const bySource = this.db.prepare("SELECT source, COUNT(*) AS count, COALESCE(SUM(amount_total), 0) AS total FROM donate_orders WHERE status = 'paid' GROUP BY source").all();
+    return {
+      paid_count: paid.count,
+      paid_total_fen: paid.total,
+      pending_count: pending.count,
+      by_source: bySource.reduce((acc, row) => ({ ...acc, [row.source || "unknown"]: { count: row.count, total_fen: row.total } }), {}),
+    };
   }
 
   close() {

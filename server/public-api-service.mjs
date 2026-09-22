@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { jsapiPrepay, miniPayParams, nativePrepay } from "./wxpay-v3.mjs";
+import { normalizeRecords as normalizeDonateRecords } from "./donate-records.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import {
@@ -119,12 +120,13 @@ export class PublicApiService {
       title: String(donate.title || "捐助支持").slice(0, 120),
       content: String(donate.content || "").slice(0, 6000),
       amounts: [...new Set(amounts)].sort((a, b) => a - b),
+      records: normalizeDonateRecords(Array.isArray(donate.records) ? donate.records : []),
       pay_enabled: this.donatePayReady(),
     };
   }
 
   /** 小程序捐助下单：JSAPI v3，返回 wx.requestPayment 所需参数；订单先落库 pending，回调置 paid。 */
-  async createDonateOrder(user, amount) {
+  async createDonateOrder(user, amount, { nickname = "", remark = "" } = {}) {
     if (!this.donatePayStore || !this.donateOrderStore) throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
     const config = this.donatePayStore.config();
     const openid = this.mpAuthService?.getOpenid?.(user.id);
@@ -150,12 +152,12 @@ export class PublicApiService {
       console.error(`[donate] prepay failed: ${error.message} ${error.detail || ""}`);
       throw new PublicApiError(502, "支付下单失败，请稍后重试。", "DONATE_PREPAY_FAILED");
     }
-    this.donateOrderStore.create({ outTradeNo, userId: user.id, amountTotal });
+    this.donateOrderStore.create({ outTradeNo, userId: user.id, amountTotal, nickname, remark, source: "jsapi" });
     return miniPayParams({ appid: config.appid, prepayId, privateKeyPem: config.privateKey });
   }
 
   /** 网页端 Native 扫码捐助：无需登录/openid，返回 code_url 由前端渲染二维码；同一回调入账。 */
-  async createDonateOrderNative({ userId = 0, amount } = {}) {
+  async createDonateOrderNative({ userId = 0, amount, nickname = "", remark = "" } = {}) {
     if (!this.donatePayStore || !this.donateOrderStore) throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
     const config = this.donatePayStore.config();
     const amountTotal = Math.round(Number(amount) * 100);
@@ -170,7 +172,7 @@ export class PublicApiService {
       console.error(`[donate] native prepay failed: ${error.message} ${error.detail || ""}`);
       throw new PublicApiError(502, "支付下单失败，请稍后重试。", "DONATE_PREPAY_FAILED");
     }
-    this.donateOrderStore.create({ outTradeNo, userId: Number(userId) || 0, amountTotal });
+    this.donateOrderStore.create({ outTradeNo, userId: Number(userId) || 0, amountTotal, nickname, remark, source: "native" });
     return { code_url: codeUrl, out_trade_no: outTradeNo, amount };
   }
 

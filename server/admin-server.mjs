@@ -51,6 +51,7 @@ import { DEFAULT_DONATE_CONTENT } from "./default-donate.mjs";
 import { DonatePayStore } from "./donate-pay-store.mjs";
 import { DonateOrderStore } from "./donate-order-store.mjs";
 import { decryptAes256Gcm, verifyNotifySignature } from "./wxpay-v3.mjs";
+import { appendDonateRecord, normalizeRecords } from "./donate-records.mjs";
 import { StaticReleasePublisher } from "./static-release-publisher.mjs";
 
 const root = projectRoot;
@@ -1230,6 +1231,7 @@ function normalizeDonate(data) {
     title: cleanText(data.title, 120) || '捐助支持',
     content: cleanText(data.content, 6000),
     amounts: amounts.length ? [...new Set(amounts)].sort((a, b) => a - b) : DEFAULT_DONATE_AMOUNTS,
+    records: normalizeRecords(data.records),
   };
 }
 
@@ -1525,6 +1527,11 @@ async function handleDonateNotify(req, res) {
       transactionId: String(resource.transaction_id || "") || null,
     });
     if (!marked) return respond(500, { code: "FAIL", message: "订单不存在或金额不符" });
+    try {
+      await appendDonateRecord({ store: jsonStore, filePath: donatePath, nickname: donateOrderStore.get(resource.out_trade_no)?.nickname || "", paidAtMs: Date.now() });
+    } catch (error) {
+      console.error(`[donate] append record failed: ${error.message}`);
+    }
     return respond(200, { code: "SUCCESS" });
   } catch (error) {
     console.error(`[donate] notify failed: ${error.message}`);
@@ -2607,6 +2614,12 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const result = await publishContent(donatePath, body.data || {}, body.expectedRevision, normalizeDonate);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/donate-stats") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      json(res, 200, { ok: true, data: { summary: donateOrderStore.summary(), recent: donateOrderStore.listRecent(20) } });
       return;
     }
 

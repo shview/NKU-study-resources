@@ -222,3 +222,41 @@ test("createDonateOrderNative: no login needed, returns code_url and records ord
   }
   orders.close();
 });
+
+test("donate-records: normalize keeps sane rows, appendDonateRecord appends with beijing date", async () => {
+  const { normalizeRecords, appendDonateRecord, beijingDateLabel } = await import("../server/donate-records.mjs");
+  const { AtomicJsonStore } = await import("../server/atomic-json-store.mjs");
+  assert.deepEqual(
+    normalizeRecords([{ date: "2026-09-22", nickname: "", usage: "" }, { date: "bad", nickname: "x", usage: "y" }, { date: "2026-09-23", nickname: "  小紫  ", usage: "服务器续费" }]),
+    [{ date: "2026-09-22", nickname: "好心人", usage: "待定" }, { date: "2026-09-23", nickname: "小紫", usage: "服务器续费" }],
+  );
+  assert.equal(beijingDateLabel(Date.UTC(2026, 8, 21, 17, 30)), "2026-09-22", "UTC+8 跨日");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nkustudy-rec-"));
+  const store = new AtomicJsonStore({ allowedRoot: dir });
+  const filePath = path.join(dir, "donate.json");
+  await store.update(filePath, () => ({ version: 1, title: "T", content: "", amounts: [5], records: [] }), { initialize: { records: [] }, mode: 0o600 });
+  const appended = await appendDonateRecord({ store, filePath, nickname: "", paidAtMs: Date.UTC(2026, 8, 21, 18, 0) });
+  assert.equal(appended.nickname, "好心人");
+  assert.equal(appended.usage, "待定");
+  const after = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  assert.equal(after.records.length, 1);
+  const second = await appendDonateRecord({ store, filePath, nickname: "小紫", paidAtMs: Date.UTC(2026, 8, 22, 2, 0) });
+  assert.equal(second.nickname, "小紫");
+  assert.equal(JSON.parse(fs.readFileSync(filePath, "utf8")).records.length, 2);
+});
+
+test("DonateOrderStore stores nickname/remark/source and summary groups by source", async () => {
+  const { DonateOrderStore } = await import("../server/donate-order-store.mjs");
+  const store = new DonateOrderStore({ dbPath: path.join(fs.mkdtempSync(path.join(os.tmpdir(), "nkustudy-src-")), "o.sqlite") });
+  store.create({ outTradeNo: "A", userId: 1, amountTotal: 500, nickname: "小紫", remark: "加油", source: "jsapi" });
+  store.create({ outTradeNo: "B", userId: 0, amountTotal: 1000, nickname: "", remark: "", source: "native" });
+  store.markPaid({ outTradeNo: "A", amountTotal: 500 });
+  assert.equal(store.get("A").nickname, "小紫");
+  const s = store.summary();
+  assert.equal(s.paid_count, 1);
+  assert.equal(s.paid_total_fen, 500);
+  assert.equal(s.by_source.jsapi.count, 1);
+  assert.equal(s.by_source.native, undefined, "native 未支付不计入");
+  store.close();
+});

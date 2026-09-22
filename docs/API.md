@@ -21,7 +21,7 @@
 | `GET` | `/api/v1/search-data` | 公开、ETag 缓存 | 前端本地搜索精简数据（课程库/目录池/评价组名称与老师） |
 | `GET` | `/api/v1/about` | 公开、ETag 缓存 | 关于页内容（标题+markdown 正文，与网页关于页同源） |
 | `GET` | `/api/v1/donate` | 公开、ETag 缓存 | 捐助页内容（标题/markdown 正文/预设金额/支付是否可用） |
-| `POST` | `/api/v1/donate/pay` | Bearer Token | 小程序捐助支付下单（未配置商户时 503 DONATE_PAY_NOT_CONFIGURED） |
+| `POST` | `/api/v1/donate/pay` | Bearer Token | 小程序捐助支付下单（可带 nickname/remark；未配置商户时 503） |
 | `POST` | `/api/v1/donate/pay-native` | 公开（网页会话可选） | 网页 Native 扫码捐助下单，返回 code_url |
 | `GET` | `/api/v1/donate/order-status` | 公开 | 按随机单号轮询支付状态 |
 | `POST` | `/api/v1/donate/notify` | 微信支付服务器回调 | 支付结果通知（验签+解密+幂等入账），仅微信支付服务器调用 |
@@ -92,6 +92,7 @@
 | `GET` | `/admin-api/donate` | Cookie（content.read） | 读取捐助页内容与预设金额 |
 | `POST` | `/admin-api/donate` | Cookie（content.edit） | 保存并发布捐助页 |
 | `GET` | `/admin-api/donate-pay` | Cookie（services.manage） | 读取微信支付配置（脱敏） |
+| `GET` | `/admin-api/donate-stats` | Cookie（content.read） | 捐赠统计（总额/来源分布/最近订单） |
 | `POST` | `/admin-api/donate-pay` | Cookie（services.manage） | 保存微信支付商户配置 |
 | `POST` | `/admin-api/about` | Cookie（需相应权限） | 发布关于页内容 |
 | `GET` | `/admin-api/participate` | Cookie（需相应权限） | 读取参与贡献页和 revision |
