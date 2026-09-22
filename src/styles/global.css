@@ -2397,10 +2397,16 @@ details.resource-subsection summary::-webkit-details-marker {
 #admin-app { display: flex; gap: 0; align-items: flex-start; }
 .admin-nav {
   flex: 0 0 210px; position: sticky; top: 16px; align-self: flex-start;
-  display: flex; flex-direction: column; gap: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: calc(100vh - 32px);
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: 0 0 0 1px rgba(148,163,184,.08), 0 10px 26px rgba(15,23,42,.05);
-  padding: 12px 10px; margin-right: 20px;
+  padding: 10px; margin-right: 20px;
+}
+.admin-nav-scroll {
+  display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto; min-height: 0; flex: 1 1 auto;
+  scrollbar-width: thin;
 }
 #admin-app[data-nav-collapsed="1"] { flex-direction: row; }
 #admin-app[data-nav-collapsed="1"] .admin-nav { flex: 0 0 auto; width: 46px; padding: 10px 6px; align-items: center; }
@@ -2410,8 +2416,12 @@ details.resource-subsection summary::-webkit-details-marker {
 .admin-nav-collapse {
   border: none; background: none; cursor: pointer; font-size: 0.8em;
   color: var(--muted); text-align: left; padding: 4px 8px; border-radius: 8px;
+  flex: 0 0 auto; white-space: nowrap;
 }
 .admin-nav-collapse:hover { background: var(--surface-soft); }
+#admin-app[data-nav-collapsed="1"] .admin-nav-collapse {
+  width: 34px; height: 34px; padding: 0; text-align: center; line-height: 34px; font-size: 1em;
+}
 .admin-nav-group { display: flex; flex-direction: column; gap: 2px; }
 .admin-nav-group-head {
   text-align: left; border: none; background: none; font-weight: 800;
@@ -2429,11 +2439,12 @@ details.resource-subsection summary::-webkit-details-marker {
 .admin-nav-item.secondary { color: var(--muted); }
 .admin-nav-item:not(.secondary) { background: rgba(75,31,111,0.10); color: var(--primary); }
 .admin-nav-item--locked, .admin-nav-item--locked:hover { opacity: 0.4; cursor: not-allowed; background: none; }
-.admin-nav-flat-toggle { border: none; background: none; color: var(--muted); font-size: 0.75em; text-align: left; padding: 8px 10px; cursor: pointer; }
+.admin-nav-flat-toggle { border: none; background: none; color: var(--muted); font-size: 0.75em; text-align: left; padding: 8px 10px; cursor: pointer; flex: 0 0 auto; }
 .admin-nav-flat-toggle:hover { background: var(--surface-soft); border-radius: 8px; }
 @media (max-width: 900px) {
   #admin-app { flex-direction: column; }
-  .admin-nav { position: static; flex: none; width: 100%; margin-right: 0; }
+  .admin-nav { position: static; flex: none; width: 100%; margin-right: 0; max-height: none; }
+  .admin-nav-scroll { overflow: visible; }
   .admin-nav-items { flex-direction: row; flex-wrap: wrap; }
   #admin-app[data-nav-collapsed="1"] .admin-nav { width: 100%; flex-direction: row; }
 }

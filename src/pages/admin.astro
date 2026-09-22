@@ -366,6 +366,49 @@ import "vditor/dist/index.css";
           </div>
           <div class="panel-body">
             <p class="field-hint" style="margin: 0 0 12px;">支付成功后自动追加一行（无昵称显示"好心人"，去向初始"待定"）；此处可修改去向或补充历史记录，随"保存并发布捐助页"一起生效。</p>
+
+      <div id="donate-records-editor"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
+            <h2>捐赠统计</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button secondary" id="reload-donate-stats" type="button">刷新统计</button>
+              <input class="searchbar" id="donate-stats-search" type="search" placeholder="搜索单号 / 昵称 / 备注 / 交易号 / 金额" style="max-width: 280px;" />
+              <select class="searchbar" id="donate-stats-status" style="max-width: 130px;">
+                <option value="all">全部状态</option>
+                <option value="paid">已支付</option>
+                <option value="pending">待支付</option>
+              </select>
+              <select class="searchbar" id="donate-stats-source" style="max-width: 140px;">
+                <option value="all">全部来源</option>
+                <option value="jsapi">小程序</option>
+                <option value="native">网页扫码</option>
+              </select>
+              <span class="muted" id="donate-stats-status"></span>
+            </div>
+            <div id="donate-stats-body" style="margin-top: 14px;"></div>
+            <div class="filter-row" id="donate-stats-pager" style="margin-top: 10px;"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
+            <h2>微信支付设置</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-donate-pay" type="button">保存支付配置</button>
+              <span class="muted" id="donate-pay-status"></span>
+            </div>
+            <div class="admin-form" id="donate-pay-editor"></div>
+            <p class="field-hint">填入微信支付商户号（APIv3）并勾选启用后，小程序捐助的支付功能才会真正下单。商户私钥仅服务器保存（0600），不回显。</p>
+          </div>
+        </div>
+      </div>
+
             <div id="privacy-admin-panel" hidden>
         <div class="panel">
           <div class="panel-header">
@@ -430,48 +473,6 @@ import "vditor/dist/index.css";
               <button class="button secondary" id="law-log-refresh" type="button">刷新调取记录</button>
             </div>
             <div id="law-logs" style="margin-top: 10px;"></div>
-          </div>
-        </div>
-      </div>
-
-      <div id="donate-records-editor"></div>
-          </div>
-        </div>
-        <div class="panel" style="margin-top: 20px;">
-          <div class="panel-header">
-            <h2>捐赠统计</h2>
-          </div>
-          <div class="panel-body">
-            <div class="filter-row">
-              <button class="button secondary" id="reload-donate-stats" type="button">刷新统计</button>
-              <input class="searchbar" id="donate-stats-search" type="search" placeholder="搜索单号 / 昵称 / 备注 / 交易号 / 金额" style="max-width: 280px;" />
-              <select class="searchbar" id="donate-stats-status" style="max-width: 130px;">
-                <option value="all">全部状态</option>
-                <option value="paid">已支付</option>
-                <option value="pending">待支付</option>
-              </select>
-              <select class="searchbar" id="donate-stats-source" style="max-width: 140px;">
-                <option value="all">全部来源</option>
-                <option value="jsapi">小程序</option>
-                <option value="native">网页扫码</option>
-              </select>
-              <span class="muted" id="donate-stats-status"></span>
-            </div>
-            <div id="donate-stats-body" style="margin-top: 14px;"></div>
-            <div class="filter-row" id="donate-stats-pager" style="margin-top: 10px;"></div>
-          </div>
-        </div>
-        <div class="panel" style="margin-top: 20px;">
-          <div class="panel-header">
-            <h2>微信支付设置</h2>
-          </div>
-          <div class="panel-body">
-            <div class="filter-row">
-              <button class="button" id="save-donate-pay" type="button">保存支付配置</button>
-              <span class="muted" id="donate-pay-status"></span>
-            </div>
-            <div class="admin-form" id="donate-pay-editor"></div>
-            <p class="field-hint">填入微信支付商户号（APIv3）并勾选启用后，小程序捐助的支付功能才会真正下单。商户私钥仅服务器保存（0600），不回显。</p>
           </div>
         </div>
       </div>
@@ -2688,8 +2689,8 @@ async function loadMpUsersAdmin() {
       };
     }
 
-    function mountMarkdownEditors(root, mode = "admin") {
-      destroyMarkdownEditors(root);
+    function mountMarkdownEditors(root, mode = "admin", { destroy = true } = {}) {
+      if (destroy) destroyMarkdownEditors(root);
       const editors = Array.from(root?.querySelectorAll?.("[data-markdown-editor]") ?? []);
       for (const node of editors) {
         if (node.dataset.markdownMounted === "1") continue;
@@ -4834,6 +4835,7 @@ async function loadMpUsersAdmin() {
       nav.innerHTML = "";
       const collapsed = new Set(JSON.parse(localStorage.getItem(navCollapsedKey) || "[]"));
       const flat = localStorage.getItem(navFlatKey) === "1";
+      const collapsedNow = document.querySelector("#admin-app")?.dataset.navCollapsed === "1";
       const makeItem = (tab, label) => {
         const item = document.createElement("button");
         item.type = "button";
@@ -4842,13 +4844,29 @@ async function loadMpUsersAdmin() {
         item.textContent = label;
         return item;
       };
+      const collapseToggle = document.createElement("button");
+      collapseToggle.type = "button";
+      collapseToggle.className = "admin-nav-collapse";
+      collapseToggle.textContent = collapsedNow ? "»" : "« 收起菜单";
+      collapseToggle.title = collapsedNow ? "展开菜单" : "收起菜单";
+      collapseToggle.addEventListener("click", () => {
+        const app = document.querySelector("#admin-app");
+        const next = app?.dataset.navCollapsed === "1" ? "0" : "1";
+        if (app) app.dataset.navCollapsed = next;
+        localStorage.setItem("nkustudy-admin-nav-collapsed-all", next);
+        collapseToggle.textContent = next === "1" ? "»" : "« 收起菜单";
+        collapseToggle.title = next === "1" ? "展开菜单" : "收起菜单";
+      });
+      nav.append(collapseToggle);
+      const scroll = document.createElement("div");
+      scroll.className = "admin-nav-scroll";
       if (flat) {
         const list = document.createElement("div");
         list.className = "admin-nav-group admin-nav-group--flat";
         for (const group of ADMIN_NAV_CONFIG) {
           for (const [tab, label] of group.items) list.append(makeItem(tab, label));
         }
-        nav.append(list);
+        scroll.append(list);
       } else {
         for (const group of ADMIN_NAV_CONFIG) {
           const groupEl = document.createElement("div");
@@ -4868,23 +4886,10 @@ async function loadMpUsersAdmin() {
           items.className = "admin-nav-items";
           for (const [tab, label] of group.items) items.append(makeItem(tab, label));
           groupEl.append(items);
-          nav.append(groupEl);
+          scroll.append(groupEl);
         }
       }
-      const collapseToggle = document.createElement("button");
-      collapseToggle.type = "button";
-      collapseToggle.className = "admin-nav-collapse";
-      const collapsedNow = document.querySelector("#admin-app")?.dataset.navCollapsed === "1";
-      collapseToggle.textContent = collapsedNow ? "» 展开菜单" : "« 收起菜单";
-      collapseToggle.title = "整体收起/展开侧边栏";
-      collapseToggle.addEventListener("click", () => {
-        const app = document.querySelector("#admin-app");
-        const next = app?.dataset.navCollapsed === "1" ? "0" : "1";
-        if (app) app.dataset.navCollapsed = next;
-        localStorage.setItem("nkustudy-admin-nav-collapsed-all", next);
-        collapseToggle.textContent = next === "1" ? "» 展开菜单" : "« 收起菜单";
-      });
-      nav.append(collapseToggle);
+      nav.append(scroll);
       const modeToggle = document.createElement("button");
       modeToggle.type = "button";
       modeToggle.className = "admin-nav-flat-toggle";
@@ -4966,6 +4971,19 @@ async function loadMpUsersAdmin() {
           }
         }
         aiAdminPanel.hidden = tab !== "ai";
+        // 面板在 hidden 状态下渲染过的 Markdown 字段（如经举报页签后台加载的反馈数据）此时补挂载
+        const adminPanelsByTab = {
+          resources: resourceAdminPanel, reviews: reviewAdminPanel, participate: participateAdminPanel,
+          feedback: feedbackAdminPanel, links: linksAdminPanel, home: homeAdminPanel, footer: footerAdminPanel,
+          editorSettings: editorSettingsAdminPanel, stats: statsAdminPanel, about: aboutAdminPanel,
+          donate: donateAdminPanel, privacy: privacyAdminPanel, reports: reportsAdminPanel, law: lawAdminPanel,
+          backup: backupAdminPanel, accounts: accountsAdminPanel, mpUsers: mpUsersAdminPanel,
+          serviceKeys: serviceKeysAdminPanel, notify: notifyAdminPanel, audit: auditAdminPanel, ai: aiAdminPanel,
+        };
+        const activeAdminPanel = adminPanelsByTab[tab];
+        if (activeAdminPanel) {
+          requestAnimationFrame(() => mountMarkdownEditors(activeAdminPanel, "admin", { destroy: false }));
+        }
         if (tab === "ai" && !aiAdminState.loaded) {
           document.querySelector("#ai-status").textContent = "加载中...";
           try {
