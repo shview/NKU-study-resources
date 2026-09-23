@@ -55,6 +55,8 @@ export function runtimeDataPathMap(env = process.env) {
     reviews: resolveDataPath("reviews.json", env),
     feedback: resolveDataPath("feedback.json", env),
     about: resolveDataPath("about.json", env),
+    donate: resolveDataPath("donate.json", env),
+    privacy: resolveDataPath("privacy.json", env),
     home: resolveDataPath("home.json", env),
     guides: resolveDataPath("guides.json", env),
     participate: resolveDataPath("participate.json", env),

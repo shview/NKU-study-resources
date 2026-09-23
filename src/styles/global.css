@@ -870,6 +870,7 @@ button.tag[data-active="true"] {
   margin-top: 0;
 }
 
+
 .markdown-body > :last-child {
   margin-bottom: 0;
 }
@@ -917,6 +918,31 @@ button.tag[data-active="true"] {
   margin-top: 4px;
 }
 
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 14px;
+  font-size: 0.92em;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  text-align: left;
+}
+.markdown-body th {
+  background: var(--surface-soft);
+  font-weight: 700;
+}
+.markdown-body blockquote {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-left: 4px solid var(--line);
+  background: var(--surface-soft);
+  border-radius: 8px;
+  color: inherit;
+}
+
 .markdown-body a {
   color: var(--primary);
   font-weight: 750;
@@ -951,9 +977,15 @@ button.tag[data-active="true"] {
   white-space: pre;
 }
 
+.vditor-preview img {
+  max-width: min(480px, 100%);
+  height: auto;
+}
+
 .markdown-body img {
   display: block;
-  max-width: 100%;
+  /* 内容图默认上限，防止二维码等图片撑满版面；更小/更大用 url#w240 语法按图指定 */
+  max-width: min(480px, 100%);
   height: auto;
   margin: 12px 0;
   border: 1px solid var(--line);
@@ -1196,7 +1228,7 @@ details.resource-subsection summary::-webkit-details-marker {
   background: #fff;
   box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
   font: inherit;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .admin-field textarea {
@@ -1227,7 +1259,7 @@ details.resource-subsection summary::-webkit-details-marker {
   font: inherit;
   font-size: 15px;
   line-height: 1.65;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1243,10 +1275,13 @@ details.resource-subsection summary::-webkit-details-marker {
   min-height: 180px;
 }
 
+/* vditor 会把 .vditor 类合并到挂载容器本身，不会产生嵌套的 .vditor 元素，
+   因此容器必须用复合选择器（.markdown-editor.vditor），
+   后代规则直接以容器类为作用域，不要写中间的 .vditor。 */
 .markdown-editor .vditor,
 .admin-markdown-field .markdown-editor,
 .admin-markdown-field .vditor,
-.user-markdown-editor .vditor {
+.user-markdown-editor.vditor {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
@@ -1255,25 +1290,37 @@ details.resource-subsection summary::-webkit-details-marker {
 
 .markdown-editor .vditor,
 .admin-markdown-field .vditor,
-.user-markdown-editor .vditor {
+.user-markdown-editor.vditor {
   min-height: 220px;
   resize: vertical;
   overflow: auto;
   font: inherit;
   font-size: 15px;
   line-height: 1.65;
-  font-weight: 500;
+  /* 与正文一致用 400：Windows 微软雅黑没有 500 字重，会被匹配成粗体 */
+  font-weight: 400;
+}
+
+/* 覆盖 vditor 自带的 Helvetica 字体栈：编辑器与预览统一使用站点字体，
+   避免 Windows 上整体落到微软雅黑导致编辑区看起来比页面其他文字更粗。
+   只作用于用户侧编辑器（评价/反馈），管理页与通用编辑器保持原样。 */
+.user-markdown-editor.vditor,
+.user-markdown-editor .vditor-sv,
+.user-markdown-editor .vditor-preview,
+.user-markdown-editor .vditor-reset,
+.user-markdown-editor textarea {
+  font-family: inherit !important;
 }
 
 .markdown-editor .vditor .vditor-toolbar,
 .admin-markdown-field .vditor .vditor-toolbar,
-.user-markdown-editor .vditor .vditor-toolbar {
+.user-markdown-editor.vditor .vditor-toolbar {
   border-bottom: 1px solid var(--line);
 }
 
 .markdown-editor .vditor .vditor-wysiwyg,
 .admin-markdown-field .vditor .vditor-wysiwyg,
-.user-markdown-editor .vditor .vditor-wysiwyg {
+.user-markdown-editor.vditor .vditor-wysiwyg {
   min-height: 160px;
 }
 
@@ -1426,59 +1473,60 @@ details.resource-subsection summary::-webkit-details-marker {
   font-weight: 400 !important;
 }
 
-.user-markdown-editor .vditor,
-.user-markdown-editor .vditor textarea,
-.user-markdown-editor .vditor .vditor-sv,
-.user-markdown-editor .vditor .vditor-sv .vditor-input,
-.user-markdown-editor .vditor .vditor-ir,
-.user-markdown-editor .vditor .vditor-ir [contenteditable="true"],
-.user-markdown-editor .vditor .vditor-ir pre.vditor-reset,
-.user-markdown-editor .vditor .vditor-ir p,
-.user-markdown-editor .vditor .vditor-ir div:not([data-type="strong"]),
-.user-markdown-editor .vditor .vditor-ir span:not([data-type="strong"]),
-.user-markdown-editor .vditor .vditor-wysiwyg,
-.user-markdown-editor .vditor .vditor-wysiwyg p,
-.user-markdown-editor .vditor .vditor-preview,
-.user-markdown-editor .vditor .vditor-reset {
+.user-markdown-editor.vditor,
+.user-markdown-editor textarea,
+.user-markdown-editor .vditor-sv,
+.user-markdown-editor .vditor-sv .vditor-input,
+.user-markdown-editor .vditor-ir,
+.user-markdown-editor .vditor-ir [contenteditable="true"],
+.user-markdown-editor .vditor-ir pre.vditor-reset,
+.user-markdown-editor .vditor-ir p,
+.user-markdown-editor .vditor-ir div:not([data-type="strong"]),
+.user-markdown-editor .vditor-ir span:not([data-type="strong"]),
+.user-markdown-editor .vditor-wysiwyg,
+.user-markdown-editor .vditor-wysiwyg p,
+.user-markdown-editor .vditor-preview,
+.user-markdown-editor .vditor-reset {
   font-size: 15px !important;
-  font-weight: 350 !important;
+  /* 必须用标准字重：非标准值在部分字体环境下无法区分粗细 */
+  font-weight: 400 !important;
   line-height: 1.75 !important;
 }
 
-.user-markdown-editor .vditor strong,
-.user-markdown-editor .vditor b,
-.user-markdown-editor .vditor .vditor-ir strong,
-.user-markdown-editor .vditor .vditor-ir b,
-.user-markdown-editor .vditor .vditor-ir [data-type="strong"],
-.user-markdown-editor .vditor .vditor-ir .vditor-ir__node[data-type="strong"],
-.user-markdown-editor .vditor .vditor-ir strong *,
-.user-markdown-editor .vditor .vditor-ir b *,
-.user-markdown-editor .vditor .vditor-ir [data-type="strong"] *,
-.user-markdown-editor .vditor .vditor-reset strong,
-.user-markdown-editor .vditor .vditor-reset b {
-  font-weight: 900 !important;
+.user-markdown-editor strong,
+.user-markdown-editor b,
+.user-markdown-editor .vditor-ir strong,
+.user-markdown-editor .vditor-ir b,
+.user-markdown-editor .vditor-ir [data-type="strong"],
+.user-markdown-editor .vditor-ir .vditor-ir__node[data-type="strong"],
+.user-markdown-editor .vditor-ir strong *,
+.user-markdown-editor .vditor-ir b *,
+.user-markdown-editor .vditor-ir [data-type="strong"] *,
+.user-markdown-editor .vditor-reset strong,
+.user-markdown-editor .vditor-reset b {
+  font-weight: 700 !important;
 }
 
-.user-markdown-editor .vditor .vditor-ir .vditor-ir__marker,
-.user-markdown-editor .vditor .vditor-ir .vditor-ir__marker * {
-  font-weight: 350 !important;
+.user-markdown-editor .vditor-ir .vditor-ir__marker,
+.user-markdown-editor .vditor-ir .vditor-ir__marker * {
+  font-weight: 400 !important;
   opacity: 0.72;
 }
 
-.user-markdown-editor .vditor .vditor-ir h1,
-.user-markdown-editor .vditor .vditor-ir h2,
-.user-markdown-editor .vditor .vditor-ir h3,
-.user-markdown-editor .vditor .vditor-ir h4,
-.user-markdown-editor .vditor .vditor-ir h5,
-.user-markdown-editor .vditor .vditor-ir h6,
-.user-markdown-editor .vditor .vditor-wysiwyg h1,
-.user-markdown-editor .vditor .vditor-wysiwyg h2,
-.user-markdown-editor .vditor .vditor-wysiwyg h3,
-.user-markdown-editor .vditor .vditor-wysiwyg h4,
-.user-markdown-editor .vditor .vditor-wysiwyg h5,
-.user-markdown-editor .vditor .vditor-wysiwyg h6 {
+.user-markdown-editor .vditor-ir h1,
+.user-markdown-editor .vditor-ir h2,
+.user-markdown-editor .vditor-ir h3,
+.user-markdown-editor .vditor-ir h4,
+.user-markdown-editor .vditor-ir h5,
+.user-markdown-editor .vditor-ir h6,
+.user-markdown-editor .vditor-wysiwyg h1,
+.user-markdown-editor .vditor-wysiwyg h2,
+.user-markdown-editor .vditor-wysiwyg h3,
+.user-markdown-editor .vditor-wysiwyg h4,
+.user-markdown-editor .vditor-wysiwyg h5,
+.user-markdown-editor .vditor-wysiwyg h6 {
   font-size: 16px !important;
-  font-weight: 650 !important;
+  font-weight: 600 !important;
 }
 
 .review-announcement {
@@ -2077,7 +2125,7 @@ details.resource-subsection summary::-webkit-details-marker {
 
 :root[data-theme="dark"] .markdown-editor .vditor,
 :root[data-theme="dark"] .admin-markdown-field .vditor,
-:root[data-theme="dark"] .user-markdown-editor .vditor {
+:root[data-theme="dark"] .user-markdown-editor.vditor {
   color: var(--text) !important;
   background: var(--surface) !important;
 }
@@ -2090,10 +2138,10 @@ details.resource-subsection summary::-webkit-details-marker {
 
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-toolbar,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-toolbar,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-toolbar,
+:root[data-theme="dark"] .user-markdown-editor.vditor .vditor-toolbar,
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-menu,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-menu,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-menu {
+:root[data-theme="dark"] .user-markdown-editor.vditor .vditor-menu {
   color: var(--text) !important;
   border-color: #334458 !important;
   background: var(--surface-soft) !important;
@@ -2101,45 +2149,45 @@ details.resource-subsection summary::-webkit-details-marker {
 
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-content,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-content,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-content,
+:root[data-theme="dark"] .user-markdown-editor .vditor-content,
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-wysiwyg,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-wysiwyg,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-wysiwyg,
+:root[data-theme="dark"] .user-markdown-editor .vditor-wysiwyg,
 :root[data-theme="dark"] .markdown-editor .vditor [contenteditable="true"],
 :root[data-theme="dark"] .admin-markdown-field .vditor [contenteditable="true"],
-:root[data-theme="dark"] .user-markdown-editor .vditor [contenteditable="true"],
+:root[data-theme="dark"] .user-markdown-editor [contenteditable="true"],
 :root[data-theme="dark"] .markdown-editor .vditor textarea,
 :root[data-theme="dark"] .admin-markdown-field .vditor textarea,
-:root[data-theme="dark"] .user-markdown-editor .vditor textarea,
+:root[data-theme="dark"] .user-markdown-editor textarea,
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-preview,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-preview,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-preview,
+:root[data-theme="dark"] .user-markdown-editor .vditor-preview,
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-reset,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-reset,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-reset {
+:root[data-theme="dark"] .user-markdown-editor .vditor-reset {
   color: var(--text) !important;
   background: var(--surface) !important;
 }
 
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-toolbar button,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-toolbar button,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-toolbar button,
+:root[data-theme="dark"] .user-markdown-editor.vditor .vditor-toolbar button,
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-toolbar svg,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-toolbar svg,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-toolbar svg {
+:root[data-theme="dark"] .user-markdown-editor.vditor .vditor-toolbar svg {
   color: var(--text) !important;
   fill: currentColor !important;
 }
 
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-menu__content,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-menu__content,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-menu__content,
+:root[data-theme="dark"] .user-markdown-editor.vditor .vditor-menu__content,
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-emojis,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-emojis,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-emojis,
+:root[data-theme="dark"] .user-markdown-editor .vditor-emojis,
 :root[data-theme="dark"] .markdown-editor .vditor .vditor-tooltip,
 :root[data-theme="dark"] .admin-markdown-field .vditor .vditor-tooltip,
-:root[data-theme="dark"] .user-markdown-editor .vditor .vditor-tooltip {
+:root[data-theme="dark"] .user-markdown-editor .vditor-tooltip {
   color: var(--text) !important;
   border-color: #334458 !important;
   background: var(--surface) !important;
@@ -2343,4 +2391,60 @@ details.resource-subsection summary::-webkit-details-marker {
   line-height: 18px;
   text-align: center;
   vertical-align: middle;
+}
+
+/* ===== 后台侧边栏两级导航（P0，主题化） ===== */
+#admin-app { display: flex; gap: 0; align-items: flex-start; }
+.admin-nav {
+  flex: 0 0 210px; position: sticky; top: 16px; align-self: flex-start;
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: calc(100vh - 32px);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 0 0 1px rgba(148,163,184,.08), 0 10px 26px rgba(15,23,42,.05);
+  padding: 10px; margin-right: 20px;
+}
+.admin-nav-scroll {
+  display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto; min-height: 0; flex: 1 1 auto;
+  scrollbar-width: thin;
+}
+#admin-app[data-nav-collapsed="1"] { flex-direction: row; }
+#admin-app[data-nav-collapsed="1"] .admin-nav { flex: 0 0 auto; width: 46px; padding: 10px 6px; align-items: center; }
+#admin-app[data-nav-collapsed="1"] .admin-nav-group-head,
+#admin-app[data-nav-collapsed="1"] .admin-nav-items,
+#admin-app[data-nav-collapsed="1"] .admin-nav-flat-toggle { display: none; }
+.admin-nav-collapse {
+  border: none; background: none; cursor: pointer; font-size: 0.8em;
+  color: var(--muted); text-align: left; padding: 4px 8px; border-radius: 8px;
+  flex: 0 0 auto; white-space: nowrap;
+}
+.admin-nav-collapse:hover { background: var(--surface-soft); }
+#admin-app[data-nav-collapsed="1"] .admin-nav-collapse {
+  width: 34px; height: 34px; padding: 0; text-align: center; line-height: 34px; font-size: 1em;
+}
+.admin-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.admin-nav-group-head {
+  text-align: left; border: none; background: none; font-weight: 800;
+  font-size: 0.72em; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); padding: 8px 10px 4px; cursor: pointer;
+}
+.admin-nav-items { display: flex; flex-direction: column; gap: 2px; }
+.admin-nav-group--collapsed .admin-nav-items { display: none; }
+.admin-nav-item {
+  text-align: left; justify-content: flex-start; min-height: 36px;
+  font-size: 0.88em; border: none; background: none; border-radius: 10px;
+  color: var(--text); font-weight: 600; padding: 7px 12px; cursor: pointer;
+}
+.admin-nav-item:hover { background: var(--surface-soft); }
+.admin-nav-item.secondary { color: var(--muted); }
+.admin-nav-item:not(.secondary) { background: rgba(75,31,111,0.10); color: var(--primary); }
+.admin-nav-item--locked, .admin-nav-item--locked:hover { opacity: 0.4; cursor: not-allowed; background: none; }
+.admin-nav-flat-toggle { border: none; background: none; color: var(--muted); font-size: 0.75em; text-align: left; padding: 8px 10px; cursor: pointer; flex: 0 0 auto; }
+.admin-nav-flat-toggle:hover { background: var(--surface-soft); border-radius: 8px; }
+@media (max-width: 900px) {
+  #admin-app { flex-direction: column; }
+  .admin-nav { position: static; flex: none; width: 100%; margin-right: 0; max-height: none; }
+  .admin-nav-scroll { overflow: visible; }
+  .admin-nav-items { flex-direction: row; flex-wrap: wrap; }
+  #admin-app[data-nav-collapsed="1"] .admin-nav { width: 100%; flex-direction: row; }
 }

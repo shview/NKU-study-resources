@@ -32,24 +32,7 @@ import "vditor/dist/index.css";
         <strong>首次登录请修改密码</strong>
         <p class="muted">当前使用初始密码，请在下方「修改我的密码」中设置新密码后继续。</p>
       </div>
-      <div class="admin-tabs">
-        <button class="button" type="button" data-admin-tab="resources">课程资源</button>
-        <button class="button secondary" type="button" data-admin-tab="reviews">评价审核</button>
-        <button class="button secondary" type="button" data-admin-tab="participate">参与页面</button>
-        <button class="button secondary" type="button" data-admin-tab="feedback">反馈管理</button>
-        <button class="button secondary" type="button" data-admin-tab="links">友链页面</button>
-        <button class="button secondary" type="button" data-admin-tab="home">首页设置</button>
-        <button class="button secondary" type="button" data-admin-tab="footer">页脚设置</button>
-        <button class="button secondary" type="button" data-admin-tab="editor-settings">编辑器设置</button>
-        <button class="button secondary" type="button" data-admin-tab="stats">访问统计</button>
-        <button class="button secondary" type="button" data-admin-tab="about">关于页面</button>
-        <button class="button secondary" type="button" data-admin-tab="backup">备份</button>
-        <button class="button secondary" type="button" data-admin-tab="accounts">账号管理</button>
-        <button class="button secondary" type="button" data-admin-tab="service-keys">服务密钥</button>
-        <button class="button secondary" type="button" data-admin-tab="mp-users">小程序用户</button>
-        <button class="button secondary" type="button" data-admin-tab="notify">通知设置</button>
-        <button class="button secondary" type="button" data-admin-tab="audit">审计日志</button>
-      </div>
+      <aside class="admin-nav" id="admin-nav" aria-label="管理导航"></aside>
 
       <div id="resource-admin-panel">
         <div class="panel admin-toolbar">
@@ -139,6 +122,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-reviews" type="button">保存评价设置</button>
+              <button class="button secondary clean-images" type="button" data-owner="reviews">清理未引用图片</button>
               <button class="button secondary" id="reload-reviews" type="button">重新加载</button>
               <button class="button secondary" id="logout-reviews" type="button">退出</button>
               <span class="muted" id="review-admin-status"></span>
@@ -189,6 +173,33 @@ import "vditor/dist/index.css";
                           <span class="muted" id="review-merge-status"></span>
                         </div>
                       </div>
+                      <details class="card admin-collapsible-card" style="margin-top: 14px;">
+                        <summary>往目录池加课程（评价可选课程补充）</summary>
+                        <div class="admin-form" style="margin-top: 14px;">
+                          <div class="filter-row">
+                            <label class="admin-field" style="flex:2;">
+                              <span>课程名称（必填）</span>
+                              <input id="catalog-add-name" type="text" maxlength="120" placeholder="如：量子计算导论" autocomplete="off" />
+                            </label>
+                            <label class="admin-field" style="flex:1;">
+                              <span>开课学院（选填）</span>
+                              <input id="catalog-add-category" type="text" maxlength="80" placeholder="如：计算机学院" autocomplete="off" />
+                            </label>
+                            <label class="admin-field" style="flex:1;">
+                              <span>学期（选填）</span>
+                              <input id="catalog-add-term" type="text" maxlength="40" placeholder="如：2026-2027-1" autocomplete="off" />
+                            </label>
+                          </div>
+                          <label class="admin-field">
+                            <span>任课教师（必填，多位用顿号或逗号分隔）</span>
+                            <input id="catalog-add-teachers" type="text" placeholder="如：李四、王五" autocomplete="off" />
+                          </label>
+                          <div class="filter-row">
+                            <button class="button" type="button" id="catalog-add-submit">加入目录池</button>
+                            <span class="muted" id="catalog-add-status">加入后立即生效：网页与小程序评价均可搜索并提交该课程。</span>
+                          </div>
+                        </div>
+                      </details>
                       <div class="review-admin-list" id="review-admin-list" style="margin-top: 14px;"></div>
                     </div>
                   </div>
@@ -206,6 +217,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-participate" type="button">保存并发布参与页</button>
+              <button class="button secondary clean-images" type="button" data-owner="participate">清理未引用图片</button>
               <button class="button secondary" id="reload-participate" type="button">重新加载</button>
               <span class="muted" id="participate-admin-status"></span>
             </div>
@@ -222,6 +234,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-feedback" type="button">保存反馈</button>
+              <button class="button secondary clean-images" type="button" data-owner="feedback">清理未引用图片</button>
               <button class="button secondary" id="reload-feedback" type="button">重新加载</button>
               <span class="muted" id="feedback-admin-status"></span>
             </div>
@@ -235,9 +248,11 @@ import "vditor/dist/index.css";
               <input class="searchbar" id="feedback-admin-search" type="search" placeholder="搜索标题、内容或联系方式" autocomplete="off" />
               <select class="searchbar" id="feedback-status-filter">
                 <option value="all">全部状态</option>
-                <option value="open">待处理</option>
+                <option value="pending">待审核</option>
+                <option value="processing">处理中</option>
+                <option value="approved">已公开</option>
                 <option value="completed">已完成</option>
-                <option value="rejected">不予完成</option>
+                <option value="rejected">驳回/不予完成</option>
                 <option value="parked">搁置</option>
                 <option value="hidden">已隐藏</option>
               </select>
@@ -321,10 +336,143 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-about" type="button">保存并发布关于页</button>
+              <button class="button secondary clean-images" type="button" data-owner="about">清理未引用图片</button>
               <button class="button secondary" id="reload-about" type="button">重新加载</button>
               <span class="muted" id="about-admin-status"></span>
             </div>
             <div class="admin-form" id="about-admin-editor"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="donate-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>捐助页面管理</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-donate" type="button">保存并发布捐助页</button>
+              <button class="button secondary clean-images" type="button" data-owner="donate">清理未引用图片</button>
+              <button class="button secondary" id="reload-donate" type="button">重新加载</button>
+              <span class="muted" id="donate-admin-status"></span>
+            </div>
+            <div class="admin-form" id="donate-admin-editor"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
+            <h2>捐赠记录（公开表：时间 / 昵称 / 去向）</h2>
+          </div>
+          <div class="panel-body">
+            <p class="field-hint" style="margin: 0 0 12px;">支付成功后自动追加一行（无昵称显示"好心人"，去向初始"待定"）；此处可修改去向或补充历史记录，随"保存并发布捐助页"一起生效。</p>
+
+      <div id="donate-records-editor"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
+            <h2>捐赠统计</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button secondary" id="reload-donate-stats" type="button">刷新统计</button>
+              <input class="searchbar" id="donate-stats-search" type="search" placeholder="搜索单号 / 昵称 / 备注 / 交易号 / 金额" style="max-width: 280px;" />
+              <select class="searchbar" id="donate-stats-status" style="max-width: 130px;">
+                <option value="all">全部状态</option>
+                <option value="paid">已支付</option>
+                <option value="pending">待支付</option>
+              </select>
+              <select class="searchbar" id="donate-stats-source" style="max-width: 140px;">
+                <option value="all">全部来源</option>
+                <option value="jsapi">小程序</option>
+                <option value="native">网页扫码</option>
+              </select>
+              <span class="muted" id="donate-stats-status"></span>
+            </div>
+            <div id="donate-stats-body" style="margin-top: 14px;"></div>
+            <div class="filter-row" id="donate-stats-pager" style="margin-top: 10px;"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 20px;">
+          <div class="panel-header">
+            <h2>微信支付设置</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-donate-pay" type="button">保存支付配置</button>
+              <span class="muted" id="donate-pay-status"></span>
+            </div>
+            <div class="admin-form" id="donate-pay-editor"></div>
+            <p class="field-hint">填入微信支付商户号（APIv3）并勾选启用后，小程序捐助的支付功能才会真正下单。商户私钥仅服务器保存（0600），不回显。</p>
+          </div>
+        </div>
+      </div>
+
+            <div id="privacy-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>隐私与协议</h2>
+          </div>
+          <div class="panel-body">
+            <div class="filter-row">
+              <button class="button" id="save-privacy" type="button">保存并发布</button>
+              <button class="button secondary" id="reload-privacy" type="button">重新加载</button>
+              <span class="muted" id="privacy-admin-status"></span>
+            </div>
+            <div class="admin-form" id="privacy-admin-editor"></div>
+            <p class="field-hint">公开地址 <a href="/privacy/" target="_blank" rel="noreferrer">/privacy/</a>；内容需与实际收集一致（手机号、IP 与日志、账号资料、保存规则、注销、举报、联系方式）。</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="reports-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header split-header">
+            <h2>举报处置</h2>
+            <span class="muted" id="reports-admin-status"></span>
+          </div>
+          <div class="panel-body">
+            <p class="field-hint" style="margin: 0 0 12px;">违法有害信息举报与内容投诉。举报内容不公开展示；处置动作自动记录处理人与时间，并可封禁提交账号（封禁在「小程序用户」执行）。</p>
+            <div class="filter-row" style="margin-bottom: 12px;">
+              <input class="searchbar" id="reports-search" type="search" placeholder="搜索举报标题/内容/对象" style="flex:1;min-width:220px;" />
+              <select class="searchbar" id="reports-status-filter" style="max-width: 140px;">
+                <option value="all">全部状态</option>
+                <option value="pending">待审核</option>
+                <option value="processing">处理中</option>
+                <option value="completed">已处理</option>
+                <option value="rejected">不成立</option>
+                <option value="parked">搁置</option>
+              </select>
+            </div>
+            <div id="reports-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="law-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>依法调取（内部）</h2>
+          </div>
+          <div class="panel-body">
+            <p class="field-hint">仅在收到合法调取要求并按 SOP 核验后使用。每次查询与导出都会记录（查询人/时间/条件/结果）。流程见 docs/SECURITY_COMPLIANCE_SOP.md。</p>
+            <div class="filter-row">
+              <select class="searchbar" id="law-query-type" style="max-width:160px;">
+                <option value="account">按账号</option>
+                <option value="review">按评价 ID</option>
+                <option value="feedback">按反馈/举报 ID</option>
+              </select>
+              <input class="searchbar" id="law-query-value" type="text" placeholder="user_id / 手机号 / openid / 内容ID" style="max-width: 320px;" />
+              <button class="button" id="law-query-run" type="button">查询</button>
+              <button class="button secondary" id="law-export-run" type="button">导出 JSON</button>
+              <span class="muted" id="law-admin-status"></span>
+            </div>
+            <div id="law-result" style="margin-top: 14px;"></div>
+            <div class="filter-row" style="margin-top: 18px;">
+              <button class="button secondary" id="law-log-refresh" type="button">刷新调取记录</button>
+            </div>
+            <div id="law-logs" style="margin-top: 10px;"></div>
           </div>
         </div>
       </div>
@@ -337,6 +485,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-home" type="button">保存并发布首页</button>
+              <button class="button secondary clean-images" type="button" data-owner="home">清理未引用图片</button>
               <button class="button secondary" id="reload-home" type="button">重新加载</button>
               <span class="muted" id="home-admin-status"></span>
             </div>
@@ -353,6 +502,7 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-footer" type="button">保存并发布页脚</button>
+              <button class="button secondary clean-images" type="button" data-owner="footer">清理未引用图片</button>
               <button class="button secondary" id="reload-footer" type="button">重新加载</button>
               <span class="muted" id="footer-admin-status"></span>
             </div>
@@ -439,6 +589,69 @@ import "vditor/dist/index.css";
               <label class="admin-field"><span>确认新密码</span><input id="self-confirm-password" type="password" autocomplete="new-password" placeholder="再次输入新密码" /></label>
               <button class="button" id="change-self-password" type="button">修改密码</button>
               <span class="muted" id="self-password-status"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ai-admin-panel" hidden>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>AI 问答（API 与模型管理）</h2>
+          </div>
+          <div class="panel-body">
+            <p class="muted">学习指南针 AI 问答的模型与限流配置。密钥加密落盘（0600），保存后立即生效、无需重启；停用或未配置密钥时问答接口返回 503，普通指南不受影响。</p>
+            <div class="admin-form">
+              <div class="filter-row">
+                <label class="admin-field" style="max-width:180px;">
+                  <span>服务状态</span>
+                  <select id="ai-enabled">
+                    <option value="true">启用</option>
+                    <option value="false">停用（503）</option>
+                  </select>
+                </label>
+                <label class="admin-field" style="flex:1;">
+                  <span>DashScope API Key（留空保持不变）</span>
+                  <input id="ai-api-key" type="password" placeholder="sk-…（当前：未配置）" autocomplete="new-password" />
+                </label>
+                <label class="admin-field" style="max-width:120px;">
+                  <span>&nbsp;</span>
+                  <button class="button secondary" id="ai-clear-key" type="button">清除密钥</button>
+                </label>
+              </div>
+              <div class="filter-row">
+                <label class="admin-field" style="flex:2;">
+                  <span>Base URL（必须是阿里云 HTTPS）</span>
+                  <input id="ai-base-url" type="text" autocomplete="off" />
+                </label>
+                <label class="admin-field" style="flex:1;">
+                  <span>模型</span>
+                  <input id="ai-model" type="text" placeholder="qwen-plus" autocomplete="off" />
+                </label>
+                <label class="admin-field" style="max-width:140px;">
+                  <span>max_tokens</span>
+                  <input id="ai-max-tokens" type="number" min="64" max="8192" />
+                </label>
+              </div>
+              <div class="filter-row">
+                <label class="admin-field" style="max-width:180px;">
+                  <span>每用户每日次数</span>
+                  <input id="ai-daily-user" type="number" min="1" max="10000" />
+                </label>
+                <label class="admin-field" style="max-width:180px;">
+                  <span>每用户每分钟次数</span>
+                  <input id="ai-minute-user" type="number" min="1" max="1000" />
+                </label>
+                <label class="admin-field" style="max-width:180px;">
+                  <span>全局每日次数</span>
+                  <input id="ai-daily-global" type="number" min="1" max="1000000" />
+                </label>
+                <button class="button" id="ai-save" type="button">保存配置</button>
+                <button class="button secondary" id="ai-test" type="button">测试连接</button>
+              </div>
+              <div class="filter-row">
+                <span class="muted" id="ai-status"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -539,6 +752,11 @@ import "vditor/dist/index.css";
           </div>
           <div class="panel-body">
             <div id="notify-bot-list" style="margin-bottom: 14px;"></div>
+            <div class="filter-row" style="margin-bottom: 14px; align-items: center;">
+              <label class="perm-check perm-check-inline"><input id="notify-guide-feedback-enabled" type="checkbox" checked /> 接收指南反馈提交</label>
+              <button class="button secondary" id="notify-guide-feedback-save" type="button">保存</button>
+              <span class="muted" id="notify-guide-feedback-status">关闭后，小程序指南页/AI 页的“指南反馈”提交会被静默忽略（返回成功，但不记录、不通知）；普通反馈不受影响。</span>
+            </div>
             <details class="card admin-collapsible-card" id="notify-bot-editor-card">
               <summary>新增 / 编辑机器人</summary>
               <div class="admin-form" style="margin-top: 14px;">
@@ -663,7 +881,7 @@ import "vditor/dist/index.css";
 
   <script>
     import Vditor from "vditor";
-    import { statusWithWarnings } from "../lib/admin-response-warnings.js";
+    import { r2SyncStatus, statusWithWarnings } from "../lib/admin-response-warnings.js";
 
     let state = null;
     let manifestRevision = "";
@@ -708,6 +926,25 @@ import "vditor/dist/index.css";
     const reviewAdminPanel = document.querySelector("#review-admin-panel");
     const reviewRulesEditor = document.querySelector("#review-rules-editor");
     const reviewAdminList = document.querySelector("#review-admin-list");
+    document.querySelector("#catalog-add-submit").addEventListener("click", async () => {
+      const status = document.querySelector("#catalog-add-status");
+      const name = document.querySelector("#catalog-add-name").value.trim();
+      const categories = document.querySelector("#catalog-add-category").value.trim();
+      const term = document.querySelector("#catalog-add-term").value.trim();
+      const teachers = document.querySelector("#catalog-add-teachers").value.trim();
+      if (name.length < 2) { status.textContent = "请填写课程名称（至少 2 个字）。"; return; }
+      if (!teachers) { status.textContent = "请至少填写一位任课教师。"; return; }
+      status.textContent = "提交中...";
+      try {
+        await api("/catalog/courses", { method: "POST", body: JSON.stringify({ name, categories, terms: term, teachers }) });
+        for (const id of ["catalog-add-name", "catalog-add-category", "catalog-add-term", "catalog-add-teachers"]) {
+          document.querySelector("#" + id).value = "";
+        }
+        status.textContent = `已加入目录池：${name}。网页与小程序评价即可使用。`;
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
     const reviewAdminSidebar = document.querySelector("#review-admin-sidebar");
     const reviewAdminSidebarSearch = document.querySelector("#review-admin-sidebar-search");
     const reviewAdminSearch = document.querySelector("#review-admin-search");
@@ -729,6 +966,22 @@ import "vditor/dist/index.css";
     const participateAdminStatus = document.querySelector("#participate-admin-status");
     const aboutAdminPanel = document.querySelector("#about-admin-panel");
     const aboutAdminEditor = document.querySelector("#about-admin-editor");
+    const donateAdminPanel = document.querySelector("#donate-admin-panel");
+    const privacyAdminPanel = document.querySelector("#privacy-admin-panel");
+    const reportsAdminPanel = document.querySelector("#reports-admin-panel");
+    const reportsList = document.querySelector("#reports-list");
+    const lawAdminPanel = document.querySelector("#law-admin-panel");
+    const donateAdminStatus = document.querySelector("#donate-admin-status");
+    const privacyAdminEditor = document.querySelector("#privacy-admin-editor");
+    const privacyAdminStatus = document.querySelector("#privacy-admin-status");
+    let privacyState = null;
+    let lawResultData = null;
+    const donateRecordsEditor = document.querySelector("#donate-records-editor");
+    const donateStatsBody = document.querySelector("#donate-stats-body");
+    const donateAdminEditor = document.querySelector("#donate-admin-editor");
+    const donatePayEditor = document.querySelector("#donate-pay-editor");
+    let donateState = null;
+    let donatePayState = null;
     const aboutAdminStatus = document.querySelector("#about-admin-status");
     const homeAdminPanel = document.querySelector("#home-admin-panel");
     const homeAdminEditor = document.querySelector("#home-admin-editor");
@@ -756,11 +1009,23 @@ import "vditor/dist/index.css";
     const accountsAdminList = document.querySelector("#accounts-admin-list");
     const mpUsersAdminPanel = document.querySelector("#mp-users-admin-panel");
     const serviceKeysAdminPanel = document.querySelector("#service-keys-admin-panel");
+    const aiAdminPanel = document.querySelector("#ai-admin-panel");
+    bindAiAdminEvents();
     const mpUsersAdminStatus = document.querySelector("#mp-users-admin-status");
     const mpUsersSummary = document.querySelector("#mp-users-summary");
     const mpUsersList = document.querySelector("#mp-users-list");
     const notifyAdminPanel = document.querySelector("#notify-admin-panel");
     const notifyAdminStatus = document.querySelector("#notify-admin-status");
+    document.querySelector("#notify-guide-feedback-save").addEventListener("click", async () => {
+      const status = document.querySelector("#notify-guide-feedback-status");
+      status.textContent = "保存中...";
+      try {
+        await api("/notify-settings", { method: "POST", body: JSON.stringify({ guide_feedback_enabled: document.querySelector("#notify-guide-feedback-enabled").checked }) });
+        status.textContent = "已保存。";
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
     let mpUsersState = null;
     let mpUsersSort = "recent";
     let mpUsersDays = 0;
@@ -783,12 +1048,17 @@ import "vditor/dist/index.css";
       "backup.manage": "备份管理",
       "accounts.manage": "账号管理",
       "audit.read": "审计查看",
+      "ai.manage": "AI 问答",
+      "services.manage": "服务密钥",
+      "law.manage": "依法调取",
     };
     const rolePresetFallback = {
       super_admin: ["accounts.manage", "audit.read", "backup.manage", "content.edit", "content.moderate", "content.read", "storage.delete", "storage.manage"],
       content_admin: ["content.read", "content.edit", "content.moderate"],
       reviewer: ["content.read", "content.moderate"],
       viewer: ["content.read"],
+      service_admin: ["services.manage"],
+      ai_admin: ["ai.manage"],
     };
     const tabPermissions = {
       resources: "content.read",
@@ -800,10 +1070,15 @@ import "vditor/dist/index.css";
       home: "content.edit",
       footer: "content.edit",
       about: "content.edit",
+      donate: "content.edit",
+      privacy: "content.edit",
+      reports: "content.moderate",
+      law: "law.manage",
       "editor-settings": "content.edit",
       backup: "backup.manage",
       accounts: "accounts.manage",
       "service-keys": "services.manage",
+      ai: "ai.manage",
       "mp-users": "content.read",
       notify: "backup.manage",
       audit: "audit.read",
@@ -894,6 +1169,10 @@ import "vditor/dist/index.css";
           currentRevision: data.currentRevision,
         });
         if (response.status === 409) error.message += "\n服务器内容已变化，本次没有覆盖。请重新加载后再编辑。";
+        if (response.status === 401) {
+          error.message = "登录已过期，请重新登录。";
+          showSessionExpired();
+        }
         throw error;
       }
       return data;
@@ -1188,6 +1467,329 @@ import "vditor/dist/index.css";
       renderAboutAdmin();
     }
 
+    function reportsFiltered() {
+      const keyword = String(document.querySelector("#reports-search")?.value || "").trim().toLowerCase();
+      const status = document.querySelector("#reports-status-filter")?.value || "all";
+      return (feedbackState?.items ?? [])
+        .filter((item) => item.type === "report" || item.type === "complaint")
+        .filter((item) => status === "all" || String(item.status || "pending") === status)
+        .filter((item) => !keyword || `${item.title} ${item.content} ${item.report_target || ""} ${item.report_url || ""}`.toLowerCase().includes(keyword));
+    }
+
+    function renderReportsAdmin() {
+      if (!reportsList) return;
+      if (!feedbackState) {
+        reportsList.innerHTML = '<p class="empty">加载中…（数据来自反馈库）</p>';
+        loadFeedbackAdmin().then(() => renderReportsAdmin()).catch(() => {});
+        return;
+      }
+      const items = reportsFiltered();
+      if (!items.length) {
+        reportsList.innerHTML = '<p class="empty">暂无举报。</p>';
+        return;
+      }
+      const esc = (v) => String(v ?? "").replace(/[<>&"]/g, "");
+      const typeLabels = { report: "违法举报", complaint: "内容投诉" };
+      reportsList.innerHTML = items.map((item, index) => `
+        <div class="review-admin-item" data-report-index="${index}">
+          <div class="course-meta">
+            <span class="pill">${esc(typeLabels[item.type] || item.type)}</span>
+            <span class="pill">${esc(item.status || "pending")}</span>
+            ${item.handled_by ? `<span class="pill">处理人 ${esc(item.handled_by)} · ${esc(item.handled_at || "")}</span>` : ""}
+          </div>
+          <h3 style="margin: 10px 0 4px;">${esc(item.title)}</h3>
+          ${item.report_url || item.report_target ? `<p class="muted" style="font-size:0.85em;">被举报对象：${esc(item.report_target || "")} ${esc(item.report_url || "")}</p>` : ""}
+          <p>${esc(item.content)}</p>
+          <small class="muted">${esc(item.createdAt || "")} · 提交账号 user_id=${esc(item.user_id ?? "-")}</small>
+          <div class="filter-row" style="margin-top: 10px;" data-ops="${index}">
+            <select class="searchbar report-status-select" style="max-width: 150px;">
+              <option value="pending" ${item.status === "pending" ? "selected" : ""}>待审核</option>
+              <option value="processing" ${item.status === "processing" ? "selected" : ""}>处理中</option>
+              <option value="completed" ${item.status === "completed" ? "selected" : ""}>已处理</option>
+              <option value="rejected" ${item.status === "rejected" ? "selected" : ""}>不成立</option>
+              <option value="parked" ${item.status === "parked" ? "selected" : ""}>搁置</option>
+            </select>
+            <button class="button save-report" type="button">保存处置</button>
+            <span class="muted report-save-status"></span>
+          </div>
+        </div>
+      `).join("");
+      for (const row of reportsList.querySelectorAll("[data-ops]")) {
+        const item = items[Number(row.dataset.ops)];
+        row.querySelector(".save-report").addEventListener("click", async () => {
+          const status = row.querySelector(".report-status-select").value;
+          const statusEl = row.querySelector(".report-save-status");
+          statusEl.textContent = "保存中...";
+          item.status = status;
+          item.handled_by = sessionState?.username || "admin";
+          item.handled_at = new Date().toISOString();
+          item.updatedAt = item.handled_at;
+          try {
+            const data = await api("/feedback", { method: "POST", body: JSON.stringify({ data: feedbackState, expectedRevision: contentRevisions.get("feedback") }) });
+            feedbackState = data.data;
+            contentRevisions.set("feedback", data.revision);
+            statusEl.textContent = "已保存";
+            renderReportsAdmin();
+          } catch (error) {
+            statusEl.textContent = error.message;
+          }
+        });
+      }
+    }
+
+    async function loadPrivacyAdmin() {
+      const data = await api("/privacy");
+      privacyState = data.data;
+      contentRevisions.set("privacy", data.revision);
+      renderPrivacyAdmin();
+    }
+
+    function renderPrivacyAdmin() {
+      if (!privacyState) return;
+      privacyAdminEditor.innerHTML = "";
+      privacyAdminEditor.append(
+        field("标题", privacyState.title ?? "", (value) => { privacyState.title = value; }),
+        markdownField("正文（支持 Markdown）", privacyState.content ?? "", (value) => { privacyState.content = value; }, { height: 420 })
+      );
+      mountMarkdownEditors(privacyAdminEditor);
+    }
+
+    async function runLawQuery({ exportJson = false } = {}) {
+      const status = document.querySelector("#law-admin-status");
+      const type = document.querySelector("#law-query-type").value;
+      const value = document.querySelector("#law-query-value").value.trim();
+      if (!value) { status.textContent = "请输入查询值"; return; }
+      status.textContent = "查询中...";
+      try {
+        const param = type === "account" ? "value" : "id";
+        const url = `${exportJson ? "/law-export" : "/law-query"}?type=${encodeURIComponent(type)}&${param}=${encodeURIComponent(value)}`;
+        if (exportJson) {
+          status.textContent = "";
+          window.location.href = url;
+          await new Promise((r) => setTimeout(r, 800));
+          await loadLawLogs();
+          return;
+        }
+        const response = await fetch(url, { headers: { "x-nkustudy-admin-request": "1" } });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "查询失败");
+        lawResultData = data.data;
+        renderLawResult();
+        renderLawLogs(data.law_logs || []);
+        status.textContent = "";
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    }
+
+    function renderLawResult() {
+      const box = document.querySelector("#law-result");
+      if (!lawResultData) { box.innerHTML = ""; return; }
+      const d = lawResultData;
+      const esc = (v) => String(v ?? "").replace(/[<>&]/g, "");
+      const accountHtml = d.account ? `
+        <div class="card" style="padding:14px 18px;margin-bottom:12px;">
+          <b>账号 #${d.account.id}</b> · 昵称：${esc(d.account.nickname) || "-"} · 手机号：${esc(d.account.phone) || "未验证"}（验证时间：${d.account.phone_verified_at ? new Date(d.account.phone_verified_at).toISOString().slice(0, 19) : "-"}）
+          <div class="muted" style="font-size:0.85em;">注册 ${new Date(d.account.created_at).toISOString().slice(0, 19)} · 最近登录 ${d.account.last_login_at ? new Date(d.account.last_login_at).toISOString().slice(0, 19) : "-"} · 状态 ${d.account.blocked ? "已封禁" : "正常"}</div>
+        </div>` : "";
+      const listHtml = (rows, label) => rows.length ? `<p><b>${label}（${rows.length}）</b></p>` : "";
+      box.innerHTML = `
+        ${accountHtml}
+        ${listHtml(d.reviews, "评价")}
+        ${d.reviews.map((r) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>${esc(r.courseTitle)} · ${esc(r.teacher)}</b> <span class="muted">(${esc(r.status)}${r.hidden ? "·hidden" : ""})</span><div style="font-size:0.9em;">${esc(r.content).slice(0, 200)}</div></div>`).join("")}
+        ${listHtml(d.feedback, "反馈/举报")}
+        ${d.feedback.map((f) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>[${esc(f.type)}] ${esc(f.title)}</b> <span class="muted">(${esc(f.status)})</span>${f.report_url ? `<div class="muted" style="font-size:0.85em;">关联：${esc(f.report_url)} ${esc(f.report_target || "")}</div>` : ""}<div style="font-size:0.9em;">${esc(f.content).slice(0, 200)}</div></div>`).join("")}
+        ${listHtml(d.security_logs, "安全日志（最近展示）")}
+        ${(d.security_logs || []).slice(0, 30).map((l) => `<div class="muted" style="font-size:0.8em;">${new Date(l.at).toISOString().slice(0, 19)} · ${esc(l.action)} · ${esc(l.target_type)}:${esc(l.target_id)} · IP ${esc(l.ip)} · ${esc(l.result)}</div>`).join("")}
+      `;
+    }
+
+    function renderLawLogs(rows) {
+      const box = document.querySelector("#law-logs");
+      box.innerHTML = rows.length ? `<table class="admin-table"><thead><tr><th>时间</th><th>操作人</th><th>类型</th><th>条件</th><th>导出</th><th>结果概要</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${new Date(row.at + 8 * 3600 * 1000).toISOString().slice(0, 19)}</td><td>${String(row.queried_by).replace(/[<>&]/g, "")}</td><td>${String(row.query_type).replace(/[<>&]/g, "")}</td><td>${String(row.query_value).replace(/[<>&]/g, "")}</td><td>${row.exported ? "是" : "否"}</td><td class="muted">${String(row.result_summary).replace(/[<>&]/g, "")}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">暂无调取记录</p>';
+    }
+
+    async function loadLawLogs() {
+      try {
+        const response = await fetch("/admin-api/law-query?type=none", { headers: { "x-nkustudy-admin-request": "1" } });
+        // law-query 每次都会记录，改用轻量方式：直接查询日志走 law-query 的 law_logs 字段不合适
+      } catch {}
+    }
+
+    async function loadDonateAdmin() {
+      const data = await api("/donate");
+      donateState = data.data;
+      contentRevisions.set("donate", data.revision);
+      renderDonateAdmin();
+      loadDonatePay();
+      loadDonateStats();
+    }
+
+    async function loadDonatePay() {
+      try {
+        const data = await api("/donate-pay");
+        donatePayState = data.data;
+        renderDonatePay();
+      } catch (error) {
+        donatePayEditor.innerHTML = `<p class="muted">支付配置需「服务密钥」权限：${error.message}</p>`;
+      }
+    }
+
+    function renderDonateAdmin() {
+      if (!donateState) return;
+      donateAdminEditor.innerHTML = "";
+      donateAdminEditor.append(
+        field("标题", donateState.title ?? "", (value) => { donateState.title = value; }),
+        field("预设金额（元，逗号分隔，最多6个）", (donateState.amounts ?? []).join(", "), (value) => {
+          donateState.amounts = value.split(/[,，]/).map((item) => Number(item.trim())).filter((item) => Number.isFinite(item) && item > 0);
+        }),
+        markdownField("正文（支持 Markdown，可插图）", donateState.content ?? "", (value) => { donateState.content = value; }, { height: 360, owner: "donate" })
+      );
+      mountMarkdownEditors(donateAdminEditor);
+      renderDonateRecords();
+    }
+
+    function renderDonateRecords() {
+      if (!donateRecordsEditor) return;
+      if (!Array.isArray(donateState.records)) donateState.records = [];
+      donateRecordsEditor.innerHTML = "";
+      const ensure = (row) => {
+        if (!row || typeof row !== "object") return { date: "", nickname: "", usage: "" };
+        return row;
+      };
+      donateState.records.forEach((rawRow, index) => {
+        const row = ensure(rawRow);
+        const line = document.createElement("div");
+        line.className = "filter-row";
+        line.style.marginBottom = "8px";
+        const make = (value, placeholder, onInput) => {
+          const input = document.createElement("input");
+          input.className = "searchbar";
+          input.style.minHeight = "36px";
+          input.value = String(value ?? "");
+          input.placeholder = placeholder;
+          input.addEventListener("input", () => onInput(input.value));
+          return input;
+        };
+        const dateInput = make(row.date, "2026-09-22", (value) => { row.date = value.slice(0, 10); });
+        dateInput.style.maxWidth = "140px";
+        const nickInput = make(row.nickname, "昵称（空=好心人）", (value) => { row.nickname = value.slice(0, 32); });
+        nickInput.style.maxWidth = "160px";
+        const usageInput = make(row.usage, "去向（初始待定）", (value) => { row.usage = value.slice(0, 40); });
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "button secondary";
+        del.textContent = "删除";
+        del.addEventListener("click", () => {
+          donateState.records.splice(index, 1);
+          renderDonateRecords();
+        });
+        line.append(dateInput, nickInput, usageInput, del);
+        donateRecordsEditor.append(line);
+      });
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "button secondary";
+      add.textContent = "添加记录";
+      add.addEventListener("click", () => {
+        donateState.records.push({ date: "", nickname: "", usage: "" });
+        renderDonateRecords();
+      });
+      donateRecordsEditor.append(add);
+    }
+
+    let donateStatsRows = [];
+    let donateStatsPage = 1;
+    const DONATE_STATS_PAGE_SIZE = 50;
+
+    async function loadDonateStats() {
+      const status = document.querySelector("#donate-stats-status");
+      if (status) status.textContent = "加载中...";
+      try {
+        const data = await api("/donate-stats");
+        donateOrderSummaryCache = data.data.summary;
+        donateStatsRows = data.data.recent || [];
+        donateStatsPage = 1;
+        renderDonateStats(donateOrderSummaryCache);
+        if (status) status.textContent = "";
+      } catch (error) {
+        if (status) status.textContent = error.message;
+      }
+    }
+
+    function donateStatsFiltered() {
+      const keyword = String(document.querySelector("#donate-stats-search")?.value || "").trim().toLowerCase();
+      const statusFilter = document.querySelector("#donate-stats-status")?.value || "all";
+      const sourceFilter = document.querySelector("#donate-stats-source")?.value || "all";
+      return donateStatsRows.filter((row) => {
+        if (statusFilter !== "all" && row.status !== statusFilter) return false;
+        if (sourceFilter !== "all" && (row.source || "") !== sourceFilter) return false;
+        if (!keyword) return true;
+        const date = new Date(Number(row.created_at) + 8 * 3600 * 1000).toISOString().slice(0, 10);
+        return [row.out_trade_no, row.transaction_id, row.nickname, row.remark, String(date), String(row.amount_total / 100)]
+          .map((value) => String(value || "").toLowerCase())
+          .some((value) => value.includes(keyword));
+      });
+    }
+
+    function renderDonateStats(summary) {
+      const yuan = (fen) => (fen / 100).toFixed(2);
+      const sourceLabel = { jsapi: "小程序", native: "网页扫码" };
+      const s = summary || donateOrderSummaryCache;
+      const filtered = donateStatsFiltered();
+      const pages = Math.max(1, Math.ceil(filtered.length / DONATE_STATS_PAGE_SIZE));
+      if (donateStatsPage > pages) donateStatsPage = pages;
+      const slice = filtered.slice((donateStatsPage - 1) * DONATE_STATS_PAGE_SIZE, donateStatsPage * DONATE_STATS_PAGE_SIZE);
+      const rows = slice.map((row) => {
+        const date = new Date(Number(row.created_at) + 8 * 3600 * 1000).toISOString().slice(0, 10);
+        const esc = (value) => String(value || "").replace(/[<>&"]/g, "");
+        return `<tr><td>${date}</td><td>¥${yuan(row.amount_total)}</td><td>${sourceLabel[row.source] || row.source || "-"}</td><td>${esc(row.nickname) || "-"}</td><td>${esc(row.remark) || "-"}</td><td>${row.status === "paid" ? "已支付" : "待支付"}</td><td class="muted" style="font-size:12px;">${esc(row.out_trade_no)}</td></tr>`;
+      }).join("");
+      if (s) {
+        const sources = Object.entries(s.by_source).map(([key, value]) => `${sourceLabel[key] || key} ${value.count} 笔 / ¥${yuan(value.total_fen)}`).join("，") || "暂无";
+        donateStatsBody.innerHTML = `
+          <p style="margin:0 0 8px;"><b>累计入账 ${s.paid_count} 笔 / ¥${yuan(s.paid_total_fen)}</b>（${sources}；待支付 ${s.pending_count} 笔）</p>
+          <table class="admin-table" style="margin-top:8px;"><thead><tr><th>日期</th><th>金额</th><th>来源</th><th>昵称</th><th>备注</th><th>状态</th><th>订单号</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="muted">没有匹配的订单</td></tr>'}</tbody></table>
+        `;
+      }
+      const pager = document.querySelector("#donate-stats-pager");
+      if (pager) {
+        pager.innerHTML = "";
+        const prev = document.createElement("button");
+        prev.type = "button";
+        prev.className = "button secondary";
+        prev.textContent = "上一页";
+        prev.disabled = donateStatsPage <= 1;
+        prev.addEventListener("click", () => { donateStatsPage -= 1; renderDonateStats(); });
+        const next = document.createElement("button");
+        next.type = "button";
+        next.className = "button secondary";
+        next.textContent = "下一页";
+        next.disabled = donateStatsPage >= pages;
+        next.addEventListener("click", () => { donateStatsPage += 1; renderDonateStats(); });
+        const label = document.createElement("span");
+        label.className = "muted";
+        label.textContent = `第 ${donateStatsPage} / ${pages} 页，筛选后 ${filtered.length} 笔（共 ${donateStatsRows.length} 笔）`;
+        pager.append(prev, label, next);
+      }
+    }
+
+    let donateOrderSummaryCache = null;
+
+    function renderDonatePay() {
+      if (!donatePayState) return;
+      donatePayEditor.innerHTML = "";
+      donatePayEditor.append(
+        checkboxField("启用支付（配置齐全并勾选后小程序捐助才可支付）", donatePayState.enabled === true, (value) => { donatePayState.enabled = value; }),
+        field(`商户号 mchid${donatePayState.mchid ? "（已设 " + donatePayState.mchid + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.mchid = value.trim(); }),
+        field(`小程序 AppID${donatePayState.appid ? "（已设 " + donatePayState.appid + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.appid = value.trim(); }),
+        field(`证书序列号${donatePayState.serialNo ? "（已设 " + donatePayState.serialNo + "）" : ""}`, "", (value) => { if (value.trim()) donatePayState.serialNo = value.trim(); }),
+        field("商户 APIv3 私钥（留空=保持不变）", "", (value) => { if (value.trim()) donatePayState.privateKey = value.trim(); }),
+        field("APIv3 密钥（32位，留空=保持不变）", "", (value) => { if (value.trim()) donatePayState.apiV3Key = value.trim(); }),
+        field("支付公钥 PEM（公钥模式，留空=保持不变）", "", (value) => { if (value.trim()) donatePayState.publicKey = value.trim(); })
+      );
+    }
+
     async function loadHomeAdmin() {
       const data = await api("/home");
       homeState = data.data;
@@ -1224,9 +1826,16 @@ import "vditor/dist/index.css";
       return accountsState?.rolePresets && Object.keys(accountsState.rolePresets).length ? accountsState.rolePresets : rolePresetFallback;
     }
 
+    function serverPermissionPoints() {
+      return accountsState?.permissionPoints && accountsState.permissionPoints.length
+        ? accountsState.permissionPoints
+        : Object.keys(permissionLabels);
+    }
+
     function renderPermissionEditor(container, checked) {
       container.innerHTML = "";
-      for (const [permission, label] of Object.entries(permissionLabels)) {
+      for (const permission of serverPermissionPoints()) {
+        const label = permissionLabels[permission] || permission;
         const box = document.createElement("label");
         box.className = "perm-check";
         box.innerHTML = `<input type="checkbox" value="${permission}" ${checked.includes(permission) ? "checked" : ""} /> ${escapeHtml(label)}`;
@@ -1376,6 +1985,81 @@ import "vditor/dist/index.css";
     }
 
     let serviceKeysState = { settings: null, services: [] };
+
+let aiAdminState = { loaded: false, clearKey: false };
+
+async function loadAiAdmin() {
+  const data = await api("/ai-settings");
+  const settings = data.data;
+  document.querySelector("#ai-enabled").value = String(settings.enabled);
+  document.querySelector("#ai-api-key").value = "";
+  document.querySelector("#ai-api-key").placeholder = settings.has_api_key ? `sk-…（当前：${settings.api_key_masked}${settings.seeded_from_env ? "，来自环境变量" : ""}）` : "sk-…（当前：未配置）";
+  document.querySelector("#ai-base-url").value = settings.base_url;
+  document.querySelector("#ai-model").value = settings.model;
+  document.querySelector("#ai-max-tokens").value = settings.max_tokens;
+  document.querySelector("#ai-daily-user").value = settings.daily_limit_per_user;
+  document.querySelector("#ai-minute-user").value = settings.minute_limit_per_user;
+  document.querySelector("#ai-daily-global").value = settings.daily_limit_global;
+  aiAdminState.clearKey = false;
+  aiAdminState.loaded = true;
+}
+
+async function saveAiAdmin() {
+  const status = document.querySelector("#ai-status");
+  status.textContent = "保存中...";
+  const apiKeyInput = document.querySelector("#ai-api-key").value.trim();
+  const body = {
+    settings: {
+      enabled: document.querySelector("#ai-enabled").value === "true",
+      base_url: document.querySelector("#ai-base-url").value.trim(),
+      model: document.querySelector("#ai-model").value.trim(),
+      max_tokens: Number(document.querySelector("#ai-max-tokens").value),
+      daily_limit_per_user: Number(document.querySelector("#ai-daily-user").value),
+      minute_limit_per_user: Number(document.querySelector("#ai-minute-user").value),
+      daily_limit_global: Number(document.querySelector("#ai-daily-global").value),
+    },
+  };
+  if (apiKeyInput) body.api_key = apiKeyInput;
+  if (aiAdminState.clearKey) body.clear_api_key = true;
+  try {
+    await api("/ai-settings", { method: "POST", body: JSON.stringify(body) });
+    await loadAiAdmin();
+    status.textContent = "已保存，正在自动测试连接...";
+    await testAiAdmin();
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+async function testAiAdmin() {
+  const status = document.querySelector("#ai-status");
+  status.textContent = "测试中（最多 15 秒）...";
+  const apiKeyInput = document.querySelector("#ai-api-key").value.trim();
+  const body = {};
+  if (apiKeyInput) body.api_key = apiKeyInput;
+  if (aiAdminState.clearKey) {
+    status.textContent = "已选择清除密钥，请先保存再测试。";
+    return;
+  }
+  try {
+    const data = await api("/ai-settings/test", { method: "POST", body: JSON.stringify(body) });
+    const result = data.data;
+    if (result.ok) status.textContent = `连接成功：模型 ${result.model}，延迟 ${result.latency_ms}ms，回复「${result.preview}」。`;
+    else status.textContent = `连接失败：${result.reason}${result.error ? `（${result.error}）` : ""}`;
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+function bindAiAdminEvents() {
+  document.querySelector("#ai-save").addEventListener("click", saveAiAdmin);
+  document.querySelector("#ai-test").addEventListener("click", testAiAdmin);
+  document.querySelector("#ai-clear-key").addEventListener("click", () => {
+    aiAdminState.clearKey = !aiAdminState.clearKey;
+    document.querySelector("#ai-clear-key").textContent = aiAdminState.clearKey ? "撤销清除" : "清除密钥";
+    document.querySelector("#ai-status").textContent = aiAdminState.clearKey ? "保存后将清除已配置的密钥。" : "";
+  });
+}
 
 async function loadServiceKeysAdmin() {
   const data = await api("/service-keys");
@@ -1604,11 +2288,25 @@ async function loadMpUsersAdmin() {
     }
 
     const auditActionLabels = [
+      ["GET /admin-api/ai-settings", "查看 AI 问答配置"],
+      ["POST /admin-api/ai-settings", "保存 AI 问答配置"],
+      ["POST /admin-api/ai-settings/test", "测试 AI 连接"],
       ["login.success", "登录成功"],
       ["login.failed", "登录失败"],
       ["POST /admin-api/manifest", "发布课程树"],
       ["POST /admin-api/manifest-draft", "保存课程树草稿"],
       ["POST /admin-api/upload", "上传课程文件"],
+      ["POST /admin-api/content-images", "上传内容图片"],
+      ["POST /admin-api/content-images/cleanup", "清理未引用内容图片"],
+      ["GET /admin-api/donate", "读取捐助页"],
+      ["GET /admin-api/donate-stats", "捐赠统计"],
+      ["GET /admin-api/privacy", "读取隐私政策"],
+      ["POST /admin-api/privacy", "发布隐私政策"],
+      ["GET /admin-api/law-query", "依法调取查询"],
+      ["GET /admin-api/law-export", "依法调取导出"],
+      ["POST /admin-api/donate", "保存捐助页"],
+      ["GET /admin-api/donate-pay", "读取支付配置(脱敏)"],
+      ["POST /admin-api/donate-pay", "保存支付配置"],
       ["POST /admin-api/sync-r2", "同步课程 R2"],
       ["POST /admin-api/sync-r2-all", "重建课程树"],
       ["POST /admin-api/r2-publish", "发布 R2 变更"],
@@ -1627,6 +2325,9 @@ async function loadMpUsersAdmin() {
       ["POST /admin-api/me/password", "修改自己密码"],
       ["POST /admin-api/notify-bots", "保存通知机器人"],
       ["POST /admin-api/notify-test", "发送通知测试"],
+      ["GET /admin-api/service-keys", "查看服务密钥"],
+      ["POST /admin-api/service-keys", "创建服务密钥"],
+      ["POST /admin-api/service-keys-settings", "保存全局限流设置"],
     ];
     const auditActionLabel = (action) => {
       if (/^PATCH \/admin-api\/accounts\//.test(action)) return "修改账号权限";
@@ -1634,6 +2335,9 @@ async function loadMpUsersAdmin() {
       if (/^DELETE \/admin-api\/accounts\//.test(action)) return "删除账号";
       if (/^POST \/admin-api\/mp-users\/.+\/blocked$/.test(action)) return "封禁/解禁小程序用户";
       if (/^DELETE \/admin-api\/notify-bots\//.test(action)) return "删除通知机器人";
+      if (/^POST \/admin-api\/service-keys\/.+\/enabled$/.test(action)) return "启用/停用服务密钥";
+      if (/^POST \/admin-api\/service-keys\/.+\/daily-quota$/.test(action)) return "修改服务每日额度";
+      if (/^DELETE \/admin-api\/service-keys\//.test(action)) return "删除服务密钥";
       return auditActionLabels.find(([key]) => action === key)?.[1] || action;
     };
 
@@ -1678,10 +2382,7 @@ async function loadMpUsersAdmin() {
         permissions: Array.isArray(data.permissions) ? data.permissions : [],
         mustChangePassword: Boolean(data.mustChangePassword),
       };
-      for (const button of document.querySelectorAll("[data-admin-tab]")) {
-        const required = tabPermissions[button.dataset.adminTab];
-        button.hidden = Boolean(required) && !hasPerm(required);
-      }
+      renderAdminNav();
       renderPendingBadges();
       mustChangeBanner.hidden = !sessionState.mustChangePassword;
     }
@@ -1711,7 +2412,7 @@ async function loadMpUsersAdmin() {
     }
 
     function showFirstAllowedTab() {
-      const first = document.querySelector("[data-admin-tab]:not([hidden])");
+      const first = document.querySelector(".admin-nav-item:not(.admin-nav-item--locked)") || document.querySelector(".admin-nav-item");
       if (first) first.click();
       else {
         loginPanel.hidden = true;
@@ -1727,6 +2428,14 @@ async function loadMpUsersAdmin() {
       } else {
         showFirstAllowedTab();
       }
+    }
+
+    function showSessionExpired() {
+      const wasSignedIn = !adminApp.hidden;
+      sessionState = { username: "", permissions: [], mustChangePassword: false };
+      adminApp.hidden = true;
+      loginPanel.hidden = false;
+      loginStatus.textContent = wasSignedIn ? "登录已过期，请重新登录。" : "";
     }
 
     async function checkSession() {
@@ -1858,6 +2567,7 @@ async function loadMpUsersAdmin() {
       editor.dataset.markdownHeight = String(options.height ?? 320);
       editor.dataset.markdownPlaceholder = options.placeholder ?? "";
       editor.dataset.markdownMode = options.mode ?? "sv";
+      if (options.owner) editor.dataset.contentOwner = options.owner;
       editor.__markdownOnInput = onInput;
       fallback.addEventListener("input", () => onInput(fallback.value, fallback));
       shell.append(fallback, editor);
@@ -1911,8 +2621,76 @@ async function loadMpUsersAdmin() {
       });
     }
 
-    function mountMarkdownEditors(root, mode = "admin") {
-      destroyMarkdownEditors(root);
+    async function uploadContentImage(owner, file) {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch(`/admin-api/content-images?owner=${encodeURIComponent(owner)}`, {
+        method: "POST",
+        headers: { "x-nkustudy-admin-request": "1" },
+        body: form,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "图片上传失败");
+      return data.data.url;
+    }
+
+    function contentImageUploadConfig(node) {
+      const owner = node.dataset.contentOwner;
+      if (!owner) return {};
+      return {
+        upload: {
+          url: `/admin-api/content-images?owner=${encodeURIComponent(owner)}`,
+          accept: "image/png, image/jpeg, image/webp, image/gif",
+          multiple: false,
+          fieldName: "file",
+          max: 8 * 1024 * 1024,
+          headers: { "x-nkustudy-admin-request": "1" },
+          // 服务端返回 {ok,data:{url}}；提供 success 时 vditor 跳过自身的 succMap 解析，由这里直接插入
+          success(_editorElement, responseText) {
+            try {
+              const parsed = JSON.parse(responseText);
+              if (parsed?.ok && parsed.data?.url) {
+                document.execCommand("insertHTML", false, `
+![](${parsed.data.url})
+`);
+                return;
+              }
+              alert(parsed?.error || "图片上传失败");
+            } catch {
+              alert("图片上传失败");
+            }
+          },
+        },
+        extraToolbar: [{
+          hotkey: "",
+          name: "insert-image",
+          tipPosition: "s",
+          tip: "插入图片",
+          className: "vditor-toolbar__item--insert-image",
+          click() {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/png, image/jpeg, image/webp, image/gif";
+            input.onchange = async () => {
+              const file = input.files?.[0];
+              if (!file) return;
+              try {
+                const url = await uploadContentImage(node.dataset.contentOwner, file);
+                node.__markdownEditorRef?.insertValue(`
+![](${url})
+`);
+              } catch (error) {
+                alert(error.message || "图片上传失败");
+              }
+            };
+            input.click();
+          },
+        }],
+      };
+    }
+
+    function mountMarkdownEditors(root, mode = "admin", { destroy = true } = {}) {
+      if (destroy) destroyMarkdownEditors(root);
       const editors = Array.from(root?.querySelectorAll?.("[data-markdown-editor]") ?? []);
       for (const node of editors) {
         if (node.dataset.markdownMounted === "1") continue;
@@ -1920,6 +2698,7 @@ async function loadMpUsersAdmin() {
         if (node.closest("[hidden]")) continue;
         const shell = node.closest(".markdown-shell");
         const fallback = shell?.querySelector(".markdown-fallback");
+        const imageSupport = contentImageUploadConfig(node);
         try {
           let editor;
           editor = new Vditor(node, {
@@ -1928,8 +2707,9 @@ async function loadMpUsersAdmin() {
             height: Number(node.dataset.markdownHeight || 320),
             placeholder: node.dataset.markdownPlaceholder || "",
             cache: { enable: false },
-            toolbar: toolbarFor(mode),
+            toolbar: [...toolbarFor(mode), ...(imageSupport.extraToolbar || [])],
             toolbarConfig: { pin: false },
+            ...(imageSupport.upload ? { upload: imageSupport.upload } : {}),
             preview: {
               actions: ["desktop", "tablet", "mobile"],
               markdown: {
@@ -1938,6 +2718,7 @@ async function loadMpUsersAdmin() {
             },
             after() {
               const initialValue = node.dataset.markdownValue ?? "";
+              node.__markdownEditorRef = editor;
               editor?.setValue?.(initialValue);
               if (fallback) fallback.value = initialValue;
               enhanceVditorToolbar(node);
@@ -2178,7 +2959,7 @@ async function loadMpUsersAdmin() {
         numberField("评价最少字数", rules.minLength ?? 12, (value) => { rules.minLength = value; }),
         checkboxField("允许自定义课程名（关闭后只能从课程库/手册目录选课）", (rules.submissionOptions ??= {}).allowCustomCourse === true, (value) => { rules.submissionOptions.allowCustomCourse = value; }),
         checkboxField("允许自定义教师名（关闭后只能从手册教师列表选）", (rules.submissionOptions ??= {}).allowCustomTeacher !== false, (value) => { rules.submissionOptions.allowCustomTeacher = value; }),
-        markdownField("评价公告栏（支持 Markdown）", rules.announcement ?? "", (value) => { rules.announcement = value; }),
+        markdownField("评价公告栏（支持 Markdown，可插图）", rules.announcement ?? "", (value) => { rules.announcement = value; }, { owner: "reviews" }),
         markdownField("规则备注", rules.notes ?? "", (value) => { rules.notes = value; }, { height: 150 })
       );
 
@@ -2388,9 +3169,9 @@ async function loadMpUsersAdmin() {
           field("反馈页标题", feedbackState.title ?? "问题与建议", (value) => {
             feedbackState.title = value;
           }),
-          markdownField("反馈页公告（支持 Markdown）", feedbackState.announcement ?? "", (value) => {
+          markdownField("反馈页公告（支持 Markdown，可插图）", feedbackState.announcement ?? "", (value) => {
             feedbackState.announcement = value;
-          })
+          }, { owner: "feedback" })
         );
         feedbackRulesEditor.innerHTML = "";
       feedbackRulesEditor.append(
@@ -2433,14 +3214,17 @@ async function loadMpUsersAdmin() {
       const pageItems = items.slice((feedbackAdminPage - 1) * adminPageSize, feedbackAdminPage * adminPageSize);
 
       const statusOptions = [
-        ["open", "开放"],
-        ["hidden", "隐藏"],
+        ["pending", "待审核"],
+        ["processing", "处理中"],
+        ["approved", "已公开"],
         ["completed", "已完成"],
-        ["rejected", "不予完成"],
+        ["rejected", "驳回"],
         ["parked", "搁置"],
+        ["open", "开放(旧)"],
+        ["hidden", "隐藏"],
       ];
       const statusLabels = Object.fromEntries(statusOptions);
-      const typeLabels = { bug: "Bug", feature: "功能改进", content: "内容问题" };
+      const typeLabels = { bug: "Bug", feature: "功能改进", content: "内容问题", report: "违法举报", complaint: "内容投诉" };
 
       for (const item of pageItems) {
         const wrap = document.createElement("div");
@@ -2453,28 +3237,46 @@ async function loadMpUsersAdmin() {
           </div>
           <h3 style="margin: 12px 0 0;">${escapeHtml(item.title || "")}</h3>
           ${item.resourceRef ? `<p class="muted" style="font-size:0.85em;">关联资源：${escapeHtml(item.resourceRef)}</p>` : ""}
+          ${item.report_url || item.report_target ? `<p class="muted" style="font-size:0.85em;">举报对象：${escapeHtml(item.report_target || "")} ${escapeHtml(item.report_url || "")}</p>` : ""}
           <p>${escapeHtml(item.content || "")}</p>
-          <small class="muted">${escapeHtml(item.contact || "无联系方式")} · ${escapeHtml(item.createdAt || "")}</small>
+          ${item.reply ? `<div class="review-admin-item" style="margin:8px 0;background:var(--surface-soft,#f1f5f9);"><div class="course-meta"><span class="pill">已回复</span></div><p>${escapeHtml(item.reply)}</p><small class="muted">${escapeHtml(item.repliedAt || "")}</small></div>` : ""}
+          <small class="muted">${escapeHtml(item.contact || "无联系方式")} · ${escapeHtml(item.createdAt || "")}${item.handled_by ? ` · 处理人 ${escapeHtml(item.handled_by)} ${escapeHtml(item.handled_at || "")}` : ""}</small>
         `;
 
         const editForm = document.createElement("div");
         editForm.className = "admin-form admin-inline-editor";
+        const markHandled = () => {
+          item.handled_by = sessionState?.username || "admin";
+          item.handled_at = new Date().toISOString();
+          item.updatedAt = item.handled_at;
+        };
         editForm.append(
-          selectField("类型", item.type ?? "bug", [["bug", "Bug"], ["feature", "功能改进"], ["content", "内容问题"]], (value) => {
+          selectField("类型", item.type ?? "bug", [["bug", "Bug"], ["feature", "功能改进"], ["content", "内容问题"], ["report", "违法举报"], ["complaint", "内容投诉"]], (value) => {
             item.type = value;
-            item.updatedAt = new Date().toISOString();
+            markHandled();
+          }),
+          selectField("状态（举报类永不公开展示）", item.status ?? "pending", [["pending", "待审核"], ["processing", "处理中"], ["approved", "通过并公开"], ["completed", "已完成"], ["rejected", "驳回"], ["parked", "搁置"]], (value) => {
+            item.status = value;
+            if (item.type === "report" || item.type === "complaint") item.hidden = true;
+            markHandled();
           }),
           field("标题", item.title ?? "", (value) => {
             item.title = value;
-            item.updatedAt = new Date().toISOString();
+            markHandled();
           }),
           markdownField("反馈内容", item.content ?? "", (value) => {
             item.content = value;
-            item.updatedAt = new Date().toISOString();
+            markHandled();
           }),
           field("联系方式", item.contact ?? "", (value) => {
             item.contact = value;
-            item.updatedAt = new Date().toISOString();
+            markHandled();
+          }),
+          markdownField("回复用户（登录提交者在小程序“我的反馈”可见；清空则删除回复）", item.reply ?? "", (value) => {
+            item.reply = value;
+            item.repliedAt = value ? new Date().toISOString() : "";
+            if (value && (item.status === "pending" || item.status === "open")) item.status = "completed";
+            markHandled();
           })
         );
         editForm.hidden = true;
@@ -2625,7 +3427,7 @@ async function loadMpUsersAdmin() {
       participateAdminEditor.innerHTML = "";
       participateAdminEditor.append(
         field("标题", participateState.title ?? "参与贡献", (value) => { participateState.title = value; }),
-        markdownField("正文（支持 Markdown）", participateState.content ?? "", (value) => { participateState.content = value; }, { height: 360 })
+        markdownField("正文（支持 Markdown，可插图）", participateState.content ?? "", (value) => { participateState.content = value; }, { height: 360, owner: "participate" })
       );
       mountMarkdownEditors(participateAdminEditor);
     }
@@ -2647,9 +3449,9 @@ async function loadMpUsersAdmin() {
       aboutAdminEditor.innerHTML = "";
       aboutAdminEditor.append(
         field("标题", aboutState.title ?? "", (value) => { aboutState.title = value; }),
-        markdownField("正文（支持 Markdown）", aboutState.content ?? "", (value) => {
+        markdownField("正文（支持 Markdown，可插图）", aboutState.content ?? "", (value) => {
           aboutState.content = value;
-        }, { height: 360 })
+        }, { height: 360, owner: "about" })
       );
       mountMarkdownEditors(aboutAdminEditor);
     }
@@ -2670,7 +3472,7 @@ async function loadMpUsersAdmin() {
       if (!homeState) return;
       homeAdminEditor.innerHTML = "";
       homeAdminEditor.append(
-        markdownField("首页公告栏（支持 Markdown）", homeState.announcement ?? "", (value) => { homeState.announcement = value; })
+        markdownField("首页公告栏（支持 Markdown，可插图）", homeState.announcement ?? "", (value) => { homeState.announcement = value; }, { owner: "home" })
       );
       mountMarkdownEditors(homeAdminEditor);
     }
@@ -2699,7 +3501,7 @@ async function loadMpUsersAdmin() {
         checkboxField("访问量使用真实统计", footerState.useRealVisitCount !== false, (value) => { footerState.useRealVisitCount = value; }),
         field("本站总访问量（关闭真实统计时使用）", footerState.visitCount ?? "10411114", (value) => { footerState.visitCount = value; }),
         field("安全运行起始时间（北京时间，如 2025-07-15T16:00:00+08:00）", footerState.startedAt ?? "2022-01-01T00:00:00+08:00", (value) => { footerState.startedAt = value; }),
-        markdownField("版权文本", footerState.copyrightText ?? "© 2025 NKUStudy", (value) => { footerState.copyrightText = value; }, { height: 130 }),
+        markdownField("版权文本（支持 Markdown，可插图）", footerState.copyrightText ?? "© 2025 NKUStudy", (value) => { footerState.copyrightText = value; }, { height: 130, owner: "footer" }),
         markdownField("维护者链接（每行：[显示名](链接)，也可：显示名|链接）", maintainersValue, (value) => {
           footerState.maintainers = value
             .split(/\r?\n/)
@@ -3620,7 +4422,7 @@ async function loadMpUsersAdmin() {
         renderManifestSettings();
         renderTree();
         renderEditor();
-        publishStatus.textContent = statusWithWarnings("已按 R2 更新并发布", data);
+        publishStatus.textContent = r2SyncStatus("已按 R2 更新并发布", data);
       } catch (error) {
         publishStatus.textContent = error.message;
       }
@@ -3639,7 +4441,7 @@ async function loadMpUsersAdmin() {
         renderManifestSettings();
         renderTree();
         renderEditor();
-        publishStatus.textContent = statusWithWarnings("已按 R2 重建并发布", data);
+        publishStatus.textContent = r2SyncStatus("已按 R2 重建并发布", data);
       } catch (error) {
         publishStatus.textContent = error.message;
       }
@@ -3825,6 +4627,7 @@ async function loadMpUsersAdmin() {
     async function loadNotifyAdmin() {
       const data = await api("/notify-settings");
       notifyState = { ...data.data, loaded: true };
+      document.querySelector("#notify-guide-feedback-enabled").checked = notifyState.guide_feedback_enabled !== false;
       renderNotifyBots();
     }
 
@@ -4008,9 +4811,132 @@ async function loadMpUsersAdmin() {
       }
     });
 
+    // ===== 侧边栏两级导航（P0）：分组渲染 + 无权限置灰 + 折叠/扁平记忆 =====
+    const ADMIN_NAV_CONFIG = [
+      { label: "内容管理", items: [
+        ["resources", "课程资源"], ["reviews", "评价审核"],
+        ["home", "首页设置"], ["about", "关于页面"], ["participate", "参与页面"],
+        ["links", "友链页面"], ["footer", "页脚设置"], ["donate", "捐助页面"], ["privacy", "隐私与协议"],
+      ] },
+      { label: "用户与安全", items: [
+        ["mp-users", "小程序用户"], ["accounts", "账号与权限"], ["feedback", "反馈管理"], ["reports", "举报处置"], ["audit", "审计日志"], ["law", "依法调取"],
+      ] },
+      { label: "系统设置", items: [
+        ["service-keys", "服务密钥"], ["ai", "AI 问答"], ["notify", "通知设置"],
+        ["editor-settings", "编辑器设置"], ["stats", "访问统计"], ["backup", "备份"],
+      ] },
+    ];
+    const navCollapsedKey = "nkustudy-admin-nav-collapsed";
+    const navFlatKey = "nkustudy-admin-nav-flat";
+
+    function renderAdminNav() {
+      const nav = document.querySelector("#admin-nav");
+      if (!nav) return;
+      nav.innerHTML = "";
+      const collapsed = new Set(JSON.parse(localStorage.getItem(navCollapsedKey) || "[]"));
+      const flat = localStorage.getItem(navFlatKey) === "1";
+      const collapsedNow = document.querySelector("#admin-app")?.dataset.navCollapsed === "1";
+      const makeItem = (tab, label) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "admin-nav-item";
+        item.dataset.adminTab = tab;
+        item.textContent = label;
+        return item;
+      };
+      const collapseToggle = document.createElement("button");
+      collapseToggle.type = "button";
+      collapseToggle.className = "admin-nav-collapse";
+      collapseToggle.textContent = collapsedNow ? "»" : "« 收起菜单";
+      collapseToggle.title = collapsedNow ? "展开菜单" : "收起菜单";
+      collapseToggle.addEventListener("click", () => {
+        const app = document.querySelector("#admin-app");
+        const next = app?.dataset.navCollapsed === "1" ? "0" : "1";
+        if (app) app.dataset.navCollapsed = next;
+        localStorage.setItem("nkustudy-admin-nav-collapsed-all", next);
+        collapseToggle.textContent = next === "1" ? "»" : "« 收起菜单";
+        collapseToggle.title = next === "1" ? "展开菜单" : "收起菜单";
+      });
+      nav.append(collapseToggle);
+      const scroll = document.createElement("div");
+      scroll.className = "admin-nav-scroll";
+      if (flat) {
+        const list = document.createElement("div");
+        list.className = "admin-nav-group admin-nav-group--flat";
+        for (const group of ADMIN_NAV_CONFIG) {
+          for (const [tab, label] of group.items) list.append(makeItem(tab, label));
+        }
+        scroll.append(list);
+      } else {
+        for (const group of ADMIN_NAV_CONFIG) {
+          const groupEl = document.createElement("div");
+          groupEl.className = "admin-nav-group" + (collapsed.has(group.label) ? " admin-nav-group--collapsed" : "");
+          const head = document.createElement("button");
+          head.type = "button";
+          head.className = "admin-nav-group-head";
+          head.textContent = group.label + (collapsed.has(group.label) ? " ▸" : " ▾");
+          head.addEventListener("click", () => {
+            const current = new Set(JSON.parse(localStorage.getItem(navCollapsedKey) || "[]"));
+            if (current.has(group.label)) current.delete(group.label); else current.add(group.label);
+            localStorage.setItem(navCollapsedKey, JSON.stringify([...current]));
+            renderAdminNav();
+          });
+          groupEl.append(head);
+          const items = document.createElement("div");
+          items.className = "admin-nav-items";
+          for (const [tab, label] of group.items) items.append(makeItem(tab, label));
+          groupEl.append(items);
+          scroll.append(groupEl);
+        }
+      }
+      nav.append(scroll);
+      const modeToggle = document.createElement("button");
+      modeToggle.type = "button";
+      modeToggle.className = "admin-nav-flat-toggle";
+      modeToggle.textContent = flat ? "切换为分组" : "切换为扁平";
+      modeToggle.addEventListener("click", () => {
+        localStorage.setItem(navFlatKey, flat ? "0" : "1");
+        renderAdminNav();
+      });
+      nav.append(modeToggle);
+      bindAdminNavState();
+      bindAdminTabButtons();
+    }
+
+    (function applyNavCollapsedMemory() {
+      const app = document.querySelector("#admin-app");
+      if (app && localStorage.getItem("nkustudy-admin-nav-collapsed-all") === "1") app.dataset.navCollapsed = "1";
+    })();
+
+    /** 登录态变化后刷新置灰与当前高亮 */
+    function bindAdminNavState() {
+      const permissions = new Set(sessionState?.permissions || []);
+      for (const item of document.querySelectorAll(".admin-nav-item")) {
+        const required = tabPermissions[item.dataset.adminTab];
+        const allowed = !required || permissions.has(required);
+        item.classList.toggle("admin-nav-item--locked", !allowed);
+        item.title = allowed ? "" : `需要「${permissionLabels[required] || required}」权限`;
+        item.classList.toggle("secondary", item.dataset.adminTab !== currentAdminTab);
+      }
+    }
+
+    let currentAdminTab = "resources";
+
+    function bindAdminTabButtons() {
     document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+      if (button.dataset.adminTabBound === "1") return;
+      button.dataset.adminTabBound = "1";
       button.addEventListener("click", async () => {
         const tab = button.dataset.adminTab;
+        const required = tabPermissions[tab];
+        if (required && !(sessionState?.permissions || []).includes(required)) {
+          window.alert(`该页面需要「${permissionLabels[required] || required}」权限，请联系主管理员开通。`);
+          return;
+        }
+        currentAdminTab = tab;
+        for (const item of document.querySelectorAll(".admin-nav-item")) {
+          item.classList.toggle("secondary", item.dataset.adminTab !== tab);
+        }
         document.querySelectorAll("[data-admin-tab]").forEach((item) => {
           const active = item === button;
           item.classList.toggle("secondary", !active);
@@ -4025,6 +4951,10 @@ async function loadMpUsersAdmin() {
         editorSettingsAdminPanel.hidden = tab !== "editor-settings";
         statsAdminPanel.hidden = tab !== "stats";
         aboutAdminPanel.hidden = tab !== "about";
+        donateAdminPanel.hidden = tab !== "donate";
+        privacyAdminPanel.hidden = tab !== "privacy";
+        reportsAdminPanel.hidden = tab !== "reports";
+        lawAdminPanel.hidden = tab !== "law";
         backupAdminPanel.hidden = tab !== "backup";
         accountsAdminPanel.hidden = tab !== "accounts";
         mpUsersAdminPanel.hidden = tab !== "mp-users";
@@ -4038,6 +4968,29 @@ async function loadMpUsersAdmin() {
             notifyAdminStatus.textContent = "";
           } catch (error) {
             notifyAdminStatus.textContent = error.message;
+          }
+        }
+        aiAdminPanel.hidden = tab !== "ai";
+        // 面板在 hidden 状态下渲染过的 Markdown 字段（如经举报页签后台加载的反馈数据）此时补挂载
+        const adminPanelsByTab = {
+          resources: resourceAdminPanel, reviews: reviewAdminPanel, participate: participateAdminPanel,
+          feedback: feedbackAdminPanel, links: linksAdminPanel, home: homeAdminPanel, footer: footerAdminPanel,
+          editorSettings: editorSettingsAdminPanel, stats: statsAdminPanel, about: aboutAdminPanel,
+          donate: donateAdminPanel, privacy: privacyAdminPanel, reports: reportsAdminPanel, law: lawAdminPanel,
+          backup: backupAdminPanel, accounts: accountsAdminPanel, mpUsers: mpUsersAdminPanel,
+          serviceKeys: serviceKeysAdminPanel, notify: notifyAdminPanel, audit: auditAdminPanel, ai: aiAdminPanel,
+        };
+        const activeAdminPanel = adminPanelsByTab[tab];
+        if (activeAdminPanel) {
+          requestAnimationFrame(() => mountMarkdownEditors(activeAdminPanel, "admin", { destroy: false }));
+        }
+        if (tab === "ai" && !aiAdminState.loaded) {
+          document.querySelector("#ai-status").textContent = "加载中...";
+          try {
+            await loadAiAdmin();
+            document.querySelector("#ai-status").textContent = "";
+          } catch (error) {
+            document.querySelector("#ai-status").textContent = error.message;
           }
         }
         if (tab === "service-keys") {
@@ -4122,6 +5075,26 @@ async function loadMpUsersAdmin() {
             aboutAdminStatus.textContent = error.message;
           }
         }
+        if (tab === "privacy" && !privacyState) {
+          privacyAdminStatus.textContent = "加载中...";
+          try { await loadPrivacyAdmin(); privacyAdminStatus.textContent = ""; } catch (error) { privacyAdminStatus.textContent = error.message; }
+        }
+        if (tab === "reports") {
+          renderReportsAdmin();
+        }
+        if (tab === "law") {
+          document.querySelector("#law-admin-status").textContent = "";
+          renderLawLogs([]);
+        }
+        if (tab === "donate" && !donateState) {
+          donateAdminStatus.textContent = "加载中...";
+          try {
+            await loadDonateAdmin();
+            donateAdminStatus.textContent = "";
+          } catch (error) {
+            donateAdminStatus.textContent = error.message;
+          }
+        }
         if (tab === "home" && !homeState) {
           homeAdminStatus.textContent = "加载中...";
           try {
@@ -4171,6 +5144,8 @@ async function loadMpUsersAdmin() {
         }
       });
     });
+    }
+    bindAdminTabButtons();
 
     document.querySelector("#reload-reviews").addEventListener("click", async () => {
       reviewAdminStatus.textContent = "加载中...";
@@ -4335,6 +5310,27 @@ async function loadMpUsersAdmin() {
       }
     });
 
+    document.querySelectorAll(".clean-images").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const owner = button.dataset.owner;
+        if (!confirm(`扫描${owner} 内容当前未引用的图片并从 R2 删除？`)) return;
+        const label = button.textContent;
+        button.textContent = "清理中…";
+        button.disabled = true;
+        try {
+          const data = await api("/content-images/cleanup", { method: "POST", body: JSON.stringify({ owner }) });
+          button.textContent = label;
+          button.disabled = false;
+          const status = button.closest(".filter-row")?.querySelector(".muted");
+          if (status) status.textContent = `清理完成：扫描 ${data.scanned} 张，删除 ${data.removed} 张，保留引用中 ${data.kept} 张`;
+        } catch (error) {
+          button.textContent = label;
+          button.disabled = false;
+          alert(error.message || "清理失败");
+        }
+      });
+    });
+
     document.querySelector("#save-feedback").addEventListener("click", async () => {
       try {
         await saveFeedbackState("已保存");
@@ -4392,6 +5388,64 @@ async function loadMpUsersAdmin() {
         participateAdminStatus.textContent = error.message;
       }
     });
+
+    document.querySelector("#save-privacy").addEventListener("click", async () => {
+      privacyAdminStatus.textContent = "保存中...";
+      try {
+        const data = await api("/privacy", { method: "POST", body: JSON.stringify({ data: privacyState, expectedRevision: contentRevisions.get("privacy") }) });
+        privacyState = data.data;
+        contentRevisions.set("privacy", data.revision);
+        renderPrivacyAdmin();
+        privacyAdminStatus.textContent = "已保存并发布";
+      } catch (error) { privacyAdminStatus.textContent = error.message; }
+    });
+    document.querySelector("#reload-privacy").addEventListener("click", async () => {
+      privacyAdminStatus.textContent = "加载中...";
+      try { await loadPrivacyAdmin(); privacyAdminStatus.textContent = ""; } catch (error) { privacyAdminStatus.textContent = error.message; }
+    });
+    for (const selector of ["#reports-search", "#reports-status-filter"]) {
+      document.querySelector(selector)?.addEventListener("input", () => renderReportsAdmin());
+      document.querySelector(selector)?.addEventListener("change", () => renderReportsAdmin());
+    }
+    document.querySelector("#law-query-run").addEventListener("click", () => runLawQuery());
+    document.querySelector("#law-export-run").addEventListener("click", () => runLawQuery({ exportJson: true }));
+    document.querySelector("#law-log-refresh").addEventListener("click", () => renderLawLogs([]));
+    document.querySelector("#reload-donate-stats").addEventListener("click", () => loadDonateStats());
+    for (const selector of ["#donate-stats-search", "#donate-stats-status", "#donate-stats-source"]) {
+      document.querySelector(selector)?.addEventListener("input", () => { donateStatsPage = 1; renderDonateStats(); });
+      document.querySelector(selector)?.addEventListener("change", () => { donateStatsPage = 1; renderDonateStats(); });
+    }
+
+    document.querySelector("#save-donate").addEventListener("click", async () => {
+      donateAdminStatus.textContent = "保存中...";
+      try {
+        const data = await api("/donate", {
+          method: "POST",
+          body: JSON.stringify({ data: donateState, expectedRevision: contentRevisions.get("donate") }),
+        });
+        donateState = data.data;
+        contentRevisions.set("donate", data.revision);
+        renderDonateAdmin();
+        donateAdminStatus.textContent = "已保存并发布";
+      } catch (error) {
+        donateAdminStatus.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#save-donate-pay").addEventListener("click", async () => {
+      const status = document.querySelector("#donate-pay-status");
+      status.textContent = "保存中...";
+      try {
+        const data = await api("/donate-pay", { method: "POST", body: JSON.stringify(donatePayState || {}) });
+        donatePayState = data.data;
+        renderDonatePay();
+        status.textContent = "支付配置已保存";
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+
+    document.querySelector("#reload-donate").addEventListener("click", async () => { donateAdminStatus.textContent = "加载中..."; try { await loadDonateAdmin(); donateAdminStatus.textContent = ""; } catch (error) { donateAdminStatus.textContent = error.message; } });
 
     document.querySelector("#reload-about").addEventListener("click", async () => {
       aboutAdminStatus.textContent = "加载中...";

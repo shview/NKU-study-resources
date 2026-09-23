@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PublicApiService } from "../server/public-api-service.mjs";
+import { createLearningCompassService } from "../server/learning-compass-service.mjs";
 
 const uidA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const uidB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -62,22 +63,40 @@ function fixture() {
     readManifest: () => structuredClone(manifest),
     readReviews: () => structuredClone(reviews),
     readHome: () => ({ announcement: "服务器公告", privateField: "never expose" }),
-    readGuides: () => ({
-      version: 1,
-      updated_at: "2026-08-16T12:00:00+08:00",
-      correction_url: "https://nkustudy.top/feedback",
-      items: [{
-        id: "add-drop-guide",
+    learningCompass: createLearningCompassService({
+      version: "testsnapshot01",
+      content_updated_at: "2026-08-16T12:00:00+08:00",
+      categories: [
+        { value: "course-study", label: "选课与修读", order: 1 },
+        { value: "exam-grade", label: "考试与成绩", order: 2 },
+      ],
+      sources: [{ id: "SRC-T1", title: "公开教务说明", document_no: "", publisher: "南开大学教务部", published_at: "2026", file_type: "pdf", file_name: "说明.pdf", file_url: "https://resources.nkustudy.top/guide-sources/%E8%AF%B4%E6%98%8E.pdf", official_page_url: "https://nkustudy.top/about", location_label: "" }],
+      guides: [{
+        id: "course-study-guide",
         title: "退补选流程",
         summary: "退补选时间与操作步骤",
-        category: "add-drop",
-        tags: ["退补选"],
+        category: "course-study",
+        category_label: "选课与修读",
+        content_type: "standard",
+        applicable_scope: "南开大学本科生",
+        time_status: "long_term",
         updated_at: "2026-08-16T12:00:00+08:00",
-        related_course_ids: [uidA],
-        steps: [{ title: "第一步", body: "登录选课系统。" }],
-        source_title: "公开教务说明",
-        source_url: "https://nkustudy.top/about",
+        read_minutes: 3,
+        aliases: [],
+        tags: ["退补选"],
+        sections: [{ id: "step-1", title: "第一步", body_format: "markdown", body: "登录选课系统。", source_ids: ["SRC-T1"] }],
+        sources: [{ id: "SRC-T1", title: "公开教务说明", document_no: "", publisher: "南开大学教务部", published_at: "2026", file_type: "pdf", file_name: "说明.pdf", file_url: "https://resources.nkustudy.top/guide-sources/%E8%AF%B4%E6%98%8E.pdf", official_page_url: "https://nkustudy.top/about", location_label: "" }],
+        variants: [],
+        variant_details: [],
+        retrieval: [{ id: "chunk-t1", source_file_id: "SRC-T1", location: "第一步", text: "登录选课系统。" }],
       }],
+      conflicts: [],
+    }),
+    readFeedback: () => ({
+      items: [
+        { id: "fb-1", title: "有回复的反馈", content: "内容", type: "feature", status: "completed", user_id: 7, reply: "已添加该课程。", repliedAt: "2026-08-28T00:00:00Z", createdAt: "2026-08-27T00:00:00Z" },
+        { id: "fb-2", title: "匿名反馈", content: "内容2", type: "bug", status: "open", createdAt: "2026-08-27T01:00:00Z" },
+      ],
     }),
     reviewSubmissionService,
     publicResourceOrigin: "https://resources.nkustudy.top",
@@ -149,15 +168,18 @@ test("complete search index exposes four whitelisted result types with a stable 
   for (const forbidden of ["basePath", "path", "source", "resourceRoot", "ipHash", "userAgent"]) assert.equal(keys.has(forbidden), false);
 });
 
-test("guide list and detail validate categories, related courses, and correction URL", () => {
+test("guide list and detail validate categories and expose sections/sources", () => {
   const { service } = fixture();
-  const list = service.guides(new URLSearchParams("category=add-drop&page=1&page_size=20"));
+  const list = service.guides(new URLSearchParams("category=course-study&page=1&page_size=20"));
   assert.equal(list.total, 1);
-  assert.deepEqual(list.facets.categories, ["add-drop"]);
-  assert.equal(list.items[0].id, "add-drop-guide");
-  const detail = service.guide("add-drop-guide");
-  assert.deepEqual(detail.related_courses, [{ id: uidA, name: "中文课程" }]);
-  assert.equal(detail.correction_url, "https://nkustudy.top/feedback");
+  assert.deepEqual(list.facets.categories, [{ value: "course-study", label: "选课与修读", order: 1, count: 1 }]);
+  assert.equal(list.items[0].id, "course-study-guide");
+  assert.equal(list.items[0].category_label, "选课与修读");
+  const detail = service.guide("course-study-guide");
+  assert.equal(detail.sections[0].body, "登录选课系统。");
+  assert.equal(detail.sources[0].file_url.startsWith("https://resources.nkustudy.top/guide-sources/"), true);
+  assert.equal(Object.hasOwn(detail, "steps"), false, "旧 steps 字段必须移除");
+  assert.equal(Object.hasOwn(detail, "source_title"), false, "旧 source_title 字段必须移除");
   assert.throws(() => service.guides(new URLSearchParams("category=life")), /指南分类无效/);
   assert.throws(() => service.guide("missing"), /指南不存在/);
 });
@@ -201,6 +223,25 @@ test("mini-program review body maps into the shared submission service", async (
   assert.equal(Object.hasOwn(submissions[1].input, "anonymous"), false);
 });
 
+test("mini-program can review a historical group by exact course_title", async () => {
+  const { service, submissions } = fixture();
+  service.assertReviewAttempt("actor2");
+  const result = await service.submitReview({ course_title: "历史未匹配课程", teacher: "李老师", rating: 4, body: "给历史课程组的新的评价内容。" }, { clientIp: "actor2", userAgent: "wx" });
+  assert.deepEqual(result, { submitted: true, pending: true });
+  assert.equal(submissions[1].input.courseTitle, "历史未匹配课程");
+  await assert.rejects(() => service.submitReview({ course_title: "不存在的课程名", teacher: "张老师", rating: 5, body: "随便写的正文。" }, { clientIp: "actor2", userAgent: "wx" }), (error) => error.code === "REVIEW_GROUP_NOT_FOUND");
+});
+
+test("my feedback list carries admin replies for logged-in submitters", () => {
+  const { service } = fixture();
+  const mine = service.getMyFeedback(7);
+  assert.equal(mine.total, 1);
+  assert.equal(mine.items[0].reply, "已添加该课程。");
+  assert.equal(mine.items[0].repliedAt, "2026-08-28T00:00:00Z");
+  const anonymous = service.getMyFeedback(99);
+  assert.equal(anonymous.total, 0);
+});
+
 test("review groups merge punctuation variants and resolve catalog aliases", async () => {
   const { buildReviewGroups } = await import("../server/public-api-dto.mjs");
   const manifest = { courses: [{ id: "c1", uid: "u1", title: "光、视觉与艺术" }] };
@@ -224,4 +265,26 @@ test("review groups merge punctuation variants and resolve catalog aliases", asy
   const reviewData2 = { reviews: [{ id: "r5", courseTitle: "光，视觉与艺术", teacher: "王五", rating: 5, content: "e", status: "approved", createdAt: "2026-01-05" }] };
   const groups2 = buildReviewGroups(manifest2, reviewData2, fakeCatalog);
   assert.equal(groups2[0].course?.id, "c2", "catalog alias resolution attaches unmatched titles");
+});
+
+test("about() returns sanitized about-page content for the mini-program", () => {
+  const manifest = { resourceRoot: "https://resources.nkustudy.top/resources/", courses: [] };
+  const reviews = { version: 1, rules: {}, reviews: [] };
+  const reviewSubmissionService = { assertAttempt() {}, async submit() { return { pending: true }; } };
+  const make = (readAbout) => new PublicApiService({
+    readManifest: () => structuredClone(manifest),
+    readReviews: () => structuredClone(reviews),
+    readHome: () => ({}),
+    readAbout,
+    reviewSubmissionService,
+  });
+  const data = make(() => ({ title: "关于 NKUStudy", content: "# 简介" + String.fromCharCode(10) + "正文内容", updated: "2026-09-18" })).about();
+  assert.equal(data.title, "关于 NKUStudy");
+  assert.equal(data.content.includes("正文内容"), true);
+  assert.equal(data.updated, "2026-09-18");
+
+  assert.throws(() => make(null).about(), /关于页暂未配置/);
+  const oversized = make(() => ({ title: "T".repeat(300), content: "X".repeat(7000), updated: "" })).about();
+  assert.equal(oversized.title.length, 120);
+  assert.equal(oversized.content.length, 6000);
 });

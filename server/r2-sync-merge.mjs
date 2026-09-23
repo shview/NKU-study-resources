@@ -86,6 +86,16 @@ export function mergeR2Discoveries(snapshot, discoveries, { conflicts = [], crea
       report.missing.push(...merged.report.missing.map((filePath) => ({ basePath: entryBasePath, filePath })));
       continue;
     }
+    // E课名字池按目录名预建占位（仅 .openlist），量级大且多数尚未开课，
+    // 重建时跳过等真实资料出现；普通学期/分类下管理员新建的目录视为有意开课，
+    // 纯占位也创建课程壳，资料上传后由后续重建合并。
+    const realFileCount = (entry.sections || []).reduce((sum, section) => sum + (section.files || []).length, 0);
+    if (!existing && realFileCount === 0 && entry.term === "E课") {
+      report.placeholderSkipped = (report.placeholderSkipped || 0) + 1;
+      observedPaths.add(entryBasePath);
+      continue;
+    }
+    if (!existing && realFileCount === 0) report.placeholderShells = (report.placeholderShells || 0) + 1;
     manifest.courses.push({
       id: createId(entry), term: entry.term, group: entry.group, title: entry.title,
       summary: "待补充课程简介。", contributors: [], assessment: "绩点制",
@@ -93,7 +103,7 @@ export function mergeR2Discoveries(snapshot, discoveries, { conflicts = [], crea
       basePath: `${entryBasePath}/`, sections: structuredClone(entry.sections),
     });
     report.addedCourses += 1;
-    report.addedResources += (entry.sections || []).reduce((sum, section) => sum + (section.files || []).length, 0);
+    report.addedResources += realFileCount;
   }
 
   for (const course of manifest.courses) {

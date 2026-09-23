@@ -46,6 +46,7 @@ function publicUser(row) {
     avatar_url: row.avatar_url || "",
     email: row.email || "",
     has_web_password: Boolean(row.web_password_hash),
+    phone_verified: Boolean(row.phone_verified_at),
     created_at: row.created_at,
     last_login_at: row.last_login_at || null,
   };
@@ -108,6 +109,8 @@ export class MpAuthService {
         openid TEXT UNIQUE,
         nickname TEXT NOT NULL DEFAULT '',
         avatar_url TEXT NOT NULL DEFAULT '',
+        phone TEXT NOT NULL DEFAULT '',
+        phone_verified_at INTEGER,
         created_at INTEGER NOT NULL,
         last_login_at INTEGER,
         login_count INTEGER NOT NULL DEFAULT 0,
@@ -127,12 +130,15 @@ export class MpAuthService {
     if (!userColumns.includes("blocked")) this.db.exec("ALTER TABLE mp_users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0");
     if (!userColumns.includes("web_password_hash")) this.db.exec("ALTER TABLE mp_users ADD COLUMN web_password_hash TEXT");
     if (!userColumns.includes("email")) this.db.exec("ALTER TABLE mp_users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+    if (!userColumns.includes("phone")) this.db.exec("ALTER TABLE mp_users ADD COLUMN phone TEXT NOT NULL DEFAULT ''");
+    if (!userColumns.includes("phone_verified_at")) this.db.exec("ALTER TABLE mp_users ADD COLUMN phone_verified_at INTEGER");
     this.insertUser = this.db.prepare("INSERT INTO mp_users(openid, created_at) VALUES (?, ?)");
     this.selectUserByOpenid = this.db.prepare("SELECT * FROM mp_users WHERE openid = ?");
     this.selectUserById = this.db.prepare("SELECT * FROM mp_users WHERE id = ?");
     this.markLogin = this.db.prepare("UPDATE mp_users SET last_login_at = ?, login_count = login_count + 1 WHERE id = ?");
     this.updateProfileStmt = this.db.prepare("UPDATE mp_users SET nickname = ?, avatar_url = ? WHERE id = ?");
     this.selectByNickname = this.db.prepare("SELECT * FROM mp_users WHERE nickname = ? COLLATE NOCASE");
+    this.selectByPhone = this.db.prepare("SELECT * FROM mp_users WHERE phone = ?");
     this.updateNickname = this.db.prepare("UPDATE mp_users SET nickname = ? WHERE id = ?");
     this.updateWebPassword = this.db.prepare("UPDATE mp_users SET web_password_hash = ? WHERE id = ?");
     this.bindOpenid = this.db.prepare("UPDATE mp_users SET openid = ? WHERE id = ?");
@@ -239,7 +245,13 @@ export class MpAuthService {
       return this.selectUserById.get(created.id);
     })();
     this.#secureDatabaseFiles();
-    return row;
+    return this.#issueToken(row, timestamp);
+  }
+
+  /** 供微信支付等内部流程取用户 openid；不进入任何公共 DTO。 */
+  getOpenid(userId) {
+    const row = this.selectUserById.get(Number(userId));
+    return row?.openid || null;
   }
 
   webLogin({ nickname, password }, { now = this.now() } = {}) {
@@ -257,7 +269,25 @@ export class MpAuthService {
     }
     const timestamp = positiveSafeInteger(now, "now");
     this.markLogin.run(timestamp, row.id);
-    return this.selectUserById.get(row.id);
+    return this.#issueToken(this.selectUserById.get(row.id), timestamp);
+  }
+
+  /**
+   * 修改网页密码：必须先验证当前密码，避免持有会话者无凭据接管账号。
+   */
+  changeWebPassword(userId, { currentPassword, newPassword } = {}) {
+    const account = this.selectUserById.get(Number(userId));
+    if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    if (!account.web_password_hash) {
+      throw new PublicApiError(400, "该账号尚未设置网页密码，请先在“设置网页登录密码”中创建。", "WEB_PASSWORD_NOT_SET");
+    }
+    if (!verifyWebPassword(String(currentPassword ?? ""), account.web_password_hash)) {
+      throw new PublicApiError(401, "当前密码不正确。", "AUTH_INVALID_CREDENTIALS");
+    }
+    const secret = validateWebPassword(newPassword);
+    this.updateWebPassword.run(hashWebPassword(secret), account.id);
+    this.#secureDatabaseFiles();
+    return true;
   }
 
   deleteAccount(userId) {
@@ -278,6 +308,23 @@ export class MpAuthService {
     this.updateWebPassword.run(hashWebPassword(secret), account.id);
     this.#secureDatabaseFiles();
     return true;
+  }
+
+  /** 手机号实名验证（公安评估）：记录手机号与验证时间，供 UGC 门禁与依法调取。 */
+  setVerifiedPhone(userId, phone, { now = this.now() } = {}) {
+    const account = this.selectUserById.get(Number(userId));
+    if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    this.db.prepare("UPDATE mp_users SET phone = ?, phone_verified_at = ? WHERE id = ?").run(String(phone).slice(0, 20), Number(now), account.id);
+    return this.selectUserById.get(account.id);
+  }
+
+  isPhoneVerified(userId) {
+    const account = this.selectUserById.get(Number(userId));
+    return Boolean(account?.phone_verified_at);
+  }
+
+  findByPhone(phone) {
+    return this.selectByPhone.get(String(phone).slice(0, 20)) || null;
   }
 
   bindOpenidToUser(userId, openid) {

@@ -15,6 +15,7 @@ Only these public routes exist:
 - `GET /health`
 - `GET /home`
 - `GET /search-index`
+- `GET /search-data` (compact snapshot for on-device ranked search)
 - `GET /guides?category=&page=1&page_size=20`
 - `GET /guides/:guideId`
 - `GET /courses?page=1&page_size=20&q=&term=&group=&tag=&assessment=`
@@ -22,11 +23,14 @@ Only these public routes exist:
 - `GET /courses/:courseUid/resources`
 - `GET /review-groups`
 - `GET /review-groups/:groupKey`
-- `POST /reviews`
+- `POST /reviews` (requires WeChat login + verified phone number)
+- `POST /auth/wechat` · `POST /auth/phone-verify` · `POST /auth/logout`
+- `GET /me` · `PUT /me/profile` · `GET /me/favorites` · `POST|DELETE /me/favorites` · `GET /me/reviews`
+- `GET /about` · `GET /donate` · `POST /donate/pay` · `GET /donate/order-status`
 
 `page_size` is at most 100. All filters use strings stored by the website. Groups such as `通识选修课`, tags, assessment values, terms, and teacher names are not duplicated into an API enum. There are deliberately no academic-year or campus fields.
 
-No `/api/v1/admin*` route exists. The public router does not proxy, map, or reuse `/admin-api/*`; website administrators continue to manage content in the web interface. Authentication, favorites, submissions, reports, and resource-detail endpoints are outside this release.
+No `/api/v1/admin*` route exists. The public router does not proxy, map, or reuse `/admin-api/*`; website administrators continue to manage content in the web interface. WeChat login (`/auth/wechat`), profile and favorites (`/me/*`), verified-phone review submission (`/auth/phone-verify` + `POST /reviews`), content pages (`/about`, `/donate`) and local-search data (`/search-data`) are implemented; the authoritative route contract is `docs/API.md`.
 
 ## Course and home DTOs
 
@@ -88,7 +92,7 @@ Mini-program submission body:
 }
 ```
 
-`anonymous` is accepted from the current client but no identity is published. The service resolves `course_id` to the current course title, then uses the exact same submission service, persistent limits, atomic queue, `reviews.json`, and moderation state as `/review-api/submit`. It does not create a mini-program review database.
+`anonymous` is accepted from the current client but no identity is published. Submission additionally requires a WeChat login token and a verified phone number (`PHONE_VERIFY_REQUIRED` until verified). The service resolves `course_id` to the current course title, then uses the exact same submission service, persistent limits, atomic queue, `reviews.json`, and moderation state as `/review-api/submit`. It does not create a mini-program review database.
 
 ## Resource DTO and domains
 

@@ -1,6 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { jsapiPrepay, miniPayParams, nativePrepay } from "./wxpay-v3.mjs";
+import { normalizeRecords as normalizeDonateRecords } from "./donate-records.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
-import { GUIDE_CATEGORIES, normalizeGuideData } from "./public-guide-data.mjs";
+import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import {
   buildReviewGroups,
   isVisibleCourseMetaTag,
@@ -55,7 +57,7 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readGuides = () => ({ version: 1, items: [] }), readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
+  constructor({ readManifest, readReviews, readHome, readAbout = null, readDonate = null, donatePayReady = null, donatePayStore = null, donateOrderStore = null, notifyBase = "", wxpayFetch = undefined, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -64,7 +66,15 @@ export class PublicApiService {
     this.readManifest = readManifest;
     this.readReviews = readReviews;
     this.readHome = readHome;
-    this.readGuides = readGuides;
+    this.readAbout = readAbout;
+    this.readDonate = readDonate;
+    this.donatePayReady = donatePayReady || (() => false);
+    this.donatePayStore = donatePayStore;
+    this.donateOrderStore = donateOrderStore;
+    this.notifyBase = String(notifyBase || "").replace(/\/+$/, "");
+    this.wxpayFetch = wxpayFetch;
+    this.learningCompass = learningCompass || createDefaultLearningCompassService();
+    this.guideAssistant = guideAssistant;
     this.readVisitStats = readVisitStats;
     this.readFeedback = readFeedback || (() => ({ items: [] }));
     this.courseCatalog = courseCatalog;
@@ -79,17 +89,99 @@ export class PublicApiService {
     const reviewData = this.readReviews();
     if (!manifest || !Array.isArray(manifest.courses)) throw new Error("Runtime course data is unavailable.");
     const groups = buildReviewGroups(manifest, reviewData, this.courseCatalog, { viewerId });
-    const normalizedGuides = normalizeGuideData(this.readGuides(), {
-      courseIds: new Set(manifest.courses.map((course) => course.uid)),
-      fallbackCorrectionUrl: this.guideCorrectionUrl,
-    });
-    if (normalizedGuides.errors.length) throw new Error(`Runtime guide data is invalid: ${normalizedGuides.errors.join(" ")}`);
-    return { manifest, reviewData, groups, guides: normalizedGuides.data };
+    return { manifest, reviewData, groups, learningCompass: this.learningCompass };
   }
 
   health() {
     this.snapshot();
     return { status: "ok" };
+  }
+
+  /** 关于页公开数据：与网页关于页同一数据源（后台"关于页面管理"），markdown 正文。 */
+  about() {
+    const about = this.readAbout?.();
+    if (!about || typeof about !== "object") throw new PublicApiError(503, "关于页暂未配置。", "ABOUT_NOT_CONFIGURED");
+    return {
+      title: String(about.title || "NKUStudy").slice(0, 120),
+      content: String(about.content || "").slice(0, 6000),
+      updated: String(about.updated || "").slice(0, 40),
+    };
+  }
+
+  /** 捐助页公开数据：文案与预设金额来自后台"捐助页面管理"；pay_enabled 提示小程序支付是否可用。 */
+  donate() {
+    const donate = this.readDonate?.();
+    if (!donate || typeof donate !== "object") throw new PublicApiError(503, "捐助页暂未配置。", "DONATE_NOT_CONFIGURED");
+    const amounts = (Array.isArray(donate.amounts) ? donate.amounts : [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value >= 1 && value <= 10000)
+      .slice(0, 6);
+    return {
+      title: String(donate.title || "捐助支持").slice(0, 120),
+      content: String(donate.content || "").slice(0, 6000),
+      amounts: [...new Set(amounts)].sort((a, b) => a - b),
+      records: normalizeDonateRecords(Array.isArray(donate.records) ? donate.records : []),
+      pay_enabled: this.donatePayReady(),
+    };
+  }
+
+  /** 小程序捐助下单：JSAPI v3，返回 wx.requestPayment 所需参数；订单先落库 pending，回调置 paid。 */
+  async createDonateOrder(user, amount, { nickname = "", remark = "" } = {}) {
+    if (!this.donatePayStore || !this.donateOrderStore) throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
+    const config = this.donatePayStore.config();
+    const openid = this.mpAuthService?.getOpenid?.(user.id);
+    if (!openid) throw new PublicApiError(400, "当前账号缺少微信支付身份，请重新登录后再试。", "OPENID_MISSING");
+    const amountTotal = Math.round(Number(amount) * 100);
+    if (!Number.isSafeInteger(amountTotal) || amountTotal < 100 || amountTotal > 1000000) {
+      throw new PublicApiError(400, "捐助金额需在 1-10000 元之间。", "INVALID_DONATE_AMOUNT");
+    }
+    const outTradeNo = `DON${Date.now()}${randomBytes(4).toString("hex").toUpperCase()}`;
+    let prepayId;
+    try {
+      prepayId = await jsapiPrepay({
+        fetchImpl: this.wxpayFetch,
+        config,
+        appid: config.appid,
+        description: "NKUStudy 捐助支持",
+        outTradeNo,
+        amountTotal,
+        openid,
+        notifyUrl: `${this.notifyBase}/api/v1/donate/notify`,
+      });
+    } catch (error) {
+      console.error(`[donate] prepay failed: ${error.message} ${error.detail || ""}`);
+      throw new PublicApiError(502, "支付下单失败，请稍后重试。", "DONATE_PREPAY_FAILED");
+    }
+    this.donateOrderStore.create({ outTradeNo, userId: user.id, amountTotal, nickname, remark, source: "jsapi" });
+    return miniPayParams({ appid: config.appid, prepayId, privateKeyPem: config.privateKey });
+  }
+
+  /** 网页端 Native 扫码捐助：无需登录/openid，返回 code_url 由前端渲染二维码；同一回调入账。 */
+  async createDonateOrderNative({ userId = 0, amount, nickname = "", remark = "" } = {}) {
+    if (!this.donatePayStore || !this.donateOrderStore) throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
+    const config = this.donatePayStore.config();
+    const amountTotal = Math.round(Number(amount) * 100);
+    if (!Number.isSafeInteger(amountTotal) || amountTotal < 100 || amountTotal > 1000000) {
+      throw new PublicApiError(400, "捐助金额需在 1-10000 元之间。", "INVALID_DONATE_AMOUNT");
+    }
+    const outTradeNo = `DON${Date.now()}${randomBytes(4).toString("hex").toUpperCase()}`;
+    let codeUrl;
+    try {
+      codeUrl = await nativePrepay({ config, description: "NKUStudy 捐助支持", outTradeNo, amountTotal, notifyUrl: `${this.notifyBase}/api/v1/donate/notify`, fetchImpl: this.wxpayFetch });
+    } catch (error) {
+      console.error(`[donate] native prepay failed: ${error.message} ${error.detail || ""}`);
+      throw new PublicApiError(502, "支付下单失败，请稍后重试。", "DONATE_PREPAY_FAILED");
+    }
+    this.donateOrderStore.create({ outTradeNo, userId: Number(userId) || 0, amountTotal, nickname, remark, source: "native" });
+    return { code_url: codeUrl, out_trade_no: outTradeNo, amount };
+  }
+
+  /** 网页端轮询订单状态（随机单号仅发起人可见）。 */
+  donateOrderStatus(outTradeNo) {
+    if (!this.donateOrderStore) throw new PublicApiError(503, "支付功能暂未开通。", "DONATE_PAY_NOT_CONFIGURED");
+    const order = this.donateOrderStore.get(String(outTradeNo || "").slice(0, 40));
+    if (!order) throw new PublicApiError(404, "订单不存在。", "DONATE_ORDER_NOT_FOUND");
+    return { status: order.status, amount: order.amount_total / 100 };
   }
 
   home() {
@@ -215,7 +307,7 @@ export class PublicApiService {
   }
 
   searchIndex() {
-    const { manifest, groups, guides } = this.snapshot();
+    const { manifest, groups, learningCompass } = this.snapshot();
     const coursesById = new Map(manifest.courses.map((course) => [course.uid, course]));
     const courseDtos = new Map(manifest.courses.map((course) => [course.uid, publicCourseDto(course, groups, manifest)]));
     const items = [];
@@ -283,19 +375,19 @@ export class PublicApiService {
       }
     }
 
-    for (const guide of guides.items) {
+    for (const guide of learningCompass.searchItems()) {
       items.push({
         ...indexItemBase({
           id: guide.id,
           type: "guide",
           name: guide.title,
-          shortName: guide.short_name,
           aliases: guide.aliases,
           tags: guide.tags,
-          searchText: [guide.summary, guide.category, guide.applicable_scope].join(" "),
-          subtitle: [guide.category, `${guide.updated_at.slice(0, 10)} 更新`].filter(Boolean).join(" · "),
+          searchText: [guide.summary, guide.category_label, guide.applicable_scope].join(" "),
+          subtitle: [guide.category_label, `${guide.updated_at.slice(0, 10)} 更新`].filter(Boolean).join(" · "),
         }),
         category: guide.category,
+        category_label: guide.category_label,
         updated_at: guide.updated_at,
       });
     }
@@ -306,57 +398,28 @@ export class PublicApiService {
     const timestamps = [
       manifest.updated,
       ...manifest.courses.map((course) => course.updated),
-      guides.updated_at,
-      ...guides.items.map((guide) => guide.updated_at),
+      learningCompass.contentUpdatedAt(),
+      ...learningCompass.searchItems().map((guide) => guide.updated_at),
       ...groups.flatMap((group) => group.reviews.map((review) => review.created_at)),
     ];
     return { version, generated_at: generatedAt(timestamps), items, total: items.length };
   }
 
   guides(searchParams) {
-    const { guides } = this.snapshot();
-    const page = positiveInteger(searchParams.get("page"), 1, { max: 1_000_000 });
-    const pageSize = positiveInteger(searchParams.get("page_size"), 20, { max: 100 });
-    const category = queryText(searchParams.get("category"), 40);
-    if (category && !GUIDE_CATEGORIES.includes(category)) throw new PublicApiError(400, "指南分类无效。", "INVALID_GUIDE_CATEGORY");
-    const filtered = guides.items.filter((guide) => !category || guide.category === category);
-    const offset = (page - 1) * pageSize;
-    return {
-      items: filtered.slice(offset, offset + pageSize).map((guide) => ({
-        id: guide.id,
-        title: guide.title,
-        summary: guide.summary,
-        category: guide.category,
-        updated_at: guide.updated_at,
-        applicable_scope: guide.applicable_scope,
-        related_course_ids: guide.related_course_ids,
-      })),
-      total: filtered.length,
-      page,
-      page_size: pageSize,
-      facets: { categories: GUIDE_CATEGORIES.filter((value) => guides.items.some((guide) => guide.category === value)) },
-      data_updated_at: guides.updated_at,
-    };
+    return this.learningCompass.guides(searchParams);
   }
 
   guide(guideId) {
-    const { manifest, guides } = this.snapshot();
-    const guide = guides.items.find((item) => item.id === guideId);
-    if (!guide) throw new PublicApiError(404, "指南不存在。", "GUIDE_NOT_FOUND");
-    const coursesById = new Map(manifest.courses.map((course) => [course.uid, course]));
-    return {
-      id: guide.id,
-      title: guide.title,
-      summary: guide.summary,
-      category: guide.category,
-      updated_at: guide.updated_at,
-      applicable_scope: guide.applicable_scope,
-      steps: guide.steps,
-      related_courses: guide.related_course_ids.map((id) => ({ id, name: queryText(coursesById.get(id)?.title, 120) })),
-      source_title: guide.source_title,
-      source_url: guide.source_url,
-      correction_url: guide.correction_url,
-    };
+    return this.learningCompass.guide(guideId);
+  }
+
+  guideVariant(guideId, variantId) {
+    return this.learningCompass.guideVariant(guideId, variantId);
+  }
+
+  async guideAssistantAnswer(userId, body) {
+    if (!this.guideAssistant) throw new PublicApiError(503, "问答服务暂未开放，请使用普通指南或搜索。", "AI_UNAVAILABLE");
+    return this.guideAssistant.answer(userId, body);
   }
 
   reviewGroups({ viewerId = null } = {}) {
@@ -428,7 +491,7 @@ export class PublicApiService {
   }
 
   getMyFeedback(userId, { page = 1, pageSize = 20 } = {}) {
-    const feedback = this.readFeedbackData();
+    const feedback = this.readFeedback();
     const safePage = Math.max(1, Number(page) || 1);
     const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
     const items = (feedback.items || [])
@@ -439,6 +502,7 @@ export class PublicApiService {
         id: item.id, title: item.title, content: item.content, type: item.type,
         status: String(item.status || "open"), hidden: item.hidden === true,
         resourceRef: item.resourceRef || "", createdAt: item.createdAt || "", updatedAt: item.updatedAt || "",
+        reply: String(item.reply || ""), repliedAt: item.repliedAt || "",
       })),
       total: items.length, page: safePage, page_size: safePageSize,
     };
@@ -456,6 +520,19 @@ export class PublicApiService {
     };
   }
 
+  /**
+   * 前端本地搜索用的精简全量数据：课程库(名称)、目录池(名称+老师)、评价组(课程名+老师)。
+   * 字段刻意最小化，gzip 后约百 KB；GET 自动带 ETag/max-age，重复访问 304 近零流量。
+   */
+  searchData() {
+    const { manifest, groups } = this.snapshot();
+    return {
+      courses: manifest.courses.map((course) => ({ id: course.uid, name: course.title })),
+      catalog: (this.courseCatalog?.courses || []).map((entry) => ({ id: entry.id, name: entry.name, teachers: entry.teachers || [] })),
+      groups: groups.map((group) => ({ name: group.courseTitle, teacher: group.teacher })),
+    };
+  }
+
   async submitReview(body, context) {
     const { manifest } = this.snapshot();
     const courseUid = queryText(body?.course_id, 80);
@@ -468,6 +545,12 @@ export class PublicApiService {
       courseTitle = catalogCourse.name;
     } else if (course) {
       courseTitle = course.title;
+    } else if (body?.course_title) {
+      const groupTitle = queryText(body.course_title, 120);
+      const { reviewData } = this.snapshot();
+      const knownTitles = new Set((reviewData.reviews || []).map((review) => String(review.courseTitle || "").trim()).filter(Boolean));
+      if (!knownTitles.has(groupTitle)) throw new PublicApiError(404, "没有找到该课程的评价记录。", "REVIEW_GROUP_NOT_FOUND");
+      courseTitle = groupTitle;
     } else {
       throw new PublicApiError(404, "课程不存在。", "COURSE_NOT_FOUND");
     }

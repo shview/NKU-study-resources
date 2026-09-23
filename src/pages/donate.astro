@@ -1,0 +1,189 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { readBuildData } from "../lib/runtime-data";
+import { markdownToHtml } from "../lib/markdown";
+import { DEFAULT_DONATE_CONTENT } from "../../server/default-donate.mjs";
+
+let donate = { ...DEFAULT_DONATE_CONTENT };
+try {
+  const saved = readBuildData("donate.json");
+  if (saved && typeof saved === "object" && Object.keys(saved).length) donate = { ...donate, ...saved };
+} catch {
+  // donate.json 尚未保存过时使用默认文案；后台保存并发布会重建本页
+}
+const amounts = (Array.isArray(donate.amounts) ? donate.amounts : DEFAULT_DONATE_CONTENT.amounts)
+  .map((value) => Number(value))
+  .filter((value) => Number.isFinite(value) && value >= 1 && value <= 10000)
+  .slice(0, 6);
+---
+
+<Layout title={donate.title || "捐助支持"} eyebrow="Donate">
+  <section class="content">
+    <article class="panel">
+      <div class="panel-header split-header">
+        <h2>{donate.title || "捐助支持"}</h2>
+        <div class="header-actions">
+          <a class="button secondary" href="/admin/" target="_blank" rel="noreferrer">管理</a>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="markdown-body" set:html={markdownToHtml(donate.content || "")} />
+
+        <div class="donate-box" id="donate-box" data-amounts={amounts.join(",")}>
+          <h3>选择捐助金额</h3>
+          <div class="donate-amounts" id="donate-amounts"></div>
+          <div class="donate-custom">
+            <label for="donate-custom-input">自定义金额（元）</label>
+            <input id="donate-custom-input" type="number" min="1" max="10000" step="0.01" placeholder="输入金额" />
+          </div>
+          <div class="donate-custom">
+            <label for="donate-nickname">昵称（选填，捐赠记录中展示，留空显示"好心人"）</label>
+            <input id="donate-nickname" type="text" maxlength="32" placeholder="你的昵称" />
+          </div>
+          <div class="donate-custom">
+            <label for="donate-remark">备注（选填，仅管理员可见）</label>
+            <input id="donate-remark" type="text" maxlength="200" placeholder="想说的话（选填）" />
+          </div>
+          <button class="button" id="donate-pay" type="button">生成微信支付二维码</button>
+          <p class="me-status" id="donate-status" style="font-size:13px;margin:10px 0 0;color:var(--muted);">支付功能由微信支付提供，扫码前请确认金额</p>
+          <div class="donate-qr" id="donate-qr" hidden>
+            <div id="donate-qr-canvas"></div>
+            <p class="donate-qr-amount" id="donate-qr-amount"></p>
+            <p id="donate-qr-hint" style="font-size:13px;color:var(--muted);margin:8px 0 0;">请使用微信扫码完成支付</p>
+          </div>
+          <div class="donate-records" id="donate-records">
+            <h3>捐赠记录与资金去向</h3>
+            <div id="donate-records-table"></div>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+</Layout>
+
+<style is:global>
+  .donate-box { margin-top: 22px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-soft); }
+  .donate-box h3 { margin: 0 0 14px; }
+  .donate-amounts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .donate-amount-chip { min-width: 84px; padding: 10px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); font-weight: 700; cursor: pointer; text-align: center; }
+  .donate-amount-chip.active { border-color: var(--primary); color: var(--primary); background: #eef2ff; }
+  .donate-custom { margin-bottom: 14px; font-size: 13px; color: #475569; display: grid; gap: 6px; }
+  .donate-custom input { width: 100%; min-height: 40px; padding: 9px 11px; color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); font: inherit; box-sizing: border-box; }
+  .donate-qr { margin-top: 18px; text-align: center; }
+  .donate-qr canvas, .donate-qr img { max-width: 240px; }
+  .donate-qr-amount { font-size: 20px; font-weight: 800; margin: 10px 0 0; color: var(--primary); }
+  .donate-records { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 18px; }
+  .donate-records table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .donate-records th, .donate-records td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+  .donate-records th { background: var(--surface-soft); }
+</style>
+
+<script is:inline src="/qrcode-generator.js"></script>
+<script>
+  const box = document.querySelector("#donate-box");
+  const statusEl = document.querySelector("#donate-status");
+  const amounts = String(box?.dataset.amounts || "5,10,15").split(",").map(Number).filter(Boolean);
+  let selected = amounts[0] || 0;
+  let pollTimer = null;
+
+  const chipsWrap = document.querySelector("#donate-amounts");
+  amounts.forEach((value, index) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "donate-amount-chip" + (index === 0 ? " active" : "");
+    chip.textContent = `${value} 元`;
+    chip.addEventListener("click", () => {
+      selected = value;
+      customInput.value = "";
+      chipsWrap.querySelectorAll(".donate-amount-chip").forEach((item) => item.classList.remove("active"));
+      chip.classList.add("active");
+    });
+    chipsWrap.append(chip);
+  });
+
+  const customInput = document.querySelector("#donate-custom-input");
+  customInput?.addEventListener("input", () => {
+    selected = 0;
+    chipsWrap.querySelectorAll(".donate-amount-chip").forEach((item) => item.classList.remove("active"));
+  });
+
+  const qrWrap = document.querySelector("#donate-qr");
+  const qrCanvas = document.querySelector("#donate-qr-canvas");
+  const qrAmount = document.querySelector("#donate-qr-amount");
+
+  async function checkPayEnabled() {
+    try {
+      const response = await fetch("/api/v1/donate");
+      const data = await response.json();
+      return data?.data?.pay_enabled === true;
+    } catch { return false; }
+  }
+
+  document.querySelector("#donate-pay")?.addEventListener("click", async () => {
+    const amount = selected > 0 ? selected : Number(customInput.value);
+    if (!Number.isFinite(amount) || amount < 1 || amount > 10000) {
+      statusEl.textContent = "请选择或输入 1-10000 元的金额";
+      return;
+    }
+    statusEl.textContent = "正在下单…";
+    try {
+      const response = await fetch("/api/v1/donate/pay-native", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          nickname: document.querySelector("#donate-nickname")?.value.trim().slice(0, 32) || "",
+          remark: document.querySelector("#donate-remark")?.value.trim().slice(0, 200) || "",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || data.code !== 0) throw new Error(data.message || "下单失败");
+      const { code_url: codeUrl, out_trade_no: outTradeNo } = data.data;
+      qrCanvas.innerHTML = "";
+      // @ts-ignore vendor UMD
+      const qr = window.qrcode(0, "M");
+      qr.addData(codeUrl);
+      qr.make();
+      qrCanvas.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2 });
+      qrAmount.textContent = `¥ ${amount}`;
+      qrWrap.hidden = false;
+      statusEl.textContent = "";
+      pollStatus(outTradeNo);
+    } catch (error) {
+      statusEl.textContent = error.message || "下单失败，请稍后重试";
+    }
+  });
+
+  async function loadRecords() {
+    try {
+      const response = await fetch("/api/v1/donate");
+      const data = await response.json();
+      const records = Array.isArray(data?.data?.records) ? data.data.records : [];
+      const table = document.querySelector("#donate-records-table");
+      if (!records.length) {
+        table.innerHTML = '<p style="font-size:13px;color:var(--muted);margin:0;">暂无捐赠记录，成为第一位支持者吧。</p>';
+        return;
+      }
+      const rows = records.slice().reverse().map((row) => `<tr><td>${String(row.date).replace(/[<>&]/g, "")}</td><td>${String(row.nickname).replace(/[<>&]/g, "")}</td><td>${String(row.usage).replace(/[<>&]/g, "")}</td></tr>`).join("");
+      table.innerHTML = `<table><thead><tr><th>时间</th><th>昵称</th><th>去向</th></tr></thead><tbody>${rows}</tbody></table>`;
+    } catch {}
+  }
+  loadRecords();
+
+  function pollStatus(outTradeNo) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/v1/donate/order-status?out_trade_no=${encodeURIComponent(outTradeNo)}`);
+        const data = await response.json();
+        if (response.ok && data.data?.status === "paid") {
+          clearInterval(pollTimer);
+          qrWrap.hidden = true;
+          statusEl.style.color = "#16a34a";
+          statusEl.textContent = "支付成功，感谢你对 NKUStudy 的支持！";
+          loadRecords();
+        }
+      } catch {}
+    }, 2500);
+  }
+</script>

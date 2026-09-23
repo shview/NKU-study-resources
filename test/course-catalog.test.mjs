@@ -51,3 +51,36 @@ test("empty catalog degrades to not-loaded", () => {
   assert.equal(c.loaded, false);
   assert.equal(c.find("任何"), null);
 });
+
+test("addCourse validates input, dedupes, persists, and hot-reloads", async () => {
+  const { CourseCatalogService } = await import("../server/course-catalog-service.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "catalog-add-"));
+  const file = path.join(dir, "catalog.json");
+  fs.writeFileSync(file, JSON.stringify({ version: 1, updated: "", sources: [], courses: [
+    { id: "cat-exists", name: "高等数学", aliases: [], categories: [], modules: [], teachers: ["张三"], terms: [] }
+  ] }));
+  const service = new CourseCatalogService({
+    catalogPath: file,
+    writeJson: async (mutator) => {
+      const current = JSON.parse(fs.readFileSync(file, "utf8"));
+      fs.writeFileSync(file, JSON.stringify(mutator(current)));
+    },
+  });
+  const added = await service.addCourse({ name: "量子计算导论", categories: "计算机学院", teachers: "李四、王五, 李四", terms: "2026-2027-1" });
+  assert.equal(added.name, "量子计算导论");
+  assert.deepEqual(added.teachers, ["李四", "王五"], "分隔符拆分并去重");
+  assert.ok(service.find("量子计算导论"), "写入后立即可查（热重载）");
+  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.equal(stored.courses.length, 2);
+  assert.equal(stored.courses[1].origin, "user");
+  await assert.rejects(() => service.addCourse({ name: "高等数学", teachers: ["x"] }), /已在目录/);
+  await assert.rejects(() => service.addCourse({ name: "量子计算导论", teachers: ["x"] }), /已在目录/);
+  await assert.rejects(() => service.addCourse({ name: "量", teachers: ["x"] }), /课程名称/);
+  await assert.rejects(() => service.addCourse({ name: "新课程" }), /任课教师/);
+  await assert.rejects(
+    () => service.addCourse({ name: "课程库课程", teachers: ["x"], manifestTitles: new Set(["课程库课程"]) }),
+    /已在目录/,
+  );
+  await assert.rejects(() => new CourseCatalogService({ catalogPath: file }).addCourse({ name: "y课程", teachers: ["x"] }), /read-only/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

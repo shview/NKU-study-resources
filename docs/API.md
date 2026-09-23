@@ -18,8 +18,22 @@
 | `GET` | `/api/v1/home` | 公开 | 小程序首页数据 |
 | `GET` | `/api/v1/search-index` | 公开 | 完整、版本化的四类搜索快照 |
 | `GET` | `/api/v1/catalog` | 公开 | 选课手册课程目录（课程+教师，支持 q 搜索与分页） |
-| `GET` | `/api/v1/guides` | 公开 | 指南列表、分类和分页 |
-| `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情、相关课程和纠错入口 |
+| `GET` | `/api/v1/search-data` | 公开、ETag 缓存 | 前端本地搜索精简数据（课程库/目录池/评价组名称与老师） |
+| `GET` | `/api/v1/about` | 公开、ETag 缓存 | 关于页内容（标题+markdown 正文，与网页关于页同源） |
+| `GET` | `/api/v1/donate` | 公开、ETag 缓存 | 捐助页内容（标题/markdown 正文/预设金额/支付是否可用） |
+| `POST` | `/api/v1/donate/pay` | Bearer Token | 小程序捐助支付下单（可带 nickname/remark；未配置商户时 503） |
+| `POST` | `/api/v1/donate/pay-native` | 公开（网页会话可选） | 网页 Native 扫码捐助下单，返回 code_url |
+| `GET` | `/api/v1/donate/order-status` | 公开 | 按随机单号轮询支付状态 |
+| `POST` | `/api/v1/donate/notify` | 微信支付服务器回调 | 支付结果通知（验签+解密+幂等入账），仅微信支付服务器调用 |
+| `GET` | `/api/v1/guides` | 公开 | 学习指南针指南列表（稳定五分类、facets、分页） |
+| `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |
+| `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |
+| `POST` | `/api/v1/guide-assistant/answers` | 登录 | 学习指南针 AI 问答（检索+引用+拒答） |
+| `POST` | `/admin-api/catalog/courses` | `content.edit` | 评价管理"往目录池加课程"（校验+去重） |
+| `POST` | `/admin-api/catalog/import-courses` | `content.edit` | 从目录池批量建课程壳（幂等，附 dry_run） |
+| `GET` | `/admin-api/ai-settings` | `ai.manage` | 读取 AI 问答配置（Key 掩码） |
+| `POST` | `/admin-api/ai-settings` | `ai.manage` | 保存 AI 问答配置（Key/模型/限流，动态生效） |
+| `POST` | `/admin-api/ai-settings/test` | `ai.manage` | 用当前或待存配置真实调用一次模型测试连通 |
 | `GET` | `/api/v1/courses` | 公开 | 搜索、筛选和分页课程 |
 | `GET` | `/api/v1/courses/:courseUid` | 公开 | 课程详情 |
 | `GET` | `/api/v1/courses/:courseUid/resources` | 公开 | 课程资源与 R2 下载地址 |
@@ -30,8 +44,9 @@
 | `POST` | `/api/v1/service/blacklist` | 服务密钥 | 批量查询用户黑名单状态（≤100 个） |
 | `POST` | `/api/v1/service/rate-limit` | 服务密钥 | 通用固定窗口限流（按服务命名空间隔离） |
 | `POST` | `/api/v1/auth/wechat` | 公开、限流 | 小程序微信登录（code 换 token） |
+| `POST` | `/api/v1/auth/phone-verify` | Bearer Token、限流 | 微信手机号验证（getPhoneNumber code 换手机号，达标实名） |
 | `POST` | `/api/v1/auth/web-register` | 公开、限流 | 网页注册（昵称+密码） |
-| `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码） |
+| `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码，签发 httpOnly 会话 cookie；空请求用于恢复会话） |
 | `POST` | `/api/v1/auth/logout` | Bearer Token | 注销小程序登录令牌 |
 | `GET` | `/api/v1/me` | Bearer Token | 当前小程序用户信息 |
 | `GET` | `/api/v1/me/favorites` | Bearer Token | 我的收藏课程列表（分页） |
@@ -39,7 +54,8 @@
 | `POST` | `/api/v1/favorites` | Bearer Token | 收藏课程（body：course_id） |
 | `DELETE` | `/api/v1/favorites/:param` | Bearer Token | 取消收藏课程 |
 | `POST` | `/api/v1/me/profile` | Bearer Token | 更新昵称与头像 |
-| `POST` | `/api/v1/me/web-password` | Bearer Token | 设置/修改网页登录密码 |
+| `POST` | `/api/v1/me/web-password` | Bearer Token | 设置网页登录密码（微信端首次设置） |
+| `POST` | `/api/v1/me/web-password/change` | Bearer Token | 修改网页登录密码（需验证当前密码） |
 | `POST` | `/api/v1/me/delete-account` | Bearer Token | 注销账号（删绑定关系、保留内容；封禁账号需联系管理员） |
 | `GET` | `/api/v1/me/feedback` | Bearer Token | 我的反馈列表（含审核状态） |
 | `POST` | `/api/v1/reviews` | 公开、限流 | 小程序提交评价 |
@@ -53,6 +69,8 @@
 | `POST` | `/admin-api/login` | 公开、限流 | 账号+密码登录并签发 Cookie |
 | `POST` | `/admin-api/logout` | 公开 | 清除管理员 Cookie |
 | `POST` | `/admin-api/upload` | Cookie（需相应权限） | 上传课程文件到 R2 |
+| `POST` | `/admin-api/content-images` | Cookie（content.edit） | 上传内容图片（关于/参与/公告等），multipart，归属白名单 owner |
+| `POST` | `/admin-api/content-images/cleanup` | Cookie（content.edit） | 清理指定归属未被引用的内容图片 |
 | `POST` | `/admin-api/sync-r2` | Cookie（需相应权限） | 从 R2 同步一门课程 |
 | `POST` | `/admin-api/sync-r2-all` | Cookie（需相应权限） | 从 R2 重建/合并全部课程树 |
 | `POST` | `/admin-api/delete-r2` | Cookie；已禁用 | 旧 R2 删除接口，固定 410 |
@@ -72,6 +90,15 @@
 | `GET` | `/admin-api/footer` | Cookie（需相应权限） | 读取页脚内容和 revision |
 | `POST` | `/admin-api/footer` | Cookie（需相应权限） | 发布页脚内容 |
 | `GET` | `/admin-api/about` | Cookie（需相应权限） | 读取关于页内容和 revision |
+| `GET` | `/admin-api/donate` | Cookie（content.read） | 读取捐助页内容与预设金额 |
+| `POST` | `/admin-api/donate` | Cookie（content.edit） | 保存并发布捐助页 |
+| `GET` | `/admin-api/donate-pay` | Cookie（services.manage） | 读取微信支付配置（脱敏） |
+| `GET` | `/admin-api/donate-stats` | Cookie（content.read） | 捐赠统计（总额/来源分布/最近订单） |
+| `GET` | `/admin-api/privacy` | Cookie（content.read） | 读取隐私政策 |
+| `POST` | `/admin-api/privacy` | Cookie（content.edit） | 发布隐私政策 |
+| `GET` | `/admin-api/law-query` | Cookie（law.manage） | 依法调取：按账号/内容聚合证据（每次留痕） |
+| `GET` | `/admin-api/law-export` | Cookie（law.manage） | 依法调取：导出 JSON（每次留痕） |
+| `POST` | `/admin-api/donate-pay` | Cookie（services.manage） | 保存微信支付商户配置 |
 | `POST` | `/admin-api/about` | Cookie（需相应权限） | 发布关于页内容 |
 | `GET` | `/admin-api/participate` | Cookie（需相应权限） | 读取参与贡献页和 revision |
 | `POST` | `/admin-api/participate` | Cookie（需相应权限） | 发布参与贡献页 |
@@ -99,6 +126,7 @@
 | `POST` | `/admin-api/me/password` | Cookie | 修改自己的密码 |
 | `GET` | `/admin-api/audit` | Cookie（需相应权限） | 分页查询管理操作审计日志 |
 | `GET` | `/admin-api/mp-users` | Cookie（需相应权限） | 小程序用户列表与登录统计 |
+| `POST` | `/admin-api/notify-settings` | `backup.manage` | 设置指南反馈接收开关 |
 | `GET` | `/admin-api/notify-settings` | Cookie（需相应权限） | 飞书通知机器人列表（不返回密钥明文） |
 | `POST` | `/admin-api/notify-bots` | Cookie（需相应权限） | 新增或更新飞书机器人（webhook/密钥/开关） |
 | `DELETE` | `/admin-api/notify-bots/:param` | Cookie（需相应权限） | 删除飞书机器人 |
@@ -148,6 +176,7 @@
 - 除上传外，POST 请求应发送 `Content-Type: application/json` 和 UTF-8 JSON。当前服务按正文解析 JSON，并未依赖该请求头判断格式；调用方仍应正确设置请求头。
 - JSON 正文上限为 **2,000,000 字节**。无效 JSON、无效 UTF-8、请求中止返回 `400`；超限在旧接口和管理接口通常返回 `413`。公共 v1 路由会把正文读取失败统一映射为 `400 INVALID_JSON`，超限时底层还会关闭请求连接。
 - `/admin-api/upload` 使用 `multipart/form-data`，限制每次最多 20 个文件、20 个 multipart part、每个文件最多 100 MiB。
+- `/admin-api/content-images` 使用 `multipart/form-data`，单文件 ≤8MB，仅 png/jpeg/webp/gif，存入 R2 `content/<owner>/` 前缀；内容保存时自动删除不再引用的同归属图片。
 - 所有服务端 JSON 响应均为 `application/json; charset=utf-8`。`GET /admin-api/backup` 额外返回 `Content-Disposition: attachment`。
 
 ### 缓存、ETag、CORS
@@ -312,17 +341,61 @@ curl -sS https://nkustudy.top/api/v1/home
 
 ### `GET /api/v1/guides`
 
-查询参数：`category` 可为空或取 `course-selection`、`training-program`、`add-drop`、`exam-grade`；`page` 默认 1，`page_size` 默认 20、最大 100。未知分类返回 `400 INVALID_GUIDE_CATEGORY`。
+学习指南针公共指南列表（无需登录，只读）。数据来自版本化内容快照 `server/data/learning-compass-snapshot.json`（5 分类、18 篇 published 指南、29 个转专业学院变体）。
 
-成功 `data` 为 `{items,total,page,page_size,facets,data_updated_at}`；列表项只含 `id`、`title`、`summary`、`category`、`updated_at`、`applicable_scope`、`related_course_ids`。`facets.categories` 只列当前有已发布内容的分类。
+查询参数：`category` 可为空或取稳定五分类 `course-study`、`exam-grade`、`student-status-graduation`、`academic-development`、`rules-rights`；`page` 默认 1，`page_size` 默认 20、最大 100。未知分类返回 `400 INVALID_GUIDE_CATEGORY`。
+
+成功 `data` 为 `{items,total,page,page_size,facets,data_updated_at}`：
+
+- 列表项（GuideSummary）：`id`、`title`、`summary`、`category`、`category_label`、`applicable_scope`、`updated_at`、`time_status`（`long_term|current|ended|historical`）、`content_type`（`standard|multi_variant`）、`read_minutes`、`source_count`、`aliases`、`tags`。
+- `facets.categories` 为对象数组 `[{value,label,order,count}]`，只列当前有已发布内容的分类。
+- 旧字段 `steps/source_title/source_url` 已按产品决定直接移除（未公测，无兼容窗口）。
 
 ### `GET /api/v1/guides/:guideId`
 
-- `guideId` 是 `guides.json` 中由内容维护者分配、发布后不随标题变化的稳定 ID。
-- 成功字段：`id`、`title`、`summary`、`category`、`updated_at`、`applicable_scope`、`steps[{title,body}]`、`related_courses[{id,name}]`、`source_title`、`source_url`、`correction_url`。
-- `related_courses[].id` 必须是现有课程 UUID；URL 只允许无账号信息的公开 HTTPS 地址。
-- 本阶段纠错采用公开链接方案，默认指向网站反馈页；没有新增小程序写接口或管理接口。
-- 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`；运行时指南数据违反白名单或引用未知课程时失败关闭并返回 `500 INTERNAL_ERROR`。
+- `guideId` 是内容快照中发布后不变的稳定 ID。
+- 成功字段（GuideDetail）：`id`、`title`、`summary`、`category`、`category_label`、`applicable_scope`、`updated_at`、`time_status`、`content_type`、`read_minutes`、`sections[{id,title,body_format,body,source_ids}]`、`sources[{id,title,document_no,publisher,published_at,file_type,file_name,file_url,official_page_url,location_label}]`、`variants[{id,title,order,source_count}]`、`related_courses`、`correction_url`。
+- `sections[].body` 为忠实于官方原文的 Markdown；`sources[].file_url` 指向 R2 公网域名 `https://resources.nkustudy.top/guide-sources/...`，浏览器与小程序 `downloadFile` 均可直接访问，不经应用服务器代理。
+- 多学院指南（`transfer-major-2026`）详情只返回校级章节和 29 个轻量 `variants`，不携带 150 个学院原文块；学院正文按需经 variants 接口加载。
+- 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`。
+
+### `GET /api/v1/guides/:guideId/variants/:variantId`
+
+- 按需读取一个转专业学院/单位的逐字原文。当前仅 `transfer-major-2026` 是 `multi_variant`。
+- 成功 `data` 为 `{guide_id, variant:{id,title,order,sections[{id,title,body_format,body,source_ids}],sources[]}}`；`sections[].body` 为该学院官方原文件的 Markdown 全文，学院之间内容不串用。
+- 主要错误：`400 INVALID_PATH`、`404 GUIDE_NOT_FOUND`、`404 GUIDE_VARIANT_NOT_FOUND`。
+
+### `POST /admin-api/catalog/courses`
+
+管理后台「评价审核」面板的"往目录池加课程"：课程不在课程库/目录时，管理员提交课程名/学院/教师/学期，通过校验后**直接写入课程目录**（`catalog.json`）并热生效——网页与小程序评价立即可搜索并提交该课程。
+
+- 权限：`content.edit`。
+- 请求体：`{ name, categories?, teachers, terms? }`；`name` 2–120 字、`teachers` 必填（字符串或数组，支持顿号/逗号分隔，去重后最多 20 位）；`categories` 最多 5 项。
+- 去重：与目录课程（含别名、忽略空白/全半角括号）及课程库标题重复时返回 `400`，`code=CATALOG_COURSE_EXISTS`（提示可直接填写课程名提交评价）。
+- 成功 `data`：`{ submitted:true, course:{id,name,categories,teachers,terms} }`；同时向飞书通知"目录新增课程"。新增条目带 `origin:"user"` 标记便于区分教务来源。
+
+### `POST /api/v1/guide-assistant/answers`
+
+学习指南针 AI 问答（B 批）。必须携带小程序登录 Bearer Token：`Authorization: Bearer <token>`。
+
+请求体（全部字段校验在 provider 调用前完成）：
+
+```json
+{
+  "question": "课程成绩有异议，如何申请复核？",
+  "history": [{ "role": "user", "content": "…" }, { "role": "assistant", "content": "…" }],
+  "profile": { "admission_year": 2025, "major": "用户主动填写的专业" }
+}
+```
+
+- `question` 必填，1–1000 字；`history` 最多 9 轮（role 只允许 `user/assistant`，历史回答不作为事实来源，每问重新检索）；`profile` 可选。
+- 服务端顺序：Token 验证 → 黑名单/注销检查 → 限流 → 输入校验 → 检索 published 逐字块 → 冲突/无依据拒答 → 调用千问 → 返回。
+- 限流：每用户每日 20 次、分钟 3 次，全局每日 2000 次（SQLite 持久化窗口）。
+- 30 秒总预算，provider 失败最多自动重试 1 次，仍失败返回 `503 AI_UNAVAILABLE`。
+- 依据不足/来源冲突/越界返回 `200` 业务拒答：`data.refused=true`，`reason` 为 `INSUFFICIENT_EVIDENCE|SOURCE_CONFLICT|OUT_OF_SCOPE` 之一，不调用模型、不编造。
+- 成功响应 `data`：`answer`、`refused:false`、`reason:null`、`applicable_scope`、`freshness_notice`、`citations[{id,title,document_no,publisher,published_at,file_type,file_url,official_page_url}]`（整份原文件级引用，`file_url` 为 R2 公网直链）。
+- 模型密钥只存在于服务器环境变量（`DASHSCOPE_API_KEY`、可选 `QWEN_BASE_URL`/`QWEN_MODEL`/`QWEN_MAX_TOKENS`）；未配置密钥时稳定返回 `503 AI_UNAVAILABLE`，普通指南不受影响。
+- 主要错误：`400 INVALID_AI_QUESTION`、`401 AUTH_REQUIRED`、`429 RATE_LIMITED`、`503 AI_UNAVAILABLE`。
 
 ### `GET /api/v1/courses`
 
@@ -542,7 +615,7 @@ curl -sS https://nkustudy.top/feedback-api/submit \
 
 ### `GET /visit-api/stats`
 
-成功：`{ "ok":true, "stats": { "total":0, "today":0, "updatedAt":"..." } }`。
+成功：`{ "ok":true, "stats": { "total":0, "today":0, "updatedAt":"...", "startedAt":"2026-07-14T16:00:00+08:00" } }`。其中 `total` 同时汇总网站与小程序上报的访问，`startedAt` 与网站页脚使用同一个安全运行起始时间。
 
 ```bash
 curl -sS https://nkustudy.top/visit-api/stats
@@ -552,7 +625,7 @@ curl -sS https://nkustudy.top/visit-api/stats
 
 请求：`{ "path":"/courses/某课程" }`；缺省时使用 Referer 或 `/`。服务端只记录固定页面、课程详情模板、评价详情模板或 `/__unknown__`，不记录任意原始 URL；后台和 API 路径不计数。同一 IP+User-Agent 30 分钟内去重。
 
-成功：`{ "ok":true, "stats": { "counted":true, "total":1, "today":1, "updatedAt":"..." } }`。限流为每 IP 每分钟 120、全局每分钟 600，超限返回 `429`。
+成功：`{ "ok":true, "stats": { "counted":true, "total":1, "today":1, "updatedAt":"...", "startedAt":"2026-07-14T16:00:00+08:00" } }`。返回的公开统计字段与 `GET /visit-api/stats` 一致；限流为每 IP 每分钟 120、全局每分钟 600，超限返回 `429`。
 
 ```bash
 curl -sS https://nkustudy.top/visit-api/hit \

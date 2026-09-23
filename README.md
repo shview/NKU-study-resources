@@ -22,7 +22,7 @@ NKUStudy 是面向南开学生的课程资料导航与选课参考平台，整�
 - **微信小程序公共 API**（`/api/v1`）：微信身份登录、收藏、评价提交——配套小程序仓库 [mzk-C4/NKU-study-wxapp](https://github.com/mzk-C4/NKU-study-wxapp)
 - **资源分发**：课程文件存 Cloudflare R2，经 `resources.nkustudy.top`（Cloudflare CDN）下载
 
-数据基线：68+ 门课程、840+ 份资料、71+ 条评价，持续更新。
+数据基线：450+ 门课程、800+ 条课程评价（770+ 个课程×教师分组）、9000+ 次访问，持续更新。
 
 ## 架构
 
@@ -48,11 +48,15 @@ Caddy（TLS / 反代 / HTTP→HTTPS）
 
 ## 管理后台能力
 
-- **多账号权限**：账号+密码（scrypt），8 权限点（内容查看/编辑/反馈处理、R2 同步/删除、备份、账号管理、审计查看）× 4 角色预设（super_admin / content_admin / reviewer / viewer）；末位超管保护、会话 8h 绝对过期 + 30min 空闲过期
+- **多账号权限**：账号+密码（scrypt），11 权限点（内容查看/编辑/审核、R2 同步/删除、备份、账号管理、审计查看、服务密钥、AI 问答、依法调取）× 6 角色预设（super_admin / service_admin / ai_admin / content_admin / reviewer / viewer）；末位超管保护、会话 8h 绝对过期 + 30min 空闲过期；侧边栏两级分组导航，无权限页面置灰并提示所需权限
+- **内容管理**：课程资源（R2 同步/事务发布）、评价/反馈审核、首页/关于/参与/友链/页脚/捐助/隐私等页面内容，全部「保存即触发 Astro 重建+原子发布」；Markdown 编辑器（vditor）支持插图（R2 `content/` 前缀直链、base64 自动迁移、未引用图片一键清理）
+- **举报处置**：违法举报与内容投诉独立页签（与普通反馈分离），状态机处置 + 处理人/时间留痕；举报内容永不公开展示
+- **捐助与支付**：捐助页内容/预设金额可配；微信支付 v3（JSAPI 小程序 + Native 网页扫码）完整下单/回调验签/解密/幂等入账，捐赠记录支付成功自动追加公开表，统计支持全量订单检索/筛选/分页；商户密钥仅存服务器（0600，接口只回掩码）
+- **依法调取（内部）**：独立 `law.manage` 权限，按账号/评价/举报 ID 查询与导出，每次操作自动留痕（公安合规要求）
 - **审计日志**：所有写操作与登录成败入审计（到秒、动作中文化）；超 2 万条按批归档至 R2
 - **审核效率**：评价按课程侧边栏审核、批量通过/隐藏、待审数角标、关键词过滤（默认关闭，命中联系方式/敏感词强制待审）
 - **飞书通知**：多机器人（独立 webhook+签名+用途），新评价/新反馈实时卡片，每日汇总（可选启用），单机定向测试
-- **小程序用户管理**：列表/搜索/排序、登录统计、黑名单（封禁即无法登录、会话即时失效）
+- **小程序用户管理**：列表/搜索/排序、登录统计、手机号实名状态、黑名单（封禁即无法登录、会话即时失效）
 - **访问统计**：7/30/90 天折线图（鼠标追踪悬浮）、按类别汇总（网页/小程序）、页面明细（解码课程名）、访客 IP（30 分钟去重）
 - **备份**：每日自动 + 手动，R2 与 WebDAV 双通道（站点数据/服务器配置/课程文件），恢复步骤经过实际演练验证
 
@@ -60,10 +64,13 @@ Caddy（TLS / 反代 / HTTP→HTTPS）
 
 | 分类 | 端点 |
 |---|---|
-| 课程/资料 | `GET /api/v1/home` · `courses` · `courses/{id}` · `courses/{id}/resources` · `search-index` · `guides` |
-| 评价 | `GET /api/v1/review-groups[/{key}]` · `POST /api/v1/reviews`（先审后显） |
-| 登录 | `POST /api/v1/auth/wechat`（wx.login code → 30 天 Bearer token）· `me` · `me/profile` · `auth/logout` |
+| 课程/资料 | `GET /api/v1/home` · `courses` · `courses/{id}` · `courses/{id}/resources` · `search-index` · `search-data`（前端本地分级搜索）· `guides` |
+| 内容页 | `GET /api/v1/about` · `donate`（捐助页内容与预设金额） |
+| 评价 | `GET /api/v1/review-groups[/{key}]` · `POST /api/v1/reviews`（先审后显，需微信登录+手机号验证） |
+| 登录 | `POST /api/v1/auth/wechat`（wx.login code → 30 天 Bearer token）· `auth/phone-verify`（微信手机号实名）· `web-register` / `web-login`（网页会话）· `me` · `me/profile` · `auth/logout` |
 | 个人 | `GET /me/favorites` · `POST/DELETE /favorites` · `GET /me/reviews` |
+| 捐助 | `POST /api/v1/donate/pay`（小程序 JSAPI）· `donate/pay-native`（网页扫码）· `donate/order-status`（轮询）· 回调 `donate/notify` |
+| 网站读写 | `GET/POST /review-api/*`（评价）· `feedback-api/submit`（反馈与举报，先审后公开）· `visit-api/stats` / `hit`（访问统计，含 `startedAt`） |
 
 统一响应 `{code, message, data}` + 分页字段；GET 带 ETag/304；AppSecret 仅存服务器环境变量，openid 永不下发客户端。
 
@@ -73,15 +80,15 @@ Caddy（TLS / 反代 / HTTP→HTTPS）
 server/          Node 服务（admin-server + 各服务模块：账号/会话/审计/认证/收藏/通知/限流/发布…）
 src/             Astro 站点（页面/组件/样式）+ admin.astro 管理界面
 scripts/         校验/构建/迁移/冒烟脚本（含 API 文档一致性检查）
-docs/            API.md（74 对路由契约）· DEPLOYMENT.md · data-schema.md · public-api.md · mp-visit-reporting.md
-test/            137 项测试（单元 + 全链路集成，含 mock code2Session）
+docs/            API.md（118 对路由契约）· DEPLOYMENT.md · SECURITY_COMPLIANCE_SOP.md · data-schema.md · mp-visit-reporting.md
+test/            209 项测试（单元 + 全链路集成，含 mock code2Session / 微信支付回调）
 ```
 
 ## 开发
 
 ```bash
 npm ci                 # 安装依赖
-npm test               # 137 项测试（Node 内置 test runner）
+npm test               # 209 项测试（Node 内置 test runner）
 npm run build:fixtures # 用固定数据构建验证（本地无需生产数据）
 npm run check:api-docs # API 文档与路由注册一致性检查
 npm run dev            # Astro 开发服务器
@@ -103,6 +110,13 @@ npm run dev            # Astro 开发服务器
 ## 安全基线（2026-08 渗透测试通过）
 
 16 类攻击向量实测拦截：认证绕过 / Cookie 伪造 / CSRF 源伪造 / 方法欺骗 / 路径混淆 / XFF 限流绕过 / 暴力破解（5 次/IP/5min，验密前生效）；登录时序等化防用户名枚举；会话令牌 256 位随机 HMAC 存库。报告见团队内部存档。
+
+## 公安合规（2026-09 整改落地）
+
+- **实名与门禁**：微信手机号验证（`getPhoneNumber` → `code` → `getuserphonenumber`）达标后才可提交评价/反馈/举报，服务端强制校验
+- **日志留存**：用户级安全日志（原始 IP）400 天、系统日志（journald 持久化）200 天、访问日志入 journal
+- **先审后公开**：反馈/举报默认 pending，举报类型永不公开展示
+- **依法调取**：独立权限 + 每次查询/导出留痕，流程见 `docs/SECURITY_COMPLIANCE_SOP.md`
 
 ## 相关仓库
 

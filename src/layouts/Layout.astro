@@ -91,7 +91,6 @@ const footer = {
             <h1>{title}</h1>
           </div>
           <div class="top-actions">
-            <a class="top-link" href="/me/" id="user-link" style="display:none;">我的</a>
             <button class="top-link" id="login-btn" type="button" style="display:none;" onclick="document.getElementById('auth-modal').showModal()">登录</button>
             <button class="theme-toggle top-link" id="theme-toggle" type="button" aria-label="切换明暗色" title="切换明暗色">
               <span class="theme-icon theme-icon-sun" aria-hidden="true">
@@ -101,7 +100,7 @@ const footer = {
                 <svg viewBox="0 0 24 24"><path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5Z"/></svg>
               </span>
             </button>
-            <a class="top-link" href="https://pan.shview.top" target="_blank" rel="noreferrer">OpenList</a>
+            <a class="top-link" href="https://pan.nkustudy.top" target="_blank" rel="noreferrer">OpenList</a>
           </div>
         </header>
         <slot />
@@ -118,47 +117,68 @@ const footer = {
                     item.url ? <a href={item.url} target="_blank" rel="noreferrer">{item.label}</a> : <span>{item.label}</span>
                   ))}
                 </span>
+                <span class="footer-maintainers">
+                  <a href="/privacy/">隐私政策与用户协议</a>
+                </span>
               </p>
             )}
           </footer>
         )}
       </main>
-      <dialog id="auth-modal" style="border:1px solid var(--line);border-radius:16px;padding:32px;max-width:400px;background:var(--surface);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <dialog id="auth-modal" class="panel" style="border-radius:16px;padding:28px;max-width:400px;">
+        <div class="split-header" style="margin-bottom:18px;">
           <strong style="font-size:1.2em;">账号</strong>
-          <button type="button" onclick="document.getElementById('auth-modal').close()" style="border:none;background:none;font-size:1.4em;cursor:pointer;color:inherit;">×</button>
+          <button type="button" class="button secondary" onclick="document.getElementById('auth-modal').close()" style="min-height:34px;padding:4px 12px;font-size:1.1em;">×</button>
         </div>
         <div id="auth-login-form">
-          <label style="display:block;margin-bottom:12px;"><span style="display:block;font-size:0.85em;margin-bottom:4px;">昵称</span><input id="auth-nickname" type="text" style="width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;" placeholder="你的昵称" /></label>
-          <label style="display:block;margin-bottom:16px;"><span style="display:block;font-size:0.85em;margin-bottom:4px;">密码</span><input id="auth-password" type="password" style="width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;" placeholder="密码" /></label>
-          <button type="button" id="auth-login-submit" style="width:100%;padding:10px;border:none;border-radius:8px;background:#4B1F6F;color:#fff;font-weight:700;cursor:pointer;">登录</button>
-          <p style="text-align:center;margin-top:12px;font-size:0.85em;"><a href="#" id="auth-show-register" style="color:#4B1F6F;">没有账号？注册</a></p>
-          <p style="text-align:center;font-size:0.78em;color:var(--muted);margin-top:8px;">忘记密码？请通过<a href="/feedback/" style="color:inherit;">问题反馈</a>联系管理员重置</p>
+          <form class="review-form">
+            <label class="admin-field">
+              <span>昵称</span>
+              <input id="auth-nickname" type="text" placeholder="你的昵称" autocomplete="username" />
+            </label>
+            <label class="admin-field">
+              <span>密码</span>
+              <input id="auth-password" type="password" placeholder="密码" autocomplete="current-password" />
+            </label>
+            <button type="button" class="button" id="auth-login-submit" style="width:100%;">登录</button>
+            <p style="text-align:center;margin:0;font-size:0.85em;"><a href="#" id="auth-show-register" style="color:var(--primary);">没有账号？注册</a></p>
+            <p class="field-hint" style="text-align:center;margin:0;">忘记密码？请通过<a href="/feedback/" style="color:inherit;">问题反馈</a>联系管理员重置</p>
+          </form>
         </div>
         <div id="auth-register-form" style="display:none;">
-          <label style="display:block;margin-bottom:12px;"><span style="display:block;font-size:0.85em;margin-bottom:4px;">昵称（全局唯一）</span><input id="reg-nickname" type="text" style="width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;" placeholder="你的昵称" /></label>
-          <label style="display:block;margin-bottom:12px;"><span style="display:block;font-size:0.85em;margin-bottom:4px;">密码（至少 8 位）</span><input id="reg-password" type="password" style="width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;" placeholder="密码" /></label>
-          <label style="display:block;margin-bottom:16px;"><span style="display:block;font-size:0.85em;margin-bottom:4px;">确认密码</span><input id="reg-password2" type="password" style="width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;" placeholder="再次输入" /></label>
-          <p style="font-size:0.78em;color:var(--muted);margin-bottom:12px;">忘记密码？请通过<a href="/feedback/" style="color:inherit;">问题反馈</a>联系管理员重置</p>
-          <button type="button" id="auth-register-submit" style="width:100%;padding:10px;border:none;border-radius:8px;background:#4B1F6F;color:#fff;font-weight:700;cursor:pointer;">注册</button>
-          <p style="text-align:center;margin-top:12px;font-size:0.85em;"><a href="#" id="auth-show-login" style="color:#4B1F6F;">已有账号？登录</a></p>
+          <form class="review-form">
+            <label class="admin-field">
+              <span>昵称（全局唯一）</span>
+              <input id="reg-nickname" type="text" placeholder="你的昵称" autocomplete="username" />
+            </label>
+            <label class="admin-field">
+              <span>密码（至少 8 位）</span>
+              <input id="reg-password" type="password" placeholder="密码" autocomplete="new-password" />
+            </label>
+            <label class="admin-field">
+              <span>确认密码</span>
+              <input id="reg-password2" type="password" placeholder="再次输入" autocomplete="new-password" />
+            </label>
+            <p class="field-hint" style="margin:0;">忘记密码？请通过<a href="/feedback/" style="color:inherit;">问题反馈</a>联系管理员重置</p>
+            <button type="button" class="button" id="auth-register-submit" style="width:100%;">注册</button>
+            <p style="text-align:center;margin:0;font-size:0.85em;"><a href="#" id="auth-show-login" style="color:var(--primary);">已有账号？登录</a></p>
+          </form>
         </div>
-        <p id="auth-status" style="text-align:center;font-size:0.85em;color:#dc2626;margin-top:8px;"></p>
+        <p style="text-align:center;font-size:0.78em;color:var(--muted);margin:10px 0 0;">登录/注册即表示同意<a href="/privacy/" style="color:inherit;text-decoration:underline;">《隐私政策与用户协议》</a></p>
+        <p id="auth-status" style="text-align:center;font-size:0.85em;color:#dc2626;margin:8px 0 0;"></p>
       </dialog>
       <script>
         (async () => {
           const loginBtn = document.querySelector("#login-btn");
-          const userLink = document.querySelector("#user-link");
-          const status = document.querySelector("#auth-status");
           try {
             const r = await fetch("/api/v1/auth/web-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
             if (r.ok) {
               const d = await r.json();
               if (d.data?.user?.nickname) {
-                loginBtn.textContent = d.data.user.nickname;
+                loginBtn.textContent = "我";
+                loginBtn.title = `已登录：${d.data.user.nickname}`;
                 loginBtn.style.display = "";
                 loginBtn.onclick = () => location.href = "/me/";
-                userLink.style.display = "";
                 return;
               }
             }

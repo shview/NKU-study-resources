@@ -153,7 +153,7 @@ export class ReviewSubmissionService {
       current.updated = this.today();
       return current;
     }, { mode: 0o600 });
-    return { pending: review.status === "pending", notify: { title: review.courseTitle, teacher: review.teacher, rating: review.rating, content: review.content } };
+    return { pending: review.status === "pending", reviewId: review.id || "", notify: { title: review.courseTitle, teacher: review.teacher, rating: review.rating, content: review.content } };
   }
 
   listByUser(userId, { page = 1, pageSize = 20 } = {}) {

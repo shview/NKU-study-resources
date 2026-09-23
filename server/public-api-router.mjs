@@ -5,7 +5,7 @@ function responseBody(data) {
   return JSON.stringify({ code: 0, data });
 }
 
-function writeJson(req, res, statusCode, body, { cache = false } = {}) {
+function writeJson(req, res, statusCode, body, { cache = false, setCookies = [] } = {}) {
   if (res.writableEnded || res.destroyed) return;
   const headers = { "content-type": "application/json; charset=utf-8", "x-content-type-options": "nosniff" };
   if (cache && statusCode === 200 && req.method === "GET") {
@@ -20,8 +20,28 @@ function writeJson(req, res, statusCode, body, { cache = false } = {}) {
   } else {
     headers["cache-control"] = "no-store";
   }
+  if (setCookies.length) headers["set-cookie"] = setCookies;
   res.writeHead(statusCode, headers);
   res.end(body);
+}
+
+const WEB_SESSION_COOKIE = "nkustudy_web_session";
+
+/** 网页会话：优先 Authorization 头（小程序/开放接口），否则回落到 httpOnly 会话 cookie。 */
+function authorizationOf(req) {
+  const header = String(req.headers.authorization || "");
+  if (header) return header;
+  const cookies = String(req.headers.cookie || "");
+  const match = cookies.match(new RegExp(`(?:^|;[ 	]*)${WEB_SESSION_COOKIE}=([A-Za-z0-9_-]+)(?:;|$)`));
+  return match ? `Bearer ${match[1]}` : "";
+}
+
+function webSessionCookie(token, expiresIn) {
+  return `${WEB_SESSION_COOKIE}=${token}; Path=/; Max-Age=${Math.floor(expiresIn)}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+function clearWebSessionCookie() {
+  return `${WEB_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
 }
 
 export function decodePathPart(value) {
@@ -32,7 +52,7 @@ export function decodePathPart(value) {
   }
 }
 
-export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp } = {}) {
+export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp, securityLog = null, phoneVerifier = null } = {}) {
   if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
   async function requireService(req) {
     if (!serviceAuthStore) throw new PublicApiError(503, "服务间接口暂未开放。", "SERVICE_AUTH_NOT_CONFIGURED");
@@ -54,7 +74,8 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
     if (url.pathname !== "/api/v1" && !url.pathname.startsWith("/api/v1/")) return false;
     try {
       let data;
-      const authUser = mpAuthService ? mpAuthService.verifyToken(req.headers.authorization) : null;
+      const setCookies = [];
+      const authUser = mpAuthService ? mpAuthService.verifyToken(authorizationOf(req)) : null;
       if (req.method === "GET" && url.pathname === "/api/v1/health") data = service.health();
       else if (req.method === "GET" && url.pathname === "/api/v1/home") data = service.home();
       else if (req.method === "POST" && url.pathname === "/api/v1/auth/verify") {
@@ -71,6 +92,34 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         data = service.serviceRateLimit(caller, body);
       } else if (req.method === "GET" && url.pathname === "/api/v1/search-index") data = service.searchIndex();
       else if (req.method === "GET" && url.pathname === "/api/v1/catalog") data = service.catalog(url.searchParams);
+      else if (req.method === "GET" && url.pathname === "/api/v1/search-data") data = service.searchData();
+      else if (req.method === "GET" && url.pathname === "/api/v1/about") data = service.about();
+      else if (req.method === "GET" && url.pathname === "/api/v1/donate") data = service.donate();
+      else if (req.method === "POST" && url.pathname === "/api/v1/donate/pay-native") {
+        const body = await readJsonBody(req);
+        const amount = Number(body?.amount);
+        if (!Number.isFinite(amount) || amount < 1 || amount > 10000) throw new PublicApiError(400, "捐助金额需在 1-10000 元之间。", "INVALID_DONATE_AMOUNT");
+        if (typeof service.createDonateOrderNative !== "function" || !service.donatePayReady?.()) {
+          throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
+        }
+        // 网页会话可选：有 cookie 就记录归属，扫码付款本身不需要登录
+        const webUser = mpAuthService ? mpAuthService.verifyToken(authorizationOf(req)) : null;
+        data = await service.createDonateOrderNative({ userId: webUser?.id || 0, amount, nickname: body?.nickname, remark: body?.remark });
+      }
+      else if (req.method === "GET" && url.pathname === "/api/v1/donate/order-status") {
+        data = service.donateOrderStatus(url.searchParams.get("out_trade_no"));
+      }
+      else if (req.method === "POST" && url.pathname === "/api/v1/donate/pay") {
+        if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(authorizationOf(req));
+        const body = await readJsonBody(req);
+        const amount = Number(body?.amount);
+        if (!Number.isFinite(amount) || amount < 1 || amount > 10000) throw new PublicApiError(400, "捐助金额需在 1-10000 元之间。", "INVALID_DONATE_AMOUNT");
+        if (typeof service.createDonateOrder !== "function" || !service.donatePayReady?.()) {
+          throw new PublicApiError(503, "支付功能暂未开通，正在接入中。", "DONATE_PAY_NOT_CONFIGURED");
+        }
+        data = await service.createDonateOrder(user, amount, { nickname: body?.nickname, remark: body?.remark });
+      }
       else if (req.method === "GET" && url.pathname === "/api/v1/guides") data = service.guides(url.searchParams);
       else if (req.method === "GET" && url.pathname === "/api/v1/courses") data = service.courses(url.searchParams);
       else if (req.method === "POST" && url.pathname === "/api/v1/auth/wechat") {
@@ -87,10 +136,30 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         data = await mpAuthService.loginWithCode(body.code);
       } else if (req.method === "GET" && url.pathname === "/api/v1/me") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        data = { user: mpAuthService.requireUser(req.headers.authorization) };
+        data = { user: mpAuthService.requireUser(authorizationOf(req)) };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/auth/phone-verify") {
+        if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "操作过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
+        const user = mpAuthService.requireUser(authorizationOf(req));
+        let body;
+        try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
+        const code = String(body?.code || "").slice(0, 128);
+        if (!code) throw new PublicApiError(400, "缺少微信手机号授权码。", "INVALID_PHONE_CODE");
+        if (!phoneVerifier || !phoneVerifier.configured) throw new PublicApiError(503, "手机号验证暂未配置。", "PHONE_VERIFY_NOT_CONFIGURED");
+        let phone;
+        try {
+          phone = await phoneVerifier.getPhoneNumber(code);
+        } catch (error) {
+          console.error(`[phone-verify] wechat failed: ${error.message} ${error.detail || ""}`);
+          securityLog?.record({ userId: user.id, action: "phone.verify", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "error" });
+          throw new PublicApiError(502, "手机号验证失败，请重新授权。", "PHONE_VERIFY_FAILED");
+        }
+        mpAuthService.setVerifiedPhone(user.id, phone);
+        securityLog?.record({ userId: user.id, action: "phone.verify", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
+        data = { ok: true, phone_masked: String(phone).slice(0, 3) + "****" + String(phone).slice(-4) };
       } else if (req.method === "POST" && url.pathname === "/api/v1/me/profile") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        const user = mpAuthService.requireUser(req.headers.authorization);
+        const user = mpAuthService.requireUser(authorizationOf(req));
         let body;
         try {
           body = await readBody(req);
@@ -98,56 +167,76 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
           throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
         }
         data = { user: mpAuthService.updateProfile(user, { nickname: body.nickname, avatarUrl: body.avatar_url }) };
+        securityLog?.record({ userId: user.id, action: "profile.update", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok", detail: `nickname=${String(body?.nickname || "").slice(0, 40)}` });
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/logout") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        const revoked = mpAuthService.revoke(req.headers.authorization);
+        const revoked = mpAuthService.revoke(authorizationOf(req));
+        setCookies.push(clearWebSessionCookie());
         data = { revoked };
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-register") {
         if (!mpAuthService) throw new PublicApiError(503, "注册暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "注册尝试过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
         let body;
         try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
-        const user = mpAuthService.webRegister(body);
-        data = { user: { id: user.id, nickname: user.nickname, email: user.email || "", has_web_password: true } };
+        const session = mpAuthService.webRegister(body);
+        setCookies.push(webSessionCookie(session.token, session.expires_in));
+        data = { user: { id: session.user.id, nickname: session.user.nickname, email: session.user.email || "", has_web_password: true } };
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-login") {
         if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "登录尝试过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
         let body;
-        try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
-        const user = mpAuthService.webLogin(body);
-        data = { user: { id: user.id, nickname: user.nickname, email: user.email || "", has_web_password: true } };
+        try { body = await readBody(req); } catch { body = {}; }
+        if (body && (body.nickname || body.password)) {
+          // 凭据登录：签发会话令牌并通过 httpOnly cookie 下发
+          if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "登录尝试过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
+          const session = mpAuthService.webLogin(body);
+          setCookies.push(webSessionCookie(session.token, session.expires_in));
+          data = { user: { id: session.user.id, nickname: session.user.nickname, email: session.user.email || "", has_web_password: true } };
+        } else {
+          // 空请求：仅凭既有 cookie 恢复会话，不消耗登录限流额度
+          const user = mpAuthService.verifyToken(authorizationOf(req));
+          if (!user) throw new PublicApiError(401, "未登录或会话已过期。", "AUTH_REQUIRED");
+          data = { user: { id: user.id, nickname: user.nickname, email: user.email || "", has_web_password: true } };
+        }
       } else if (req.method === "GET" && url.pathname === "/api/v1/me/feedback") {
         if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        const user = mpAuthService.requireUser(req.headers.authorization);
+        const user = mpAuthService.requireUser(authorizationOf(req));
         data = service.getMyFeedback(user.id, { page: url.searchParams.get("page"), pageSize: url.searchParams.get("page_size") });
       } else if (req.method === "POST" && url.pathname === "/api/v1/me/delete-account") {
         if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        const user = mpAuthService.requireUser(req.headers.authorization);
+        const user = mpAuthService.requireUser(authorizationOf(req));
         if (user.blocked) {
           throw new PublicApiError(403, "该账号已被封禁，无法自行注销。请联系管理员处理。", "AUTH_USER_BLOCKED");
         }
         mpAuthService.deleteAccount(user.id);
-        mpAuthService.revoke(req.headers.authorization);
+        mpAuthService.revoke(authorizationOf(req));
+        setCookies.push(clearWebSessionCookie());
         if (mpFavoritesService) mpFavoritesService.deleteAllForUser(user.id);
         data = { deleted: true, note: "账号绑定关系已删除，已发布内容保留。" };
       } else if (req.method === "POST" && url.pathname === "/api/v1/me/web-password") {
         if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        const user = mpAuthService.requireUser(req.headers.authorization);
+        const user = mpAuthService.requireUser(authorizationOf(req));
         let body;
         try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
         mpAuthService.setWebPassword(user.id, body.password);
         data = { ok: true };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/me/web-password/change") {
+        if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(authorizationOf(req));
+        let body;
+        try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
+        mpAuthService.changeWebPassword(user.id, { currentPassword: body.current_password, newPassword: body.new_password });
+        data = { ok: true };
       } else if (req.method === "GET" && url.pathname === "/api/v1/me/favorites") {
         if (!mpAuthService || !mpFavoritesService) throw new PublicApiError(503, "收藏暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        const user = mpAuthService.requireUser(req.headers.authorization);
+        const user = mpAuthService.requireUser(authorizationOf(req));
         data = mpFavoritesService.list(user, { page: url.searchParams.get("page"), pageSize: url.searchParams.get("page_size") });
       } else if (req.method === "GET" && url.pathname === "/api/v1/me/reviews") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        const user = mpAuthService.requireUser(req.headers.authorization);
+        const user = mpAuthService.requireUser(authorizationOf(req));
         data = service.reviewSubmissionService.listByUser(user.id, { page: url.searchParams.get("page"), pageSize: url.searchParams.get("page_size") });
       } else if (req.method === "POST" && url.pathname === "/api/v1/favorites") {
         if (!mpAuthService || !mpFavoritesService) throw new PublicApiError(503, "收藏暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        const user = mpAuthService.requireUser(req.headers.authorization);
+        const user = mpAuthService.requireUser(authorizationOf(req));
         let body;
         try {
           body = await readBody(req);
@@ -156,12 +245,15 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         }
         data = mpFavoritesService.add(user, body.course_id);
       } else {
-        let match = url.pathname.match(/^\/api\/v1\/guides\/([^/]+)$/);
-        if (req.method === "GET" && match) data = service.guide(decodePathPart(match[1]));
+        let match = url.pathname.match(/^\/api\/v1\/guides\/([^/]+)\/variants\/([^/]+)$/);
+        if (req.method === "GET" && match) data = service.guideVariant(decodePathPart(match[1]), decodePathPart(match[2]));
         else {
-          match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)$/);
-          if (req.method === "GET" && match) data = service.course(decodePathPart(match[1]));
+          match = url.pathname.match(/^\/api\/v1\/guides\/([^/]+)$/);
+          if (req.method === "GET" && match) data = service.guide(decodePathPart(match[1]));
           else {
+            match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)$/);
+            if (req.method === "GET" && match) data = service.course(decodePathPart(match[1]));
+            else {
             match = url.pathname.match(/^\/api\/v1\/courses\/([^/]+)\/resources$/);
             if (req.method === "GET" && match) data = service.resources(decodePathPart(match[1]));
             else if (req.method === "GET" && url.pathname === "/api/v1/review-groups") data = service.reviewGroups({ viewerId: authUser?.id || null });
@@ -169,7 +261,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
               match = url.pathname.match(/^\/api\/v1\/favorites\/([^/]+)$/);
               if (req.method === "DELETE" && match) {
                 if (!mpAuthService || !mpFavoritesService) throw new PublicApiError(503, "收藏暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-                const user = mpAuthService.requireUser(req.headers.authorization);
+                const user = mpAuthService.requireUser(authorizationOf(req));
                 data = mpFavoritesService.remove(user, decodePathPart(match[1]));
               } else {
               match = url.pathname.match(/^\/api\/v1\/review-groups\/([^/]+)$/);
@@ -178,7 +270,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 match = url.pathname.match(/^\/api\/v1\/reviews\/([^/]+)\/reaction$/);
                 if (req.method === "PUT" && match) {
                   if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-                  const user = mpAuthService.requireUser(req.headers.authorization);
+                  const user = mpAuthService.requireUser(authorizationOf(req));
                   let body;
                   try {
                     body = await readBody(req);
@@ -186,8 +278,24 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                     throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
                   }
                   data = await service.reactReviewHelpful(decodePathPart(match[1]), body?.reaction ?? null, user.id);
-                } else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
+                } else if (req.method === "POST" && url.pathname === "/api/v1/guide-assistant/answers") {
+                if (!mpAuthService || !service.guideAssistantAnswer) throw new PublicApiError(503, "问答服务暂未开放。", "AI_UNAVAILABLE");
+                const user = mpAuthService.requireUser(authorizationOf(req));
+                let body;
+                try {
+                  body = await readBody(req);
+                } catch {
+                  throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
+                }
+                data = await service.guideAssistantAnswer(user.id, body);
+              } else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
                 const ip = clientIp(req);
+                // 公安合规：公开 UGC 必须已登录且完成手机号验证
+                if (!mpAuthService || !authUser) throw new PublicApiError(401, "发布评价请先登录。", "AUTH_REQUIRED");
+                if (typeof mpAuthService.isPhoneVerified === "function" && !mpAuthService.isPhoneVerified(authUser.id)) {
+                  securityLog?.record({ userId: authUser.id, action: "ugc.blocked_no_phone", path: url.pathname, ip, userAgent: req.headers["user-agent"] || "", result: "rejected" });
+                  throw new PublicApiError(403, "发布内容需先完成手机号验证。", "PHONE_VERIFY_REQUIRED");
+                }
                 service.assertReviewAttempt(ip);
                 let body;
                 try {
@@ -195,7 +303,8 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 } catch {
                   throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
                 }
-                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: authUser?.id || null, notify });
+                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: authUser.id, notify });
+                securityLog?.record({ userId: authUser.id, action: "review.submit", targetType: "review", targetId: data?.reviewId || "", path: url.pathname, ip, userAgent: req.headers["user-agent"] || "", result: data?.pending ? "pending" : "ok" });
               } else {
                 throw new PublicApiError(404, "接口不存在。", "NOT_FOUND");
               }
@@ -205,7 +314,8 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         }
       }
       }
-      writeJson(req, res, 200, responseBody(data), { cache: req.method === "GET" && url.pathname !== "/api/v1/health" });
+      }
+      writeJson(req, res, 200, responseBody(data), { cache: req.method === "GET" && url.pathname !== "/api/v1/health", setCookies });
     } catch (error) {
       const statusCode = error instanceof PublicApiError ? error.statusCode : 500;
       const code = error instanceof PublicApiError ? error.code : "INTERNAL_ERROR";

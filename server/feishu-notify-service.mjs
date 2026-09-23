@@ -44,6 +44,7 @@ function normalizeSettings(raw) {
     return {
       version: 2,
       updated: data.updated || "",
+      guide_feedback_enabled: data.guide_feedback_enabled !== false,
       bots: data.bots.filter((bot) => bot && isValidFeishuWebhookUrl(bot.webhookUrl)).map((bot) => ({
         id: String(bot.id || `bot-${randomBytes(4).toString("hex")}`),
         name: String(bot.name || "机器人").slice(0, 40),
@@ -103,7 +104,15 @@ export class FeishuNotifyService {
     return {
       bots: settings.bots.map((bot) => ({ ...bot, signSecretConfigured: Boolean(secrets.bots[bot.id]) })),
       updated: settings.updated,
+      guide_feedback_enabled: settings.guide_feedback_enabled !== false,
     };
+  }
+
+  async setGuideFeedbackEnabled(enabled) {
+    const { settings } = await this.#state();
+    const next = { ...settings, guide_feedback_enabled: enabled === true, updated: new Date().toISOString() };
+    await this.writeSettings(next);
+    return { guide_feedback_enabled: next.guide_feedback_enabled, updated: next.updated };
   }
 
   async upsertBot({ id, name, webhookUrl, signSecret, enabled = true, purposes }) {

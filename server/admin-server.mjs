@@ -19,6 +19,24 @@ import { createPublicApiHandler, decodePathPart } from "./public-api-router.mjs"
 import { PublicApiError } from "./public-api-errors.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
+import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
+import { createGuideAssistantService } from "./guide-assistant-service.mjs";
+import { createQwenProviderFromSettings } from "./qwen-provider.mjs";
+import {
+  CONTENT_IMAGE_MIGRATE_LIMIT,
+  CONTENT_IMAGE_MAX_BYTES,
+  CONTENT_IMAGE_OWNERS,
+  contentImagePrefix,
+  contentPublicRoot,
+  extractContentImageKeys,
+  extractDataUriImages,
+  newContentImageName,
+  orphanContentImageKeys,
+  replaceDataUriImages,
+  validateContentImage,
+} from "./content-images.mjs";
+import { AiProviderStore } from "./ai-provider-store.mjs";
+import { buildCatalogCourseImports } from "./catalog-import.mjs";
 import { ServiceAuthStore } from "./service-auth-store.mjs";
 import { MpFavoritesService } from "./mp-favorites-service.mjs";
 import { CourseCatalogService } from "./course-catalog-service.mjs";
@@ -29,6 +47,15 @@ import { assertR2CleanupSafety, planR2ManifestMutation, planR2ObjectCopies, stri
 import { publishAfterR2Prepare, R2MutationQueue, runExclusiveR2Mutation, runSerializedR2Mutation } from "./r2-transaction.mjs";
 import { ReviewSubmissionService } from "./review-submission-service.mjs";
 import { preflightProductionRuntime, projectRoot, runtimeDataPathMap } from "./runtime-config.mjs";
+import { DEFAULT_DONATE_CONTENT } from "./default-donate.mjs";
+import { DonatePayStore } from "./donate-pay-store.mjs";
+import { DonateOrderStore } from "./donate-order-store.mjs";
+import { decryptAes256Gcm, verifyNotifySignature } from "./wxpay-v3.mjs";
+import { appendDonateRecord, normalizeRecords } from "./donate-records.mjs";
+import { UserSecurityLogStore } from "./user-security-log-store.mjs";
+import { LawEnforcementLogStore } from "./law-enforcement-store.mjs";
+import { DEFAULT_PRIVACY_CONTENT } from "./default-privacy.mjs";
+import { createWechatPhoneVerifier, maskPhone } from "./wechat-phone.mjs";
 import { StaticReleasePublisher } from "./static-release-publisher.mjs";
 
 const root = projectRoot;
@@ -42,6 +69,8 @@ const {
   reviews: reviewsPath,
   feedback: feedbackPath,
   about: aboutPath,
+  donate: donatePath,
+  privacy: privacyPath,
   home: homePath,
   guides: guidesPath,
   participate: participatePath,
@@ -107,8 +136,8 @@ const rateLimiter = new PersistentRateLimiter({ dbPath: runtime.stateDbPath });
 const sessionStore = new AdminSessionStore({
   dbPath: runtime.stateDbPath,
   secret,
-  absoluteTtlMs: Number(process.env.ADMIN_SESSION_ABSOLUTE_TTL_MS || 8 * 60 * 60 * 1000),
-  idleTtlMs: Number(process.env.ADMIN_SESSION_IDLE_TTL_MS || 30 * 60 * 1000),
+  absoluteTtlMs: Number(process.env.ADMIN_SESSION_ABSOLUTE_TTL_MS || 7 * 24 * 60 * 60 * 1000),
+  idleTtlMs: Number(process.env.ADMIN_SESSION_IDLE_TTL_MS || 7 * 24 * 60 * 60 * 1000),
 });
 const auditArchiveDir = path.join(dataDir, "audit-archive");
 let auditArchiveUploadStarted = false;
@@ -132,6 +161,12 @@ function migrateServiceKeyPermission() {
     for (const account of accountsStore.list()) {
       if (account.permissions.includes("accounts.manage") && !account.permissions.includes("services.manage")) {
         accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "services.manage"] });
+      }
+      if (account.permissions.includes("accounts.manage") && !account.permissions.includes("law.manage")) {
+        accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "law.manage"], enabled: account.enabled, mustChangePassword: account.mustChangePassword });
+      }
+      if (account.permissions.includes("services.manage") && !account.permissions.includes("ai.manage")) {
+        accountsStore.updateSettings(account.id, { permissions: [...account.permissions, "ai.manage"] });
       }
     }
   } catch (error) {
@@ -167,6 +202,9 @@ const reviewSubmissionService = new ReviewSubmissionService({
   validateCourseTitle: (courseTitle) => {
     const manifestTitles = new Set((jsonStore.readSync(manifestPath).courses || []).map((course) => String(course.title)));
     if (manifestTitles.has(courseTitle) || courseCatalog.find(courseTitle)) return;
+    // 历史评价组：课程不在 manifest/目录时，允许精确命中已有评价的课程标题（并入原组）
+    const reviewTitles = new Set((readReviews().reviews || []).map((review) => String(review.courseTitle || "").trim()).filter(Boolean));
+    if (reviewTitles.has(courseTitle)) return;
     throw new PublicApiError(400, "请从已有课程中选择（课程目录未收录该课程名）。", "COURSE_NOT_IN_CATALOG");
   },
   validateTeacher: (courseTitle, teacher) => {
@@ -181,7 +219,17 @@ const reviewSubmissionService = new ReviewSubmissionService({
     }
   },
 });
-const courseCatalog = new CourseCatalogService({ catalogPath: path.join(dataDir, "catalog.json") });
+const donatePayStore = new DonatePayStore({ dataDir });
+const securityLogStore = new UserSecurityLogStore({ dbPath: runtime.stateDbPath });
+const lawLogStore = new LawEnforcementLogStore({ dbPath: runtime.stateDbPath });
+const wechatPhoneVerifier = createWechatPhoneVerifier({ appid: process.env.WECHAT_APPID, secret: process.env.WECHAT_APPSECRET });
+setInterval(() => { try { securityLogStore.prune(); } catch {} }, 24 * 3600 * 1000).unref();
+const donateOrderStore = new DonateOrderStore({ dbPath: runtime.stateDbPath });
+const catalogPath2 = path.join(dataDir, "catalog.json");
+const courseCatalog = new CourseCatalogService({
+  catalogPath: catalogPath2,
+  writeJson: (mutator) => jsonStore.update(catalogPath2, mutator, { initialize: { version: 1, updated: today(), sources: [], courses: [] } }),
+});
 const mpAuthService = new MpAuthService({
   dbPath: runtime.stateDbPath,
   appid: process.env.WECHAT_APPID || "",
@@ -191,11 +239,57 @@ const mpFavoritesService = new MpFavoritesService({
   dbPath: runtime.stateDbPath,
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
 });
+const learningCompassService = createDefaultLearningCompassService();
+const aiProviderStore = new AiProviderStore({ store: jsonStore, filePath: path.join(dataDir, "ai-provider-settings.json") });
+const guideAssistantQwen = createQwenProviderFromSettings(() => aiProviderStore.runtime());
+const loggedGuideAssistantQwen = async (messages, options = {}) => {
+  const runtime = aiProviderStore.runtime();
+  const fields = {
+    event: "guide-assistant-provider",
+    model: runtime.model,
+    base_host: new URL(runtime.base_url).hostname,
+    request_params: ["model", "messages", "max_tokens", "stream:false"],
+  };
+  const startedAt = Date.now();
+  try {
+    const output = await guideAssistantQwen(messages, options);
+    console.log(JSON.stringify({ ...fields, result: output === null ? "unconfigured" : "ok", content_len: output ? output.length : 0, latency_ms: Date.now() - startedAt }));
+    return output;
+  } catch (error) {
+    console.error(JSON.stringify({ ...fields, result: "error", http_status: error?.status ?? null, provider_code: error?.providerCode ?? null, latency_ms: Date.now() - startedAt }));
+    throw error;
+  }
+};
+const guideAssistantService = createGuideAssistantService({
+  learningCompass: learningCompassService,
+  log: (fields) => console.log(JSON.stringify(fields)),
+  qwen: loggedGuideAssistantQwen,
+  limiter: (userId) => {
+    const { daily_limit_per_user, minute_limit_per_user, daily_limit_global } = aiProviderStore.runtime();
+    return rateLimiter.consumeLayered({
+      scope: "guide-assistant",
+      actorHash: hashActor(`user:${userId}`, secret),
+      actorLimits: [
+        { windowMs: 24 * 60 * 60 * 1000, max: daily_limit_per_user },
+        { windowMs: 60 * 1000, max: minute_limit_per_user },
+      ],
+      globalActorHash: hashActor("global:guide-assistant", secret),
+      globalLimits: [{ windowMs: 24 * 60 * 60 * 1000, max: daily_limit_global }],
+    }).allowed;
+  },
+});
 const publicApiService = new PublicApiService({
+  readAbout: () => jsonStore.readSync(aboutPath),
+  readDonate: () => readDonate(),
+  donatePayStore,
+  donateOrderStore,
+  notifyBase: adminOrigin,
+  donatePayReady: () => donatePayStore.ready(),
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
   readHome,
-  readGuides,
+  learningCompass: learningCompassService,
+  guideAssistant: guideAssistantService,
   readVisitStats: readVisitStats,
   readFeedback: () => readFeedback(),
   courseCatalog,
@@ -230,7 +324,7 @@ function submissionHint(rules) {
 }
 
 async function notifyModerators(payload = {}) {
-  const typeLabels = { "review.pending": payload.pending === false ? "新评价（免审已公开）" : "新评价待审", "feedback.pending": "新反馈待处理", "resource-report": "资源失效反馈" };
+  const typeLabels = { "review.pending": payload.pending === false ? "新评价（免审已公开）" : "新评价待审", "feedback.pending": "新反馈待处理", "resource-report": "资源失效反馈", "catalog-course.added": "目录新增课程（网页提交）" };
   const title = typeLabels[payload.type] || "待处理通知";
   const lines = [];
   if (payload.type === "review.pending") {
@@ -245,6 +339,7 @@ async function notifyModerators(payload = {}) {
   return result;
 }
 const readPublicBody = (req) => readJsonBody(req, { rejectReplacementCharacters: true });
+
 const serviceAuthStore = new ServiceAuthStore({ store: jsonStore, filePath: path.join(dataDir, "service-keys.json") });
 const consumeServiceQuota = (caller) => {
   const quota = Number(caller?.limits?.daily_quota) || 0;
@@ -256,7 +351,9 @@ const consumeServiceQuota = (caller) => {
   });
   return result.allowed === true;
 };
-const handlePublicApi = createPublicApiHandler({ service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp });
+const handlePublicApi = createPublicApiHandler({
+  securityLog: securityLogStore,
+  phoneVerifier: wechatPhoneVerifier, service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -853,6 +950,23 @@ function requirePermission(req, account, permission, res) {
   return false;
 }
 
+/** 公安合规门禁：公开 UGC（评价/反馈/举报）必须已登录且完成手机号验证。 */
+function requirePhoneVerifiedUgcUser(req, res, ip) {
+  const authUser = mpAuthService ? mpAuthService.verifyToken(req.headers.authorization) : null;
+  if (!mpAuthService || !authUser) {
+    json(res, 401, { ok: false, error: "发布内容请先登录。", code: "AUTH_REQUIRED" });
+    req.resume();
+    return null;
+  }
+  if (mpAuthService.isPhoneVerified && !mpAuthService.isPhoneVerified(authUser.id)) {
+    securityLogStore.record({ userId: authUser.id, action: "ugc.blocked_no_phone", path: req.url, ip, userAgent: req.headers["user-agent"] || "", result: "rejected" });
+    json(res, 403, { ok: false, error: "发布内容需先完成手机号验证（小程序-我的-手机号验证）。", code: "PHONE_VERIFY_REQUIRED" });
+    req.resume();
+    return null;
+  }
+  return authUser;
+}
+
 function requireAdminMutationProvenance(req, res, url) {
   const origin = String(req.headers.origin || "");
   const fetchSite = String(req.headers["sec-fetch-site"] || "");
@@ -862,7 +976,8 @@ function requireAdminMutationProvenance(req, res, url) {
     return false;
   }
   const contentType = String(req.headers["content-type"] || "").toLowerCase();
-  const expected = url.pathname === "/admin-api/upload" ? "multipart/form-data" : "application/json";
+  const multipartPaths = url.pathname === "/admin-api/upload" || url.pathname === "/admin-api/content-images";
+  const expected = multipartPaths ? "multipart/form-data" : "application/json";
   if (!contentType.startsWith(expected)) {
     json(res, 415, { ok: false, error: `Content-Type must be ${expected}.` });
     req.resume();
@@ -959,6 +1074,7 @@ function publicVisitStats(stats = readVisitStats()) {
     total: stats.total,
     today: Number(stats.days[day] || 0),
     updatedAt: stats.updatedAt || "",
+    startedAt: readFooter().startedAt,
   };
 }
 
@@ -1123,6 +1239,48 @@ function normalizeAbout(data) {
   return {
     title: cleanText(data.title, 120) || "NKUStudy",
     content,
+  };
+}
+
+const DEFAULT_DONATE_AMOUNTS = DEFAULT_DONATE_CONTENT.amounts;
+
+function readPrivacy() {
+  let raw = null;
+  try {
+    raw = readJsonFile(privacyPath);
+  } catch {
+    raw = null;
+  }
+  return raw && typeof raw === "object" && Object.keys(raw).length ? raw : structuredClone(DEFAULT_PRIVACY_CONTENT);
+}
+
+function normalizePrivacy(data) {
+  return {
+    title: cleanText(data.title, 120) || "隐私政策与用户协议",
+    content: cleanText(data.content, 12000),
+  };
+}
+
+function readDonate() {
+  let raw = null;
+  try {
+    raw = readJsonFile(donatePath);
+  } catch {
+    raw = null;
+  }
+  return raw && typeof raw === 'object' && Object.keys(raw).length ? raw : structuredClone(DEFAULT_DONATE_CONTENT);
+}
+
+function normalizeDonate(data) {
+  const amounts = (Array.isArray(data.amounts) ? data.amounts : DEFAULT_DONATE_AMOUNTS)
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 10000)
+    .slice(0, 6);
+  return {
+    title: cleanText(data.title, 120) || '捐助支持',
+    content: cleanText(data.content, 6000),
+    amounts: amounts.length ? [...new Set(amounts)].sort((a, b) => a - b) : DEFAULT_DONATE_AMOUNTS,
+    records: normalizeRecords(data.records),
   };
 }
 
@@ -1295,6 +1453,7 @@ function visibleFeedback() {
     },
     items: data.items
     .filter((item) => item.status !== "hidden" && !item.hidden)
+    .filter((item) => (item.status === "approved" || item.status === "completed") && !["report", "complaint"].includes(item.type))
     .map(publicFeedback),
   };
 }
@@ -1342,11 +1501,15 @@ async function handleFeedbackSubmit(req, res) {
     return;
   }
 
+  const ugcUser = requirePhoneVerifiedUgcUser(req, res, ip);
+  if (!ugcUser) return;
   const title = cleanText(body.title, 120);
   const content = cleanText(body.content, 2000);
   const type = cleanText(body.type, 40) || "bug";
   const contact = cleanText(body.contact, 120);
   const resourceRef = cleanText(body.resourceRef, 200);
+  const reportUrl = cleanText(body.reportUrl, 300);
+  const reportTarget = cleanText(body.reportTarget, 120);
   if (!title || content.length < Number(rules.minLength || 5)) {
     json(res, 400, { ok: false, error: "请填写标题，并补充更完整的反馈内容。" });
     return;
@@ -1357,17 +1520,34 @@ async function handleFeedbackSubmit(req, res) {
     return;
   }
 
+  const guideShaped = title.startsWith("指南反馈：") || /^\s*\[guide_id=/.test(content);
+  if (guideShaped) {
+    let guideFeedbackEnabled = true;
+    try {
+      guideFeedbackEnabled = (await readJsonFile(notifySettingsPath)).guide_feedback_enabled !== false;
+    } catch {}
+    if (!guideFeedbackEnabled) {
+      console.log(JSON.stringify({ event: "guide_feedback_dropped", title_head: title.slice(0, 40) }));
+      json(res, 200, { ok: true });
+      return;
+    }
+  }
+
+  const isReport = type === "report" || type === "complaint";
+  const itemId = `feedback-${Date.now()}-${randomBytes(4).toString("hex")}`;
   await jsonStore.update(feedbackPath, (current) => {
     current.items = Array.isArray(current.items) ? current.items : [];
     current.items.unshift({
-      id: `feedback-${Date.now()}-${randomBytes(4).toString("hex")}`,
+      id: itemId,
       title,
       content,
       type,
       contact,
       ...(resourceRef ? { resourceRef } : {}),
-      ...(authUser ? { user_id: authUser.id } : {}),
-      status: "open",
+      ...(reportUrl ? { report_url: reportUrl } : {}),
+      ...(reportTarget ? { report_target: reportTarget } : {}),
+      user_id: ugcUser.id,
+      status: "pending",
       hidden: false,
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -1377,14 +1557,114 @@ async function handleFeedbackSubmit(req, res) {
     current.updated = today();
     return current;
   });
-  Promise.resolve(notifyModerators({ type: "feedback.pending", title, feedbackType: type, content, resourceRef })).catch(() => {});
+  securityLogStore.record({ userId: ugcUser.id, action: isReport ? "report.submit" : "feedback.submit", targetType: "feedback", targetId: itemId, path: "/feedback-api/submit", ip, userAgent: req.headers["user-agent"] || "", result: "pending", detail: isReport ? `type=${type} target=${reportTarget || reportUrl || "-"}` : "" });
+  Promise.resolve(notifyModerators({ type: isReport ? "report.pending" : "feedback.pending", title, feedbackType: type, content, resourceRef })).catch(() => {});
   json(res, 200, { ok: true });
+}
+
+/** 微信支付回调：原始报文验签（支付公钥）→ AES-GCM 解密 → 幂等置 paid。 */
+async function handleDonateNotify(req, res) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const body = Buffer.concat(chunks).toString("utf8");
+  const respond = (status, payload) => json(res, status, payload);
+  try {
+    const ok = verifyNotifySignature({
+      publicKeyPem: donatePayStore.config().publicKey,
+      timestamp: req.headers["wechatpay-timestamp"],
+      nonce: req.headers["wechatpay-nonce"],
+      body,
+      signature: req.headers["wechatpay-signature"],
+    });
+    if (!ok) return respond(401, { code: "FAIL", message: "签名验证失败" });
+    const parsed = JSON.parse(body);
+    if (parsed.event_type !== "TRANSACTION.SUCCESS") return respond(200, { code: "SUCCESS" });
+    const resource = decryptAes256Gcm(donatePayStore.config().apiV3Key, parsed.resource || {});
+    const marked = donateOrderStore.markPaid({
+      outTradeNo: String(resource.out_trade_no || ""),
+      amountTotal: Number(resource.amount && resource.amount.total),
+      transactionId: String(resource.transaction_id || "") || null,
+    });
+    if (!marked) return respond(500, { code: "FAIL", message: "订单不存在或金额不符" });
+    try {
+      await appendDonateRecord({ store: jsonStore, filePath: donatePath, nickname: donateOrderStore.get(resource.out_trade_no)?.nickname || "", paidAtMs: Date.now() });
+    } catch (error) {
+      console.error(`[donate] append record failed: ${error.message}`);
+    }
+    return respond(200, { code: "SUCCESS" });
+  } catch (error) {
+    console.error(`[donate] notify failed: ${error.message}`);
+    return respond(500, { code: "FAIL", message: "处理失败" });
+  }
+}
+
+/** 内容图片上传：content/<owner>/ 前缀、随机文件名、行内展示（无 attachment 头）、7 天缓存。 */
+async function handleContentImageUpload(req, res, url) {
+  if (!r2Client || !r2Bucket) {
+    json(res, 400, { ok: false, error: "R2 未配置，无法上传图片。" });
+    req.resume();
+    return;
+  }
+  const owner = String(url.searchParams.get("owner") || "");
+  if (!CONTENT_IMAGE_OWNERS.includes(owner)) {
+    json(res, 400, { ok: false, error: "未知的内容图片归属。" });
+    req.resume();
+    return;
+  }
+  await new Promise((resolve) => {
+    let done = false;
+    let sawFile = false;
+    const respond = (status, body) => {
+      if (done) return;
+      done = true;
+      json(res, status, body);
+      resolve();
+    };
+    const busboy = Busboy({ headers: req.headers, limits: { files: 1, parts: 3, fileSize: CONTENT_IMAGE_MAX_BYTES } });
+    busboy.on("file", (_name, file, info) => {
+      sawFile = true;
+      const chunks = [];
+      let size = 0;
+      let overLimit = false;
+      file.on("limit", () => { overLimit = true; file.resume(); });
+      file.on("data", (chunk) => { size += chunk.length; chunks.push(chunk); });
+      file.on("end", async () => {
+        if (overLimit) return respond(400, { ok: false, error: "图片超过 8MB 限制。" });
+        const body = Buffer.concat(chunks);
+        const check = validateContentImage({ mimeType: info.mimeType, size, buffer: body });
+        if (!check.ok) return respond(400, { ok: false, error: check.error });
+        const name = newContentImageName(check.ext);
+        const key = `${contentImagePrefix(owner)}${name}`;
+        try {
+          await r2Client.send(new PutObjectCommand({
+            Bucket: r2Bucket,
+            Key: key,
+            Body: body,
+            ContentType: info.mimeType,
+            CacheControl: "public, max-age=604800",
+          }));
+          const manifest = await manifestService.read();
+          respond(200, { ok: true, data: { url: `${contentPublicRoot(manifest.resourceRoot)}${owner}/${name}`, key } });
+        } catch {
+          respond(500, { ok: false, error: "图片上传失败，请重试。" });
+        }
+      });
+    });
+    busboy.on("error", () => respond(400, { ok: false, error: "上传请求无效。" }));
+    // finish 只负责“从未出现文件”的兜底；文件处理是异步的（含 R2 上传），完成与否由文件回调自行响应。
+    busboy.on("finish", () => { if (!done && !sawFile) respond(400, { ok: false, error: "未收到图片文件。" }); });
+    req.on("aborted", () => respond(400, { ok: false, error: "上传已中断。" }));
+    req.pipe(busboy);
+  });
 }
 
 async function handleReviewSubmit(req, res) {
   const ip = clientIp(req);
   reviewSubmissionService.assertAttempt(ip);
-  const result = await reviewSubmissionService.submit(await readPublicBody(req), { clientIp: ip, userAgent: req.headers["user-agent"] });
+  const ugcUser = requirePhoneVerifiedUgcUser(req, res, ip);
+  if (!ugcUser) return;
+  const result = await reviewSubmissionService.submit(await readPublicBody(req), { clientIp: ip, userAgent: req.headers["user-agent"], userId: ugcUser.id });
+  securityLogStore.record({ userId: ugcUser.id, action: "review.submit", targetType: "review", targetId: (result && result.reviewId) || "", path: "/review-api/submit", ip, userAgent: req.headers["user-agent"] || "", result: result?.pending ? "pending" : "ok" });
   if (result.notify) {
     Promise.resolve(notifyModerators({
       type: "review.pending",
@@ -1403,10 +1683,15 @@ async function readReviewStore() {
   return { data, revision: manifestRevision(data) };
 }
 
-async function updateReviewStore(next, expectedRevision) {
+async function updateReviewStore(input, expectedRevision) {
   let revision;
+  let beforeImages = null;
+  const migrated = await migrateContentDataUris("reviews", structuredClone(input));
+  const next = migrated.data;
+  const migratedImages = migrated.migrated;
   const data = await jsonStore.update(reviewsPath, (persisted) => {
     const current = normalizeReviewData(persisted);
+    beforeImages = structuredClone(current);
     const currentRevision = manifestRevision(current);
     if (!expectedRevision) {
       const error = new Error("expectedRevision is required; reload reviews before saving.");
@@ -1422,7 +1707,8 @@ async function updateReviewStore(next, expectedRevision) {
     revision = manifestRevision(current);
     return current;
   }, { mode: 0o600 });
-  return { data, revision };
+  const cleanup = beforeImages ? await cleanupOrphanContentImages("reviews", beforeImages, data) : { removed: 0 };
+  return { data, revision, ...(cleanup.warning ? { contentImageWarning: cleanup.warning } : {}), ...(migratedImages ? { migratedImages } : {}) };
 }
 
 async function uploadFileToR2({ course, section, filename, stream, mimeType, abortSignal }) {
@@ -1982,8 +2268,23 @@ async function readPublishedContent(filePath, normalize) {
 }
 
 async function publishContent(filePath, data, expectedRevision, normalize) {
+  const owner = path.basename(filePath, ".json");
+  const tracksImages = CONTENT_IMAGE_OWNERS.includes(owner);
+  const oldData = tracksImages ? jsonStore.readSync(filePath) : null;
+  let migratedImages = 0;
   try {
-    return await contentPublishService.publish(filePath, data, { expectedRevision, normalize });
+    if (tracksImages) {
+      const migrated = await migrateContentDataUris(owner, structuredClone(data));
+      data = migrated.data;
+      migratedImages = migrated.migrated;
+    }
+    const result = await contentPublishService.publish(filePath, data, { expectedRevision, normalize });
+    if (result.ok && oldData) {
+      const cleanup = await cleanupOrphanContentImages(owner, oldData, result.data ?? data);
+      if (cleanup.warning) result.contentImageWarning = cleanup.warning;
+    }
+    if (result.ok && migratedImages) result.migratedImages = migratedImages;
+    return result;
   } catch (error) {
     return {
       ok: false,
@@ -1993,6 +2294,75 @@ async function publishContent(filePath, data, expectedRevision, normalize) {
       currentRevision: error.currentRevision,
     };
   }
+}
+
+/**
+ * 保存前把内容里的 base64 数据 URI 上传 R2 并改写为直链：
+ * 无论编辑器处于何种状态（旧页面/不支持插图的字段），内容库都不会再落 base64。
+ */
+async function migrateContentDataUris(owner, data) {
+  if (!r2Client || !r2Bucket || !CONTENT_IMAGE_OWNERS.includes(owner)) return { data, migrated: 0 };
+  const images = extractDataUriImages(data);
+  if (!images.length) return { data, migrated: 0 };
+  if (images.length > CONTENT_IMAGE_MIGRATE_LIMIT) {
+    const error = new Error(`单次保存最多包含 ${CONTENT_IMAGE_MIGRATE_LIMIT} 张内嵌图片，请减少后分批保存。`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const manifest = await manifestService.read();
+  const publicRoot = contentPublicRoot(manifest.resourceRoot);
+  const replacements = [];
+  for (const image of images) {
+    const buffer = Buffer.from(image.base64, "base64");
+    const check = validateContentImage({ mimeType: image.mime, size: buffer.length, buffer });
+    if (!check.ok) {
+      const error = new Error(`内嵌图片被拒绝：${check.error}`);
+      error.statusCode = 400;
+      throw error;
+    }
+    const name = newContentImageName(check.ext);
+    await r2Client.send(new PutObjectCommand({
+      Bucket: r2Bucket,
+      Key: `${contentImagePrefix(owner)}${name}`,
+      Body: buffer,
+      ContentType: image.mime,
+      CacheControl: "public, max-age=604800",
+    }));
+    replacements.push([image.uri, `${publicRoot}${owner}/${name}`]);
+  }
+  return { data: replaceDataUriImages(data, replacements), migrated: replacements.length };
+}
+
+/** 内容保存后删除不再被引用的本归属图片；失败不阻断发布，返回警告供界面提示。 */
+async function cleanupOrphanContentImages(owner, oldObject, nextObject) {
+  if (!r2Client || !r2Bucket) return { removed: 0 };
+  let orphans = [];
+  try {
+    const manifest = await manifestService.read();
+    orphans = orphanContentImageKeys(oldObject, nextObject, owner, contentPublicRoot(manifest.resourceRoot));
+  } catch {
+    return { removed: 0 };
+  }
+  if (!orphans.length) return { removed: 0 };
+  try {
+    await deleteExactR2Keys(orphans);
+    return { removed: orphans.length };
+  } catch {
+    return { removed: 0, warning: `有 ${orphans.length} 张未引用图片删除失败，可稍后在“清理未引用图片”中重试。` };
+  }
+}
+
+/** 一次性迁移：反馈公开语义变更（open→approved），举报类一律非公开。 */
+function migrateFeedbackForModeration() {
+  jsonStore.update(feedbackPath, (current) => {
+    let changed = false;
+    for (const item of current.items || []) {
+      if (item.type === "report" || item.type === "complaint") { item.status = item.status === "open" ? "pending" : item.status; changed = true; continue; }
+      if (item.status === "open") { item.status = "approved"; changed = true; }
+    }
+    if (changed) current.updated = today();
+    return current;
+  }).catch(() => {});
 }
 
 async function initializeRuntimeData() {
@@ -2019,10 +2389,17 @@ await manifestService.recoverStartup();
 await contentPublishService.recoverStartup();
 await initializeRuntimeData();
 
+migrateFeedbackForModeration();
+
 const server = createServer(async (req, res) => {
   let url;
   try {
     url = new URL(req.url || "/", `http://${req.headers.host}`);
+    if (req.method === "POST" && url.pathname === "/api/v1/donate/notify") {
+      await handleDonateNotify(req, res);
+      return;
+    }
+
     if (await handlePublicApi(req, res, url)) return;
     if (url.pathname.startsWith("/review-api/")) {
       if (req.method === "GET" && url.pathname === "/review-api/reviews") {
@@ -2122,7 +2499,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       const token = sessionStore.create({ username: account.username });
-      res.setHeader("set-cookie", `${adminCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`);
+      res.setHeader("set-cookie", `${adminCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800`);
       accountsStore.audit({
         username: account.username,
         action: "login.success",
@@ -2152,6 +2529,31 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/admin-api/upload") {
       if (!requirePermission(req, account, "content.edit", res)) return;
       await runExclusiveR2Mutation({ queue: r2MutationQueue, mutate: () => handleUpload(req, res, url) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/content-images") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      await runExclusiveR2Mutation({ queue: r2MutationQueue, mutate: () => handleContentImageUpload(req, res, url) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/content-images/cleanup") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      const owner = String(body?.owner || "");
+      if (!CONTENT_IMAGE_OWNERS.includes(owner)) {
+        json(res, 400, { ok: false, error: "未知的内容图片归属。" });
+        return;
+      }
+      const filePath = path.join(dataDir, `${owner}.json`);
+      const current = jsonStore.readSync(filePath);
+      const manifest = await manifestService.read();
+      const referenced = extractContentImageKeys(current, owner, contentPublicRoot(manifest.resourceRoot));
+      const existing = await listR2Objects(contentImagePrefix(owner));
+      const orphans = existing.map((item) => item.Key).filter((key) => key && !key.endsWith("/") && !referenced.has(key));
+      await deleteExactR2Keys(orphans);
+      json(res, 200, { ok: true, data: { scanned: existing.length, removed: orphans.length, kept: referenced.size } });
       return;
     }
 
@@ -2272,6 +2674,142 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/admin-api/donate") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      // 首次读取自愈：donate.json 尚未保存过时用默认文案初始化，避免 ENOENT
+      try {
+        jsonStore.readSync(donatePath);
+      } catch {
+        await jsonStore.update(donatePath, () => normalizeDonate(structuredClone(DEFAULT_DONATE_CONTENT)), { initialize: normalizeDonate(structuredClone(DEFAULT_DONATE_CONTENT)), mode: 0o600 });
+      }
+      json(res, 200, { ok: true, ...await readPublishedContent(donatePath, normalizeDonate) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/donate") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      const result = await publishContent(donatePath, body.data || {}, body.expectedRevision, normalizeDonate);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/privacy") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      try { jsonStore.readSync(privacyPath); } catch {
+        await jsonStore.update(privacyPath, () => normalizePrivacy(structuredClone(DEFAULT_PRIVACY_CONTENT)), { initialize: normalizePrivacy(structuredClone(DEFAULT_PRIVACY_CONTENT)), mode: 0o600 });
+      }
+      json(res, 200, { ok: true, ...await readPublishedContent(privacyPath, normalizePrivacy) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/privacy") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      const result = await publishContent(privacyPath, body.data || {}, body.expectedRevision, normalizePrivacy);
+      json(res, result.ok ? 200 : result.statusCode || 400, result);
+      return;
+    }
+
+    /** 依法调取：聚合账号/内容/日志/处置证据。每次调用均留痕。 */
+    async function buildLawQueryResult(params) {
+      const type = String(params.get("type") || "account");
+      const result = { query: { type, at: new Date().toISOString() }, account: null, reviews: [], feedback: [], security_logs: [], admin_audit: [] };
+      const reviewsData = readReviews();
+      const feedbackData = readFeedback();
+      let user = null;
+      if (type === "account") {
+        const value = String(params.get("value") || "").trim();
+        if (/^\d+$/.test(value)) user = mpAuthService.selectUserByIdPublic ? null : null;
+        // 按形态识别：纯数字→user_id；1开头11位→手机号；wx开头/长度28+→openid
+        const db = mpAuthService.db;
+        if (/^\d{1,10}$/.test(value)) user = db.prepare("SELECT * FROM mp_users WHERE id = ?").get(Number(value));
+        else if (/^1\d{10}$/.test(value)) user = db.prepare("SELECT * FROM mp_users WHERE phone = ?").get(value);
+        else user = db.prepare("SELECT * FROM mp_users WHERE openid = ?").get(value);
+        if (!user) throw Object.assign(new Error("未找到该账号。"), { statusCode: 404 });
+        result.account = { id: user.id, nickname: user.nickname, phone: user.phone || "", phone_verified_at: user.phone_verified_at || null, openid: user.openid, created_at: user.created_at, last_login_at: user.last_login_at, blocked: user.blocked === 1, login_count: user.login_count };
+        result.reviews = (reviewsData.reviews || []).filter((review) => Number(review.user_id) === user.id);
+        result.feedback = (feedbackData.items || []).filter((item) => Number(item.user_id) === user.id);
+        result.security_logs = securityLogStore.byUser(user.id, { limit: 300 });
+        result.admin_audit = accountsStore.searchAudit ? accountsStore.searchAudit({ keyword: String(user.id), limit: 100 }) : [];
+      } else if (type === "review") {
+        const id = String(params.get("id") || "").trim();
+        const review = (reviewsData.reviews || []).find((item) => item.id === id);
+        if (!review) throw Object.assign(new Error("未找到该评价。"), { statusCode: 404 });
+        result.reviews = [review];
+        result.security_logs = securityLogStore.byTarget("review", id, { limit: 100 });
+        if (review.user_id) {
+          const db = mpAuthService.db;
+          const u = db.prepare("SELECT * FROM mp_users WHERE id = ?").get(Number(review.user_id));
+          if (u) result.account = { id: u.id, nickname: u.nickname, phone: u.phone || "", phone_verified_at: u.phone_verified_at || null, openid: u.openid, created_at: u.created_at, blocked: u.blocked === 1 };
+        }
+      } else if (type === "feedback") {
+        const id = String(params.get("id") || "").trim();
+        const item = (feedbackData.items || []).find((entry) => entry.id === id);
+        if (!item) throw Object.assign(new Error("未找到该反馈/举报。"), { statusCode: 404 });
+        result.feedback = [item];
+        result.security_logs = securityLogStore.byTarget("feedback", id, { limit: 100 });
+        if (item.user_id) {
+          const db = mpAuthService.db;
+          const u = db.prepare("SELECT * FROM mp_users WHERE id = ?").get(Number(item.user_id));
+          if (u) result.account = { id: u.id, nickname: u.nickname, phone: u.phone || "", phone_verified_at: u.phone_verified_at || null, openid: u.openid, created_at: u.created_at, blocked: u.blocked === 1 };
+        }
+      } else {
+        throw Object.assign(new Error("查询类型无效。"), { statusCode: 400 });
+      }
+      return result;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/law-query") {
+      if (!requirePermission(req, account, "law.manage", res)) return;
+      try {
+        const result = await buildLawQueryResult(url.searchParams);
+        lawLogStore.record({ queriedBy: account.username, queryType: url.searchParams.get("type") || "", queryValue: url.searchParams.get("value") || url.searchParams.get("id") || "", exported: false, resultSummary: `reviews=${result.reviews.length} feedback=${result.feedback.length} logs=${result.security_logs.length}` });
+        json(res, 200, { ok: true, data: result, law_logs: lawLogStore.listRecent(20) });
+      } catch (error) {
+        json(res, Number(error.statusCode) || 500, { ok: false, error: String(error.message || "查询失败。") });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/law-export") {
+      if (!requirePermission(req, account, "law.manage", res)) return;
+      try {
+        const result = await buildLawQueryResult(url.searchParams);
+        lawLogStore.record({ queriedBy: account.username, queryType: url.searchParams.get("type") || "", queryValue: url.searchParams.get("value") || url.searchParams.get("id") || "", exported: true, resultSummary: `export reviews=${result.reviews.length} feedback=${result.feedback.length} logs=${result.security_logs.length}` });
+        const body = JSON.stringify({ exported_at: new Date().toISOString(), exported_by: account.username, ...result }, null, 2);
+        res.writeHead(200, { "content-type": "application/json; charset=utf-8", "content-disposition": `attachment; filename="law-export-${Date.now()}.json"`, "cache-control": "no-store" });
+        res.end(body);
+      } catch (error) {
+        json(res, Number(error.statusCode) || 500, { ok: false, error: String(error.message || "导出失败。") });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/donate-stats") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      json(res, 200, { ok: true, data: { summary: donateOrderStore.summary(), recent: donateOrderStore.listRecent(Number(url.searchParams.get("limit")) || 2000) } });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/donate-pay") {
+      if (!requirePermission(req, account, "services.manage", res)) return;
+      json(res, 200, { ok: true, data: donatePayStore.masked() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/donate-pay") {
+      if (!requirePermission(req, account, "services.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const data = await donatePayStore.update(body || {});
+        json(res, 200, { ok: true, data });
+      } catch (error) {
+        json(res, 400, { ok: false, error: String(error.message || "支付配置无效。") });
+      }
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/admin-api/about") {
       if (!requirePermission(req, account, "content.read", res)) return;
       json(res, 200, { ok: true, ...await readPublishedContent(aboutPath, normalizeAbout) });
@@ -2334,6 +2872,55 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/admin-api/catalog/import-courses") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      try {
+        const category = cleanText(body?.category, 40) || "通识选修课";
+        const term = cleanText(body?.term, 40) || "E课";
+        const dryRun = body?.dry_run === true;
+        const { manifest, revision } = await manifestService.readWithRevision();
+        const result = buildCatalogCourseImports(manifest, courseCatalog.courses, { category, term, date: today() });
+        if (dryRun || !result.created) {
+          json(res, 200, { ok: true, data: { ...result, courses: undefined, dryRun } });
+          return;
+        }
+        const published = await manifestService.publish({ ...manifest, courses: [...manifest.courses, ...result.courses] }, { expectedRevision: revision, deletedCourseUids: [] });
+        json(res, 200, { ok: true, data: { category, term, created: result.created, skipped: result.skipped, revision: published.revision, dryRun: false } });
+      } catch (error) {
+        json(res, Number(error.statusCode) || 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/catalog/courses") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      const body = await readBody(req);
+      try {
+        const manifestTitles = new Set((jsonStore.readSync(manifestPath).courses || []).map((course) => String(course.title)));
+        const course = await courseCatalog.addCourse({
+          name: body?.name,
+          categories: body?.categories,
+          teachers: body?.teachers,
+          terms: body?.terms,
+          manifestTitles,
+        });
+        Promise.resolve(notifyModerators({
+          type: "catalog-course.added",
+          lines: [
+            `**课程**：${course.name}`,
+            `**教师**：${course.teachers.join("、") || "-"}`,
+            ...(course.categories.length ? [`**学院**：${course.categories.join("、")}`] : []),
+            ...(course.terms.length ? [`**学期**：${course.terms.join("、")}`] : []),
+          ],
+        })).catch(() => {});
+        json(res, 200, { ok: true, data: { submitted: true, course } });
+      } catch (error) {
+        json(res, Number(error.statusCode) || 400, { ok: false, error: String(error.message || "课程信息无效。"), code: error.code || "INVALID_CATALOG_COURSE" });
+      }
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/admin-api/reviews") {
       if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
@@ -2379,6 +2966,18 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/admin-api/notify-settings") {
       if (!requirePermission(req, account, "backup.manage", res)) return;
       json(res, 200, { ok: true, data: await feishuNotify.describe() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/notify-settings") {
+      if (!requirePermission(req, account, "backup.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const data = await feishuNotify.setGuideFeedbackEnabled(body.guide_feedback_enabled === true);
+        json(res, 200, { ok: true, data });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
       return;
     }
 
@@ -2452,6 +3051,59 @@ const server = createServer(async (req, res) => {
         json(res, 200, { ok: true, data: created });
       } catch (error) {
         json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/ai-settings") {
+      if (!requirePermission(req, account, "ai.manage", res)) return;
+      json(res, 200, { ok: true, data: aiProviderStore.masked() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/ai-settings") {
+      if (!requirePermission(req, account, "ai.manage", res)) return;
+      const body = await readBody(req);
+      try {
+        const data = await aiProviderStore.update({
+          settings: body.settings || body,
+          apiKey: body.api_key,
+          clearApiKey: body.clear_api_key === true,
+        });
+        json(res, 200, { ok: true, data });
+      } catch (error) {
+        json(res, 400, { ok: false, error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/admin-api/ai-settings/test") {
+      if (!requirePermission(req, account, "ai.manage", res)) return;
+      const body = await readBody(req);
+      const startedAt = Date.now();
+      try {
+        const runtime = aiProviderStore.runtime();
+        if (!runtime.enabled) {
+          json(res, 200, { ok: true, data: { ok: false, reason: "AI_QUESTION_DISABLED", latency_ms: 0 } });
+          return;
+        }
+        if (!runtime.api_key) {
+          json(res, 200, { ok: true, data: { ok: false, reason: "API_KEY_MISSING", latency_ms: 0 } });
+          return;
+        }
+        const { createQwenProviderFromEnv } = await import("./qwen-provider.mjs");
+        const provider = createQwenProviderFromEnv({
+          DASHSCOPE_API_KEY: body.api_key || runtime.api_key,
+          QWEN_BASE_URL: body.base_url || runtime.base_url,
+          QWEN_MODEL: body.model || runtime.model,
+          QWEN_MAX_TOKENS: String(runtime.max_tokens),
+        });
+        const answer = await provider([{ role: "user", content: "请只回复两个字：正常" }], { timeoutMs: 15_000 });
+        const latency = Date.now() - startedAt;
+        const preview = String(answer || "").trim().slice(0, 40);
+        json(res, 200, { ok: true, data: { ok: true, model: body.model || runtime.model, latency_ms: latency, preview } });
+      } catch (error) {
+        json(res, 200, { ok: true, data: { ok: false, reason: "PROVIDER_ERROR", error: String(error.message || error).slice(0, 120), latency_ms: Date.now() - startedAt } });
       }
       return;
     }
