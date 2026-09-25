@@ -3199,8 +3199,9 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    const accountPasswordMatch = url.pathname.match(/^\/admin-api\/accounts\/([^/]+)$/);
-    if (req.method === "POST" && accountPasswordMatch && /^\d+$/.test(accountPasswordMatch[1])) {
+    // 管理员重置他人密码：路径为 /accounts/{id}/password（与前端约定一致；单段 POST 不再受理）
+    const accountPasswordMatch = url.pathname.match(/^\/admin-api\/accounts\/(\d+)\/password$/);
+    if (req.method === "POST" && accountPasswordMatch) {
       if (!requirePermission(req, account, "accounts.manage", res)) return;
       const body = await readBody(req);
       try {
