@@ -192,6 +192,27 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.deepEqual(viewerSession.data.permissions, ["content.read"]);
   const viewerForbidden = await fetch(`http://127.0.0.1:${port}/admin-api/accounts`, { headers: { cookie: viewerCookie } });
   assert.equal(viewerForbidden.status, 403, "viewer must not manage accounts");
+  // 回归：管理员经 /accounts/{id}/password 重置他人密码（旧单段路径曾 404）
+  const accountsList = (await (await fetch(`http://127.0.0.1:${port}/admin-api/accounts`, { headers: { cookie } })).json()).data.accounts;
+  const viewerId = accountsList.find((row) => row.username === "viewer1").id;
+  const resetPassword = await fetch(`http://127.0.0.1:${port}/admin-api/accounts/${viewerId}/password`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json", cookie }),
+    body: JSON.stringify({ password: "viewer-password-456", mustChangePassword: true }),
+  });
+  assert.equal(resetPassword.status, 200, "reset via /accounts/:id/password must work");
+  const oldPasswordRejected = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({ username: "viewer1", password: "viewer-password-123" }),
+  });
+  assert.equal(oldPasswordRejected.status, 403, "old password must stop working after reset");
+  const reLogin = await fetch(`http://127.0.0.1:${port}/admin-api/login`, {
+    method: "POST",
+    headers: adminHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({ username: "viewer1", password: "viewer-password-456" }),
+  });
+  assert.equal(reLogin.status, 200, "new password must allow login");
   const viewerManifest = await fetch(`http://127.0.0.1:${port}/admin-api/manifest`, { headers: { cookie: viewerCookie } });
   assert.equal(viewerManifest.status, 200, "viewer can read manifest");
   const viewerWrite = await fetch(`http://127.0.0.1:${port}/admin-api/manifest-draft`, {
