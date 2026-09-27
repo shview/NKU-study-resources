@@ -4455,11 +4455,7 @@ async function loadMpUsersAdmin() {
     });
 
     document.querySelector("#sync-r2-all").addEventListener("click", async () => {
-      if (!confirm("按 R2 的 resources/学期/分类/课程 结构真实重建课程树？
-
-· R2 中有文件的课程：文件列表整体按 R2 替换（旧位置/已删除条目不再保留），文件描述与板块备注保留
-· R2 中没有任何文件的课程：保留原清单并计入报告（防止路径不匹配误清）
-· R2 中出现的新课程会自动新增")) return;
+      if (!confirm("按 R2 的 resources/学期/分类/课程 结构真实重建课程树？\n\n· R2 中有文件的课程：文件列表整体按 R2 替换（旧位置/已删除条目不再保留），文件描述与板块备注保留\n· R2 中没有任何文件的课程：保留原清单并计入报告（防止路径不匹配误清）\n· R2 中出现的新课程会自动新增")) return;
       publishStatus.textContent = "正在从 R2 重建课程树...";
       try {
         const data = await api("/sync-r2-all", {
