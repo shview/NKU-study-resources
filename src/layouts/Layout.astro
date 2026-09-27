@@ -130,6 +130,19 @@ const footer = {
           <strong style="font-size:1.2em;">账号</strong>
           <button type="button" class="button secondary" onclick="document.getElementById('auth-modal').close()" style="min-height:34px;padding:4px 12px;font-size:1.1em;">×</button>
         </div>
+        <div class="filter-row" style="justify-content:center;gap:8px;margin-bottom:16px;">
+          <button type="button" class="button auth-tab" id="auth-tab-password" style="min-height:34px;">密码登录</button>
+          <button type="button" class="button secondary auth-tab" id="auth-tab-wechat" style="min-height:34px;">微信扫码</button>
+        </div>
+        <div id="auth-wechat-form" style="display:none;">
+          <div id="auth-qr-box" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 4px;">
+            <img id="auth-qr-img" alt="微信扫码登录二维码" style="max-width:220px;width:100%;border:1px solid var(--line);border-radius:12px;display:none;" />
+            <p id="auth-qr-placeholder" class="field-hint" style="margin:0;">正在获取二维码…</p>
+            <p class="field-hint" style="margin:0;text-align:center;">用微信「扫一扫」上方二维码，在小程序里确认登录。<br />需已在小程序完成手机号验证。</p>
+            <p class="field-hint" style="margin:0;text-align:center;">无法扫码？在小程序「网页登录确认」页输入：<code id="auth-qr-ticket" style="user-select:all;"></code></p>
+            <button type="button" class="button secondary" id="auth-qr-refresh" style="min-height:34px;">刷新二维码</button>
+          </div>
+        </div>
         <div id="auth-login-form">
           <form class="review-form">
             <label class="admin-field">
@@ -185,6 +198,54 @@ const footer = {
           } catch {}
           loginBtn.style.display = "";
         })();
+        const authModal = document.querySelector("#auth-modal");
+        let authQrTimer = null;
+        function authStopQrPolling() { if (authQrTimer) { clearInterval(authQrTimer); authQrTimer = null; } }
+        function authSwitchTab(wechat) {
+          document.querySelector("#auth-tab-password")?.classList.toggle("secondary", wechat);
+          document.querySelector("#auth-tab-wechat")?.classList.toggle("secondary", !wechat);
+          document.querySelector("#auth-login-form").style.display = wechat ? "none" : "";
+          document.querySelector("#auth-register-form").style.display = "none";
+          document.querySelector("#auth-wechat-form").style.display = wechat ? "" : "none";
+          if (wechat) startAuthQr(); else authStopQrPolling();
+        }
+        async function startAuthQr() {
+          authStopQrPolling();
+          const img = document.querySelector("#auth-qr-img");
+          const placeholder = document.querySelector("#auth-qr-placeholder");
+          const ticketEl = document.querySelector("#auth-qr-ticket");
+          const status = document.querySelector("#auth-status");
+          img.style.display = "none";
+          placeholder.textContent = "正在获取二维码…";
+          ticketEl.textContent = "";
+          try {
+            const r = await fetch("/api/v1/auth/web-login/start", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+            const d = await r.json();
+            if (!r.ok || d.code !== 0) { placeholder.textContent = d.message || "二维码获取失败，请刷新重试"; return; }
+            const ticket = d.data.ticket;
+            ticketEl.textContent = ticket;
+            if (d.data.qr_available && d.data.qr_image) {
+              img.src = d.data.qr_image;
+              img.style.display = "";
+              placeholder.textContent = "二维码 5 分钟内有效";
+            } else {
+              placeholder.textContent = "二维码暂不可用，可手动输入登录码";
+            }
+            authQrTimer = setInterval(async () => {
+              try {
+                const sr = await fetch(`/api/v1/auth/web-login/status?ticket=${encodeURIComponent(ticket)}`);
+                const sd = await sr.json();
+                if (!sr.ok || sd.code !== 0) { authStopQrPolling(); placeholder.textContent = sd.message || "查询失败，请刷新"; return; }
+                if (sd.data.status === "confirmed") { authStopQrPolling(); location.href = "/me/"; return; }
+                if (sd.data.status === "expired" || sd.data.status === "used") { authStopQrPolling(); placeholder.textContent = "二维码已过期，请刷新"; }
+              } catch {}
+            }, 2000);
+          } catch { placeholder.textContent = "网络错误，请刷新重试"; }
+        }
+        document.querySelector("#auth-tab-password")?.addEventListener("click", () => authSwitchTab(false));
+        document.querySelector("#auth-tab-wechat")?.addEventListener("click", () => authSwitchTab(true));
+        document.querySelector("#auth-qr-refresh")?.addEventListener("click", () => startAuthQr());
+        authModal?.addEventListener("close", authStopQrPolling);
         document.querySelector("#auth-show-register")?.addEventListener("click", (e) => { e.preventDefault(); document.querySelector("#auth-login-form").style.display = "none"; document.querySelector("#auth-register-form").style.display = ""; });
         document.querySelector("#auth-show-login")?.addEventListener("click", (e) => { e.preventDefault(); document.querySelector("#auth-register-form").style.display = "none"; document.querySelector("#auth-login-form").style.display = ""; });
         document.querySelector("#auth-login-submit")?.addEventListener("click", async () => {

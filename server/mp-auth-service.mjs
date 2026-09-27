@@ -248,6 +248,16 @@ export class MpAuthService {
     return this.#issueToken(row, timestamp);
   }
 
+  /** 网页扫码登录：为扫码确认的既有用户（小程序身份）签发网页会话令牌。 */
+  issueSessionForUser(userId, { now = this.now() } = {}) {
+    const row = this.selectUserById.get(Number(userId));
+    if (!row) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    if (row.blocked) throw new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED");
+    const timestamp = positiveSafeInteger(now, "now");
+    this.markLogin.run(timestamp, row.id);
+    return this.#issueToken(this.selectUserById.get(row.id), timestamp);
+  }
+
   /** 供微信支付等内部流程取用户 openid；不进入任何公共 DTO。 */
   getOpenid(userId) {
     const row = this.selectUserById.get(Number(userId));
