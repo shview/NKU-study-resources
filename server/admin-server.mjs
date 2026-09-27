@@ -1908,7 +1908,7 @@ function coursePartsFromR2Path(parts) {
 }
 
 /** 扫描 R2 得到课程发现结果（重建与校对共用）。 */
-async function discoverCoursesFromR2() {
+async function discoverCoursesFromR2(snapshot) {
   if (!r2Client || !r2Bucket) {
     throw new Error("R2 upload is not configured on the server.");
   }
@@ -1974,7 +1974,7 @@ async function syncAllCoursesFromR2(expectedRevision) {
     error.currentRevision = revision;
     throw error;
   }
-  const { discoveries, conflicts, unmatched } = await discoverCoursesFromR2();
+  const { discoveries, conflicts, unmatched } = await discoverCoursesFromR2(snapshot);
   // 全量保护：R2 一个文件都没发现而清单非空，视为桶异常，拒绝重建
   const discoveredFiles = discoveries.reduce((sum, entry) => sum + (entry.sections || []).reduce((n, s) => n + (s.files || []).length, 0), 0);
   const manifestFiles = snapshot.courses.reduce((sum, c) => sum + (c.sections || []).reduce((n, s) => n + (s.files || []).length, 0), 0);
@@ -2586,7 +2586,7 @@ const server = createServer(async (req, res) => {
       if (!requirePermission(req, account, "content.read", res)) return;
       try {
         const { manifest: snapshot } = await manifestService.readWithRevision();
-        const { discoveries, conflicts, unmatched } = await discoverCoursesFromR2();
+        const { discoveries, conflicts, unmatched } = await discoverCoursesFromR2(snapshot);
         const report = compareManifestWithDiscovery(snapshot, discoveries);
         json(res, 200, { ok: true, data: { report, conflictCount: conflicts.length, unmatchedCount: unmatched.length } });
       } catch (error) {
