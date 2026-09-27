@@ -19,6 +19,8 @@ export function r2SyncStatus(message, data) {
   if (typeof report.updatedCourses === "number" && report.updatedCourses > 0) parts.push(`更新课程 ${report.updatedCourses}`);
   if (typeof report.addedResources === "number" && report.addedResources > 0) parts.push(`新增资源 ${report.addedResources}`);
   if (typeof report.updatedResources === "number" && report.updatedResources > 0) parts.push(`更新资源 ${report.updatedResources}`);
+  if (typeof report.removedResources === "number" && report.removedResources > 0) parts.push(`移除失效条目 ${report.removedResources}`);
+  if (Array.isArray(report.retainedEmptyCourses) && report.retainedEmptyCourses.length > 0) parts.push(`空发现课程 ${report.retainedEmptyCourses.length} 个已保留（控制台查看明细）`);
   if (typeof report.added === "number" && typeof report.updated === "number" && parts.length === 0) parts.push(`新增资源 ${report.added}，更新资源 ${report.updated}`);
   const conflictCount = Array.isArray(report.conflicts) ? report.conflicts.length : 0;
   if (conflictCount > 0) parts.push(`路径冲突 ${conflictCount} 个`);

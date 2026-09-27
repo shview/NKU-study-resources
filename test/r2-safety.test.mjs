@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mergeCourseR2Discovery, mergeR2Discoveries } from "../server/r2-sync-merge.mjs";
+import { compareManifestWithDiscovery, mergeCourseR2Discovery, mergeR2Discoveries } from "../server/r2-sync-merge.mjs";
 import { validateManifest } from "../server/manifest-schema.mjs";
 import { assertR2CleanupSafety, planR2ManifestMutation, planR2ObjectCopies, strictR2BasePath, strictR2Path } from "../server/r2-mutation-plan.mjs";
 import { publishAfterR2Prepare, R2MutationQueue, runExclusiveR2Mutation, runSerializedR2Mutation } from "../server/r2-transaction.mjs";
@@ -20,22 +20,44 @@ test("empty R2 discovery preserves every web-managed course", () => {
   assert.deepEqual({ updated: result.updated, added: result.added }, { updated: 0, added: 0 });
 });
 
-test("single-course empty and partial discoveries never delete manifest resources", () => {
+test("empty discovery retains data; non-empty discovery replaces from R2 truth and preserves metadata", () => {
   const course = {
     ...existing,
-    sections: [{ title: "Files", files: [
+    sections: [{ title: "Files", note: "old note", files: [
       { title: "keep.pdf", path: "Files/keep.pdf", size: 1, description: "web note" },
       { title: "missing.pdf", path: "Files/missing.pdf", size: 2, description: "retain me" },
     ] }],
   };
+  // 空发现：保留原数据并标记（basePath 不匹配/列举异常保护）
   const empty = mergeCourseR2Discovery(course, { sections: [] });
   assert.deepEqual(empty.course.sections, course.sections);
-  assert.deepEqual(empty.report.missing, ["Files/keep.pdf", "Files/missing.pdf"]);
+  assert.equal(empty.report.retainedEmpty, true);
+  // 非空发现：按 R2 真实结构替换；幸存路径保留描述与板块备注，旧位置条目移除
   const partial = mergeCourseR2Discovery(course, { sections: [{ title: "Files", files: [{ title: "keep.pdf", path: "Files/keep.pdf", size: 10 }] }] });
-  assert.equal(partial.course.sections[0].files.length, 2);
+  assert.equal(partial.course.sections[0].files.length, 1);
   assert.equal(partial.course.sections[0].files.find((file) => file.path.endsWith("keep.pdf")).size, 10);
-  assert.equal(partial.course.sections[0].files.find((file) => file.path.endsWith("missing.pdf")).description, "retain me");
-  assert.deepEqual(partial.report.missing, ["Files/missing.pdf"]);
+  assert.equal(partial.course.sections[0].files.find((file) => file.path.endsWith("keep.pdf")).description, "web note");
+  assert.equal(partial.course.sections[0].note, "old note");
+  assert.equal(partial.report.removed, 1);
+  assert.deepEqual(partial.report.removedPaths, ["Files/missing.pdf"]);
+  assert.equal(partial.report.retainedEmpty, false);
+});
+
+test("moved files are recorded at the new location only (old entries dropped)", () => {
+  const course = {
+    ...existing,
+    sections: [
+      { title: "旧位置", files: [{ title: "a.pdf", path: "旧位置/a.pdf", size: 5, description: "desc" }] },
+    ],
+  };
+  const moved = mergeCourseR2Discovery(course, { sections: [
+    { title: "新位置", files: [{ title: "a.pdf", path: "新位置/a.pdf", size: 7 }] },
+  ] });
+  assert.equal(moved.course.sections.length, 1);
+  assert.equal(moved.course.sections[0].title, "新位置");
+  assert.equal(moved.course.sections[0].files[0].path, "新位置/a.pdf");
+  assert.equal(moved.course.sections[0].files[0].description, "desc", "移动后保留人工描述");
+  assert.deepEqual(moved.report.removedPaths, ["旧位置/a.pdf"]);
 });
 
 test("manifest schema rejects overlapping course prefixes and duplicate declared resource paths", () => {
@@ -306,3 +328,26 @@ test("placeholder-only folders outside the E课 name pool create course shells",
   assert.equal(result.report.addedResources, 1);
 });
 
+test("compareManifestWithDiscovery classifies moved, deleted, new and empty without mutating", () => {
+  const snapshot = {
+    courses: [
+      { ...existing, basePath: "a/one/", sections: [{ title: "S", files: [
+        { title: "ok.pdf", path: "S/ok.pdf" },
+        { title: "moved.pdf", path: "old/moved.pdf" },
+        { title: "gone.pdf", path: "S/gone.pdf" },
+      ] }] },
+      { ...existing, uid: "00000000-0000-4000-8000-000000000009", id: "ghost", basePath: "a/ghost/", sections: [{ title: "S", files: [{ title: "x.pdf", path: "S/x.pdf" }] }] },
+    ],
+  };
+  const discoveries = [
+    { basePath: "a/one", sections: [{ title: "S", files: [{ title: "ok.pdf", path: "S/ok.pdf" }, { title: "moved.pdf", path: "new/moved.pdf" }] }, { title: "extra", files: [{ title: "n.pdf", path: "extra/n.pdf" }] }] },
+    { basePath: "a/fresh", sections: [{ title: "S", files: [{ title: "f.pdf", path: "S/f.pdf" }] }] },
+  ];
+  const report = compareManifestWithDiscovery(snapshot, discoveries);
+  assert.equal(report.consistentFiles, 1);
+  assert.deepEqual(report.moved, [{ course: "Web only", from: "old/moved.pdf", to: "new/moved.pdf" }]);
+  assert.deepEqual(report.deleted, [{ course: "Web only", path: "S/gone.pdf" }]);
+  assert.deepEqual(report.newInR2, [{ course: "Web only", basePath: "a/one", path: "extra/n.pdf" }]);
+  assert.deepEqual(report.retainedEmptyCourses, [{ course: "Web only", basePath: "a/ghost", manifestFiles: 1 }]);
+  assert.deepEqual(report.newCourses, [{ basePath: "a/fresh", title: undefined, files: 1 }]);
+});

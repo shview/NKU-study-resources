@@ -42,7 +42,7 @@ import { MpFavoritesService } from "./mp-favorites-service.mjs";
 import { CourseCatalogService } from "./course-catalog-service.mjs";
 import { FeishuNotifyService } from "./feishu-notify-service.mjs";
 import { readJsonBody } from "./read-json-body.mjs";
-import { mergeCourseR2Discovery, mergeR2Discoveries } from "./r2-sync-merge.mjs";
+import { compareManifestWithDiscovery, mergeCourseR2Discovery, mergeR2Discoveries } from "./r2-sync-merge.mjs";
 import { assertR2CleanupSafety, planR2ManifestMutation, planR2ObjectCopies, strictR2BasePath, strictR2Path } from "./r2-mutation-plan.mjs";
 import { publishAfterR2Prepare, R2MutationQueue, runExclusiveR2Mutation, runSerializedR2Mutation } from "./r2-transaction.mjs";
 import { ReviewSubmissionService } from "./review-submission-service.mjs";
@@ -1907,19 +1907,8 @@ function coursePartsFromR2Path(parts) {
   return null;
 }
 
-async function syncAllCoursesFromR2(expectedRevision) {
-  if (!expectedRevision) {
-    const error = new Error("expectedRevision is required.");
-    error.statusCode = 400;
-    throw error;
-  }
-  const { manifest: snapshot, revision } = await manifestService.readWithRevision();
-  if (revision !== expectedRevision) {
-    const error = new Error("Manifest changed before R2 sync began; no changes were written.");
-    error.statusCode = 409;
-    error.currentRevision = revision;
-    throw error;
-  }
+/** 扫描 R2 得到课程发现结果（重建与校对共用）。 */
+async function discoverCoursesFromR2() {
   if (!r2Client || !r2Bucket) {
     throw new Error("R2 upload is not configured on the server.");
   }
@@ -1927,7 +1916,6 @@ async function syncAllCoursesFromR2(expectedRevision) {
   const discovered = new Map();
   const unmatched = [];
   const conflicts = [];
-  const usedIds = new Set(snapshot.courses.map((course) => course.id));
   for (const object of objects) {
     if (!object.Key || object.Key.endsWith("/")) continue;
     let relative;
@@ -1970,6 +1958,30 @@ async function syncAllCoursesFromR2(expectedRevision) {
     }));
     return { ...entry, basePath, sections };
   });
+  return { discoveries, conflicts, unmatched };
+}
+
+async function syncAllCoursesFromR2(expectedRevision) {
+  if (!expectedRevision) {
+    const error = new Error("expectedRevision is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const { manifest: snapshot, revision } = await manifestService.readWithRevision();
+  if (revision !== expectedRevision) {
+    const error = new Error("Manifest changed before R2 sync began; no changes were written.");
+    error.statusCode = 409;
+    error.currentRevision = revision;
+    throw error;
+  }
+  const { discoveries, conflicts, unmatched } = await discoverCoursesFromR2();
+  // 全量保护：R2 一个文件都没发现而清单非空，视为桶异常，拒绝重建
+  const discoveredFiles = discoveries.reduce((sum, entry) => sum + (entry.sections || []).reduce((n, s) => n + (s.files || []).length, 0), 0);
+  const manifestFiles = snapshot.courses.reduce((sum, c) => sum + (c.sections || []).reduce((n, s) => n + (s.files || []).length, 0), 0);
+  if (manifestFiles > 0 && discoveredFiles === 0) {
+    throw new Error("R2 未发现任何文件而清单非空，已拒绝重建（疑似存储异常），请先运行「按 R2 校对清单」核查。");
+  }
+  const usedIds = new Set(snapshot.courses.map((course) => course.id));
   const merged = mergeR2Discoveries(snapshot, discoveries, {
     conflicts,
     createId: (entry) => uniqueCourseId(entry.title, entry.term, entry.group, entry.basePath, usedIds),
@@ -2567,6 +2579,19 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const result = await syncCourseFromR2(body.courseId, body.expectedRevision);
       json(res, 200, syncCourseResponse(result));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/admin-api/manifest-verify") {
+      if (!requirePermission(req, account, "content.read", res)) return;
+      try {
+        const { manifest: snapshot } = await manifestService.readWithRevision();
+        const { discoveries, conflicts, unmatched } = await discoverCoursesFromR2();
+        const report = compareManifestWithDiscovery(snapshot, discoveries);
+        json(res, 200, { ok: true, data: { report, conflictCount: conflicts.length, unmatchedCount: unmatched.length } });
+      } catch (error) {
+        json(res, 500, { ok: false, error: error.message });
+      }
       return;
     }
 
