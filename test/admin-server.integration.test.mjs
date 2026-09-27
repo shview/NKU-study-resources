@@ -242,12 +242,55 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ courseTitle: "Fixture course", teacher: "t", rating: 5, content: "anonymous must be rejected now." }),
   })).status, 401, "匿名评价投稿必须被拒");
+  // 公安合规：已登录但未验证手机号 → 投稿必须 403（直连接口不可绕过门禁）
+  const unverifiedSubmit = await fetch(`http://127.0.0.1:${port}/api/v1/reviews`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...ugcAuth },
+    body: JSON.stringify({ course_id: "11111111-1111-4111-8111-111111111111", teacher: "t", rating: 5, body: "unverified must be rejected.", anonymous: true }),
+  });
+  assert.equal(unverifiedSubmit.status, 403, "未验证手机号的登录用户投稿必须被拒");
+  assert.equal((await unverifiedSubmit.json()).code, "PHONE_VERIFY_REQUIRED");
+
+  // 网页扫码登录：start → 未验证手机号 confirm 403 → 验证后 confirm → status 兑换会话 cookie → 一次性
+  const webLoginStart = await (await fetch(`http://127.0.0.1:${port}/api/v1/auth/web-login/start`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).json();
+  assert.equal(webLoginStart.code, 0);
+  assert.equal(webLoginStart.data.qr_available, false, "测试环境未配置小程序凭据，二维码应不可用但不影响票据流程");
+  assert.match(webLoginStart.data.ticket, /^[A-Za-z0-9_-]{10,64}$/);
+  const confirmUnverified = await fetch(`http://127.0.0.1:${port}/api/v1/auth/web-login/confirm`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...ugcAuth },
+    body: JSON.stringify({ ticket: webLoginStart.data.ticket }),
+  });
+  assert.equal(confirmUnverified.status, 403, "未验证手机号不得扫码登录网页");
+  assert.equal((await confirmUnverified.json()).code, "PHONE_VERIFY_REQUIRED");
+
   const phoneVerify = await fetch(`http://127.0.0.1:${port}/api/v1/auth/phone-verify`, {
     method: "POST",
     headers: { "content-type": "application/json", ...ugcAuth },
     body: JSON.stringify({ code: "phone-ok" }),
   });
   assert.equal(phoneVerify.status, 200, "手机号验证接口");
+
+  const confirmOk = await fetch(`http://127.0.0.1:${port}/api/v1/auth/web-login/confirm`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...ugcAuth },
+    body: JSON.stringify({ ticket: webLoginStart.data.ticket }),
+  });
+  assert.equal(confirmOk.status, 200, "验证后 confirm 应成功");
+  const statusExchange = await fetch(`http://127.0.0.1:${port}/api/v1/auth/web-login/status?ticket=${webLoginStart.data.ticket}`);
+  const exchangeBody = await statusExchange.json();
+  assert.equal(statusExchange.status, 200);
+  assert.equal(exchangeBody.data.status, "confirmed", "确认后首次轮询应兑换会话");
+  const webCookie = statusExchange.headers.get("set-cookie")?.split(";", 1)[0] || "";
+  assert.match(webCookie, /^nkustudy_web_session=/, "兑换响应必须下发网页会话 cookie");
+  const restored = await fetch(`http://127.0.0.1:${port}/api/v1/auth/web-login`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: webCookie },
+    body: "{}",
+  });
+  assert.equal(restored.status, 200, "扫码得到的会话应能恢复网页登录态");
+  const replay = await (await fetch(`http://127.0.0.1:${port}/api/v1/auth/web-login/status?ticket=${webLoginStart.data.ticket}`)).json();
+  assert.equal(replay.data.status, "used", "票据兑换一次性，重放不再次签发");
 
   const reviewResponse = await fetch(`http://127.0.0.1:${port}/review-api/submit`, {
     method: "POST",
@@ -336,7 +379,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   const mpUsersAdmin = await (await fetch(`http://127.0.0.1:${port}/admin-api/mp-users`, { headers: { cookie } })).json();
   assert.equal(mpUsersAdmin.ok, true);
   assert.equal(mpUsersAdmin.data.total, 1);
-  assert.equal(mpUsersAdmin.data.users[0].login_count, 2, "本轮含 UGC 门禁的前置登录，同一账号共登录两次");
+  assert.equal(mpUsersAdmin.data.users[0].login_count, 3, "UGC 前置登录 ×1 + 扫码登录会话签发 ×1 + 此前登录 ×1");
   assert.equal(mpUsersAdmin.data.users[0].nickname, "集成测试用户");
   assert.equal(JSON.stringify(mpUsersAdmin).includes("integration-openid-1"), false, "admin list must only expose masked openid");
 

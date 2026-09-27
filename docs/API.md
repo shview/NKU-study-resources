@@ -47,6 +47,9 @@
 | `POST` | `/api/v1/auth/phone-verify` | Bearer Token、限流 | 微信手机号验证（getPhoneNumber code 换手机号，达标实名） |
 | `POST` | `/api/v1/auth/web-register` | 公开、限流 | 网页注册（昵称+密码） |
 | `POST` | `/api/v1/auth/web-login` | 公开、限流 | 网页登录（昵称+密码，签发 httpOnly 会话 cookie；空请求用于恢复会话） |
+| `POST` | `/api/v1/auth/web-login/start` | 公开、限流 | 发起微信扫码登录：返回票据与小程序码（base64） |
+| `POST` | `/api/v1/auth/web-login/confirm` | Bearer Token | 小程序端确认扫码登录（需手机号已验证） |
+| `GET` | `/api/v1/auth/web-login/status` | 公开 | 网页轮询票据状态；confirmed 时一次性兑换 httpOnly 会话 |
 | `POST` | `/api/v1/auth/logout` | Bearer Token | 注销小程序登录令牌 |
 | `GET` | `/api/v1/me` | Bearer Token | 当前小程序用户信息 |
 | `GET` | `/api/v1/me/favorites` | Bearer Token | 我的收藏课程列表（分页） |
@@ -121,7 +124,7 @@
 | `GET` | `/admin-api/accounts` | Cookie（需相应权限） | 账号列表、权限点与角色预设 |
 | `POST` | `/admin-api/accounts` | Cookie（需相应权限） | 创建管理员账号 |
 | `PATCH` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 更新账号权限、启用状态或改密提示 |
-| `POST` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 重置账号密码 |
+| `POST` | `/admin-api/accounts/:param/password` | Cookie（需相应权限） | 重置账号密码（body: password, mustChangePassword） |
 | `DELETE` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 删除管理员账号 |
 | `POST` | `/admin-api/me/password` | Cookie | 修改自己的密码 |
 | `GET` | `/admin-api/audit` | Cookie（需相应权限） | 分页查询管理操作审计日志 |
@@ -600,6 +603,18 @@ curl -sS https://nkustudy.top/review-api/submit \
 ```bash
 curl -sS https://nkustudy.top/feedback-api/feedback
 ```
+
+### `POST /api/v1/auth/web-login/start`
+
+发起微信扫码登录。成功：`{ "code":0, "data":{ "ticket":"...", "expires_in":300, "qr_available":true, "qr_image":"data:image/png;base64,..." } }`。`qr_image` 为小程序码（scene=票据），未配置小程序凭据时 `qr_available:false`，可改用手动输入票据（小程序「网页登录确认」页）。
+
+### `POST /api/v1/auth/web-login/confirm`
+
+小程序端确认：`{ "ticket":"..." }`，需 Bearer Token 且手机号已验证（否则 `403 PHONE_VERIFY_REQUIRED`）。成功 `{ "code":0, "data":{ "confirmed":true } }`。
+
+### `GET /api/v1/auth/web-login/status`
+
+网页轮询 `?ticket=`。`pending` / `confirmed`（本次响应即兑换，Set-Cookie 下发网页会话，票据一次性）/ `used` / `expired`。
 
 ### `POST /feedback-api/submit`
 

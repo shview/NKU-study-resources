@@ -56,6 +56,8 @@ import { UserSecurityLogStore } from "./user-security-log-store.mjs";
 import { LawEnforcementLogStore } from "./law-enforcement-store.mjs";
 import { DEFAULT_PRIVACY_CONTENT } from "./default-privacy.mjs";
 import { createWechatPhoneVerifier, maskPhone } from "./wechat-phone.mjs";
+import { createWxacodeService } from "./wxacode-service.mjs";
+import { createWebLoginService } from "./web-login-service.mjs";
 import { StaticReleasePublisher } from "./static-release-publisher.mjs";
 
 const root = projectRoot;
@@ -351,9 +353,12 @@ const consumeServiceQuota = (caller) => {
   });
   return result.allowed === true;
 };
+const webLoginTickets = createWebLoginService();
+const wxacodeService = createWxacodeService({ appid: process.env.WECHAT_APPID || "", secret: process.env.WECHAT_APPSECRET || "" });
 const handlePublicApi = createPublicApiHandler({
   securityLog: securityLogStore,
-  phoneVerifier: wechatPhoneVerifier, service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp });
+  phoneVerifier: wechatPhoneVerifier, service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp,
+  webLoginTickets, wxacode: wxacodeService, webLoginPagePath: "pages/login-confirm/index", wxacodeEnvVersion: process.env.WXACODE_ENV_VERSION || "release" });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
@@ -3200,8 +3205,8 @@ const server = createServer(async (req, res) => {
     }
 
     // 管理员重置他人密码：路径为 /accounts/{id}/password（与前端约定一致；单段 POST 不再受理）
-    const accountPasswordMatch = url.pathname.match(/^\/admin-api\/accounts\/(\d+)\/password$/);
-    if (req.method === "POST" && accountPasswordMatch) {
+    const accountPasswordMatch = url.pathname.match(/^\/admin-api\/accounts\/([^/]+)\/password$/);
+    if (req.method === "POST" && accountPasswordMatch && /^\d+$/.test(accountPasswordMatch[1])) {
       if (!requirePermission(req, account, "accounts.manage", res)) return;
       const body = await readBody(req);
       try {

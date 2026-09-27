@@ -52,7 +52,7 @@ export function decodePathPart(value) {
   }
 }
 
-export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp, securityLog = null, phoneVerifier = null } = {}) {
+export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp, securityLog = null, phoneVerifier = null, webLoginTickets = null, wxacode = null, webLoginPagePath = "pages/login-confirm/index", wxacodeEnvVersion = "release" } = {}) {
   if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
   async function requireService(req) {
     if (!serviceAuthStore) throw new PublicApiError(503, "服务间接口暂未开放。", "SERVICE_AUTH_NOT_CONFIGURED");
@@ -196,6 +196,50 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
           const user = mpAuthService.verifyToken(authorizationOf(req));
           if (!user) throw new PublicApiError(401, "未登录或会话已过期。", "AUTH_REQUIRED");
           data = { user: { id: user.id, nickname: user.nickname, email: user.email || "", has_web_password: true } };
+        }
+      } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-login/start") {
+        if (!mpAuthService || !webLoginTickets) throw new PublicApiError(503, "扫码登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "操作过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
+        const ticket = webLoginTickets.create();
+        let qrImage = null;
+        if (wxacode?.configured) {
+          try {
+            const code = await wxacode.unlimitedQr({ scene: ticket.id, page: webLoginPagePath, envVersion: wxacodeEnvVersion });
+            qrImage = `data:${code.contentType};base64,${code.base64}`;
+          } catch (error) {
+            console.warn(`[web-login] wxacode failed: ${error.message} ${error.detail || ""}`);
+          }
+        }
+        data = { ticket: ticket.id, expires_in: Math.max(1, Math.floor((ticket.expiresAt - Date.now()) / 1000)), qr_available: Boolean(qrImage), qr_image: qrImage };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-login/confirm") {
+        if (!mpAuthService || !webLoginTickets) throw new PublicApiError(503, "扫码登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(authorizationOf(req));
+        if (user.blocked) throw new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED");
+        if (typeof mpAuthService.isPhoneVerified === "function" && !mpAuthService.isPhoneVerified(user.id)) {
+          securityLog?.record({ userId: user.id, action: "weblogin.blocked_no_phone", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "rejected" });
+          throw new PublicApiError(403, "请先在小程序完成手机号验证，再扫码登录网页。", "PHONE_VERIFY_REQUIRED");
+        }
+        const body = await readJsonBody(req);
+        const ticketId = String(body?.ticket || "");
+        if (!/^[A-Za-z0-9_-]{10,64}$/.test(ticketId)) throw new PublicApiError(400, "登录码无效。", "WEB_LOGIN_TICKET_INVALID");
+        if (!webLoginTickets.confirm(ticketId, user.id)) throw new PublicApiError(404, "登录码不存在或已使用。", "WEB_LOGIN_TICKET_INVALID");
+        securityLog?.record({ userId: user.id, action: "weblogin.confirm", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
+        data = { confirmed: true };
+      } else if (req.method === "GET" && url.pathname === "/api/v1/auth/web-login/status") {
+        if (!mpAuthService || !webLoginTickets) throw new PublicApiError(503, "扫码登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const ticketId = String(url.searchParams.get("ticket") || "");
+        if (!/^[A-Za-z0-9_-]{10,64}$/.test(ticketId)) throw new PublicApiError(400, "登录码无效。", "WEB_LOGIN_TICKET_INVALID");
+        const ticket = webLoginTickets.get(ticketId);
+        if (!ticket) {
+          data = { status: "expired" };
+        } else if (ticket.status === "confirmed") {
+          const session = mpAuthService.issueSessionForUser(ticket.userId);
+          webLoginTickets.markUsed(ticket.id);
+          setCookies.push(webSessionCookie(session.token, session.expires_in));
+          securityLog?.record({ userId: ticket.userId, action: "weblogin.granted", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
+          data = { status: "confirmed", user: { id: session.user.id, nickname: session.user.nickname, has_web_password: false } };
+        } else {
+          data = { status: ticket.status, expires_in: Math.max(1, Math.floor((ticket.expiresAt - Date.now()) / 1000)) };
         }
       } else if (req.method === "GET" && url.pathname === "/api/v1/me/feedback") {
         if (!mpAuthService) throw new PublicApiError(503, "暂未开放。", "MP_AUTH_NOT_CONFIGURED");
