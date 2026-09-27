@@ -20,6 +20,7 @@ export const ADMIN_ROUTE_PERMISSIONS = Object.freeze({
   "GET /admin-api/home": "content.read",
   "GET /admin-api/links": "content.read",
   "GET /admin-api/manifest": "content.read",
+  "GET /admin-api/manifest-verify": "content.read",
   "GET /admin-api/mp-users": "content.read",
   "GET /admin-api/participate": "content.read",
   "GET /admin-api/reviews": "content.read",

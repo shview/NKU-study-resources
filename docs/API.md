@@ -113,6 +113,7 @@
 | `POST` | `/admin-api/reviews` | Cookie（需相应权限） | 以 CAS 更新评价及审核状态 |
 | `GET` | `/admin-api/session` | Cookie（需相应权限） | 检查管理会话 |
 | `GET` | `/admin-api/manifest` | Cookie（需相应权限） | 读取完整课程树和 revision |
+| `GET` | `/admin-api/manifest-verify` | Cookie（需相应权限） | 校对清单：与 R2 只读比对，产出移动/缺失/新增/空发现报告 |
 | `POST` | `/admin-api/manifest` | Cookie（需相应权限） | 发布课程树并重建网站 |
 | `POST` | `/admin-api/manifest-draft` | Cookie（需相应权限） | 保存课程树草稿，不重建网站 |
 | `GET` | `/admin-api/service-keys` | Cookie（services.manage） | 服务密钥列表（不含密钥本体） |

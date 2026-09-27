@@ -43,6 +43,7 @@ import "vditor/dist/index.css";
             <div class="filter-row">
               <button class="button" id="publish" type="button">保存并发布</button>
               <button class="button secondary" id="sync-r2" type="button">从 R2 同步当前课程</button>
+              <button class="button secondary" id="manifest-verify" type="button">按 R2 校对清单</button>
               <button class="button secondary" id="sync-r2-all" type="button">从 R2 重建课程树</button>
               <button class="button secondary" id="add-course" type="button">新增课程</button>
               <button class="button secondary" id="download-json" type="button">下载 JSON</button>
@@ -4428,8 +4429,37 @@ async function loadMpUsersAdmin() {
       }
     });
 
+    document.querySelector("#manifest-verify").addEventListener("click", async () => {
+      publishStatus.textContent = "正在比对 R2 与清单...";
+      try {
+        const data = await api("/manifest-verify");
+        const r = data.data.report;
+        const summary = [
+          `一致 ${r.consistentFiles} 个文件`,
+          r.moved.length ? `移动待修 ${r.moved.length}` : "",
+          r.deleted.length ? `R2 已缺失 ${r.deleted.length}` : "",
+          r.newInR2.length ? `R2 新增未收录 ${r.newInR2.length}` : "",
+          r.retainedEmptyCourses.length ? `空发现课程 ${r.retainedEmptyCourses.length}（保留待核查）` : "",
+          r.newCourses.length ? `新课程目录 ${r.newCourses.length}` : "",
+        ].filter(Boolean).join("，");
+        publishStatus.textContent = `校对完成：${summary}。详情见控制台输出。`;
+        console.info("[校对清单] 移动待修：", r.moved);
+        console.info("[校对清单] R2 已缺失：", r.deleted);
+        console.info("[校对清单] R2 新增未收录：", r.newInR2);
+        console.info("[校对清单] 空发现课程：", r.retainedEmptyCourses);
+        console.info("[校对清单] 新课程目录：", r.newCourses);
+        if (r.moved.length || r.deleted.length) alert(`校对发现 ${r.moved.length} 个移动待修、${r.deleted.length} 个 R2 已缺失文件。点击「从 R2 重建课程树」可按 R2 真实结构修正（移动文件按新位置收录，缺失文件条目移除）。`);
+      } catch (error) {
+        publishStatus.textContent = error.message;
+      }
+    });
+
     document.querySelector("#sync-r2-all").addEventListener("click", async () => {
-      if (!confirm("按 R2 的 resources/学期/分类/课程 结构重建课程树？这会更新已有课程资源列表，并新增 R2 中出现的新课程。")) return;
+      if (!confirm("按 R2 的 resources/学期/分类/课程 结构真实重建课程树？
+
+· R2 中有文件的课程：文件列表整体按 R2 替换（旧位置/已删除条目不再保留），文件描述与板块备注保留
+· R2 中没有任何文件的课程：保留原清单并计入报告（防止路径不匹配误清）
+· R2 中出现的新课程会自动新增")) return;
       publishStatus.textContent = "正在从 R2 重建课程树...";
       try {
         const data = await api("/sync-r2-all", {
