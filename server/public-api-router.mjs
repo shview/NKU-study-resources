@@ -52,7 +52,7 @@ export function decodePathPart(value) {
   }
 }
 
-export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp, securityLog = null, phoneVerifier = null, webLoginTickets = null, wxacode = null, webLoginPagePath = "pages/login-confirm/index", wxacodeEnvVersion = "release" } = {}) {
+export function createPublicApiHandler({ service, mpAuthService = null, mpFavoritesService = null, serviceAuthStore = null, consumeServiceQuota = null, notify = null, readBody, clientIp, securityLog = null, phoneVerifier = null, webLoginTickets = null, wxacode = null, webLoginPagePath = "pages/login-confirm/index", wxacodeEnvVersion = "release", avatarService = null, avatarStore = null, readAvatarUpload = null } = {}) {
   if (!service || !readBody || !clientIp) throw new Error("Public API router dependencies are required.");
   async function requireService(req) {
     if (!serviceAuthStore) throw new PublicApiError(503, "服务间接口暂未开放。", "SERVICE_AUTH_NOT_CONFIGURED");
@@ -157,6 +157,24 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         mpAuthService.setVerifiedPhone(user.id, phone);
         securityLog?.record({ userId: user.id, action: "phone.verify", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
         data = { ok: true, phone_masked: String(phone).slice(0, 3) + "****" + String(phone).slice(-4) };
+      } else if (req.method === "POST" && url.pathname === "/api/v1/me/avatar") {
+        if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
+        const user = mpAuthService.requireUser(authorizationOf(req));
+        if (!avatarService || typeof readAvatarUpload !== "function") {
+          throw new PublicApiError(503, "头像上传暂未开放。", "AVATAR_UPLOAD_UNAVAILABLE");
+        }
+        const buffer = await readAvatarUpload(req);
+        try {
+          const result = await avatarService.upload({ userId: user.id, buffer });
+          securityLog?.record({ userId: user.id, action: "avatar.upload", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
+          data = { avatar_url: result.avatar_url };
+        } catch (error) {
+          if (error?.code) {
+            securityLog?.record({ userId: user.id, action: "avatar.upload", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "rejected", detail: error.code });
+            throw new PublicApiError(Number(error.statusCode) || 400, error.message, error.code);
+          }
+          throw error;
+        }
       } else if (req.method === "POST" && url.pathname === "/api/v1/me/profile") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const user = mpAuthService.requireUser(authorizationOf(req));
@@ -166,7 +184,21 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         } catch {
           throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
         }
+        // 头像归属校验：变更头像时仅允许绑定本站 avatars 资源且登记为本人已过审
+        const nextAvatar = body?.avatar_url;
+        let boundAvatarId = null;
+        if (nextAvatar !== undefined && nextAvatar !== user.avatar_url) {
+          if (String(nextAvatar).trim() !== "") {
+            const avatarId = avatarService?.idFromUrl ? avatarService.idFromUrl(nextAvatar) : null;
+            if (!avatarService || !avatarStore || !avatarId || !avatarStore.bindable({ userId: user.id, id: avatarId })) {
+              securityLog?.record({ userId: user.id, action: "avatar.bind", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "rejected" });
+              throw new PublicApiError(403, "只能使用本人上传且已通过审核的头像。", "AVATAR_NOT_OWNED");
+            }
+            boundAvatarId = avatarId;
+          }
+        }
         data = { user: mpAuthService.updateProfile(user, { nickname: body.nickname, avatarUrl: body.avatar_url }) };
+        if (boundAvatarId) avatarStore.markBound(boundAvatarId);
         securityLog?.record({ userId: user.id, action: "profile.update", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok", detail: `nickname=${String(body?.nickname || "").slice(0, 40)}` });
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/logout") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");

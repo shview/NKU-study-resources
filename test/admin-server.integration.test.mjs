@@ -360,13 +360,30 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal(meResponse.status, 200);
   assert.equal((await meResponse.json()).data.user.id, mpLoginBody.data.user.id);
 
+  // 部分更新语义：只发昵称时头像保持原值；头像变更仅允许本站已审核资源
   const profileResponse = await fetch(`http://127.0.0.1:${port}/api/v1/me/profile`, {
     method: "POST",
     headers: { "content-type": "application/json", ...mpAuth },
-    body: JSON.stringify({ nickname: "集成测试用户", avatar_url: "https://example.com/avatar.png" }),
+    body: JSON.stringify({ nickname: "集成测试用户" }),
   });
   assert.equal(profileResponse.status, 200);
-  assert.equal((await profileResponse.json()).data.user.nickname, "集成测试用户");
+  const profileBody = await profileResponse.json();
+  assert.equal(profileBody.data.user.nickname, "集成测试用户");
+  assert.equal(profileBody.data.user.avatar_url, "", "省略 avatar_url 必须保留原头像");
+  const foreignAvatar = await fetch(`http://127.0.0.1:${port}/api/v1/me/profile`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...mpAuth },
+    body: JSON.stringify({ avatar_url: "https://example.com/avatar.png" }),
+  });
+  assert.equal(foreignAvatar.status, 403, "任意外链头像必须拒绝");
+  assert.equal((await foreignAvatar.json()).code, "AVATAR_NOT_OWNED");
+  const nicknameKept = await (await fetch(`http://127.0.0.1:${port}/api/v1/me/profile`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...mpAuth },
+    body: JSON.stringify({ avatar_url: "" }),
+  })).json();
+  assert.equal(nicknameKept.data.user.nickname, "集成测试用户", "只改头像（含清空）不得清昵称");
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/me/avatar`, { method: "POST", headers: { "content-type": "multipart/form-data", ...mpAuth }, body: "x" })).status, 503, "测试环境未配置 R2，上传应 503 而非 500");
 
   const mpLogout = await fetch(`http://127.0.0.1:${port}/api/v1/auth/logout`, {
     method: "POST",
