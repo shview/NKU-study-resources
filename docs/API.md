@@ -52,6 +52,7 @@
 | `GET` | `/api/v1/auth/web-login/status` | 公开 | 网页轮询票据状态；confirmed 时一次性兑换 httpOnly 会话 |
 | `POST` | `/api/v1/auth/logout` | Bearer Token | 注销小程序登录令牌 |
 | `GET` | `/api/v1/me` | Bearer Token | 当前小程序用户信息 |
+| `POST` | `/api/v1/me/avatar` | Bearer Token、multipart、限流 | 上传用户头像（≤2MiB JPEG/PNG，重编码 256px JPEG 剥离元信息，微信同步图片审核通过后返回可绑定地址，不自动绑定资料；每人每日 5 次） |
 | `GET` | `/api/v1/me/favorites` | Bearer Token | 我的收藏课程列表（分页） |
 | `GET` | `/api/v1/me/reviews` | Bearer Token | 我提交的评价与审核状态（分页） |
 | `POST` | `/api/v1/favorites` | Bearer Token | 收藏课程（body：course_id） |
@@ -604,6 +605,16 @@ curl -sS https://nkustudy.top/review-api/submit \
 ```bash
 curl -sS https://nkustudy.top/feedback-api/feedback
 ```
+
+### `POST /api/v1/me/avatar`
+
+`multipart/form-data` 单文件字段 `file`，Bearer Token 鉴权。限制：JPEG/PNG、≤2 MiB（2,097,152 字节）、解码尺寸 ≤4096×4096。服务端重编码为 256×256 居中裁剪 JPEG（剥离 EXIF 等全部元信息）后送微信同步图片审核（`img_sec_check`），通过后存入 R2 `avatars/` 前缀并登记归属，返回版本化公开地址（Cloudflare CDN 直链，每次上传新 ID，不缓存旧图）。**上传不自动绑定资料**，需另行 `POST /me/profile` 传回 `avatar_url` 绑定（仅允许本人已过审资源，否则 403 `AVATAR_NOT_OWNED`）。限流每用户每日 5 次。
+
+```json
+{ "code": 0, "data": { "avatar_url": "https://resources.nkustudy.top/avatars/<opaque-id>.jpg" } }
+```
+
+错误码：400 `AVATAR_INVALID_IMAGE`（缺文件/解码失败）、403 `AVATAR_CONTENT_REJECTED`（审核拒绝）、403 `AVATAR_NOT_OWNED`（绑定非本人资源）、413 `AVATAR_TOO_LARGE`、429 `RATE_LIMITED`、503 `AVATAR_UPLOAD_UNAVAILABLE`（存储/审核暂不可用）。上传成功但未绑定的资源 24 小时后自动回收；旧头像在新头像绑定成功前不删除。
 
 ### `POST /api/v1/auth/web-login/start`
 

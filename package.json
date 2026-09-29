@@ -32,6 +32,7 @@
     "busboy": "^1.6.0",
     "jszip": "^3.10.1",
     "markdown-it": "^14.3.0",
+    "sharp": "^0.34.5",
     "typescript": "^5.9.3",
     "vditor": "^3.11.2"
   },

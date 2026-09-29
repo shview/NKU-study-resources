@@ -58,6 +58,10 @@ import { DEFAULT_PRIVACY_CONTENT } from "./default-privacy.mjs";
 import { createWechatPhoneVerifier, maskPhone } from "./wechat-phone.mjs";
 import { createWxacodeService } from "./wxacode-service.mjs";
 import { createWebLoginService } from "./web-login-service.mjs";
+import { AvatarStore } from "./avatar-store.mjs";
+import { createAvatarService, AVATAR_MAX_BYTES } from "./avatar-service.mjs";
+import { createWechatImageModeration } from "./wechat-image-moderation.mjs";
+import sharp from "sharp";
 import { StaticReleasePublisher } from "./static-release-publisher.mjs";
 
 const root = projectRoot;
@@ -354,11 +358,77 @@ const consumeServiceQuota = (caller) => {
   return result.allowed === true;
 };
 const webLoginTickets = createWebLoginService();
+const avatarStore = new AvatarStore({ dbPath: runtime.stateDbPath });
+const wechatImageModeration = createWechatImageModeration({ appid: process.env.WECHAT_APPID || "", secret: process.env.WECHAT_APPSECRET || "" });
+const avatarPublicRoot = `${String(process.env.PUBLIC_RESOURCE_ORIGIN || "https://resources.nkustudy.top").replace(/\/+$/, "")}/avatars/`;
+let avatarService = null;
+if (r2Client && r2Bucket && wechatImageModeration.configured) {
+  avatarService = createAvatarService({
+    store: avatarStore,
+    moderation: wechatImageModeration,
+    putObject: async (key, buffer) => {
+      await r2Client.send(new PutObjectCommand({ Bucket: r2Bucket, Key: key, Body: buffer, ContentType: "image/jpeg", CacheControl: "public, max-age=31536000, immutable" }));
+    },
+    deleteObject: async (key) => {
+      await r2Client.send(new DeleteObjectCommand({ Bucket: r2Bucket, Key: key }));
+    },
+    publicRoot: avatarPublicRoot,
+    rateLimiter,
+    sharpImpl: sharp,
+  });
+}
+
+/** 公开端头像上传的 multipart 读取：单文件字段 file，2 MiB 上限。 */
+async function readAvatarUpload(req) {
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (code, message, statusCode) => {
+      if (settled) return;
+      settled = true;
+      const error = new Error(message);
+      error.code = code;
+      error.statusCode = statusCode;
+      req.removeAllListeners("data");
+      req.removeAllListeners("end");
+      req.on("data", () => {});
+      reject(error);
+    };
+    try {
+      const busboy = Busboy({ headers: req.headers, limits: { files: 1, fileSize: AVATAR_MAX_BYTES + 1, parts: 3 } });
+      let buffer = null;
+      busboy.on("file", (name, stream) => {
+        if (name !== "file") { stream.resume(); return; }
+        const chunks = [];
+        let size = 0;
+        let truncated = false;
+        stream.on("limit", () => { truncated = true; });
+        stream.on("data", (chunk) => { chunks.push(chunk); size += chunk.length; });
+        stream.on("end", () => {
+          if (settled) return;
+          if (truncated || size > AVATAR_MAX_BYTES) { fail("AVATAR_TOO_LARGE", "图片不能超过 2 MiB。", 413); return; }
+          if (size === 0) { fail("AVATAR_INVALID_IMAGE", "缺少文件。", 400); return; }
+          settled = true;
+          buffer = Buffer.concat(chunks, size);
+        });
+      });
+      busboy.on("error", () => fail("AVATAR_INVALID_IMAGE", "请求格式错误。", 400));
+      busboy.on("finish", () => {
+        if (settled && buffer) resolve(buffer);
+        else if (!settled) fail("AVATAR_INVALID_IMAGE", "缺少文件字段 file。", 400);
+      });
+      busboy.on("close", () => { if (settled && buffer) resolve(buffer); });
+      req.pipe(busboy);
+    } catch {
+      fail("AVATAR_INVALID_IMAGE", "请求格式错误。", 400);
+    }
+  });
+}
 const wxacodeService = createWxacodeService({ appid: process.env.WECHAT_APPID || "", secret: process.env.WECHAT_APPSECRET || "" });
 const handlePublicApi = createPublicApiHandler({
   securityLog: securityLogStore,
   phoneVerifier: wechatPhoneVerifier, service: publicApiService, mpAuthService, mpFavoritesService, serviceAuthStore, consumeServiceQuota, notify: notifyModerators, readBody: readPublicBody, clientIp,
-  webLoginTickets, wxacode: wxacodeService, webLoginPagePath: "pages/login-confirm/index", wxacodeEnvVersion: process.env.WXACODE_ENV_VERSION || "release" });
+  webLoginTickets, wxacode: wxacodeService, webLoginPagePath: "pages/login-confirm/index", wxacodeEnvVersion: process.env.WXACODE_ENV_VERSION || "release",
+  avatarService, avatarStore, readAvatarUpload: readAvatarUpload });
 
 function json(res, status, data) {
   if (res.writableEnded || res.destroyed) return;
