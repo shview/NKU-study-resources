@@ -2,6 +2,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
+import { accountUserDto as publicUser } from "./user-identity.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 
 const DEFAULT_CODE2SESSION_URL = "https://api.weixin.qq.com/sns/jscode2session";
@@ -37,19 +38,6 @@ function maskOpenid(openid) {
   const value = String(openid || "");
   if (value.length <= 8) return `${value.slice(0, 2)}****`;
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
-}
-
-function publicUser(row) {
-  return {
-    id: row.id,
-    nickname: row.nickname || "",
-    avatar_url: row.avatar_url || "",
-    email: row.email || "",
-    has_web_password: Boolean(row.web_password_hash),
-    phone_verified: Boolean(row.phone_verified_at),
-    created_at: row.created_at,
-    last_login_at: row.last_login_at || null,
-  };
 }
 
 const WEB_PASSWORD_MIN = 8;
@@ -125,7 +113,12 @@ export class MpAuthService {
       );
       CREATE INDEX IF NOT EXISTS mp_auth_tokens_user_idx ON mp_auth_tokens(user_id);
       CREATE INDEX IF NOT EXISTS mp_auth_tokens_expiry_idx ON mp_auth_tokens(expires_at);
+      CREATE TABLE IF NOT EXISTS mp_phone_code_uses (
+        code_hash TEXT PRIMARY KEY,
+        used_at INTEGER NOT NULL
+      );
     `);
+    this.#migrateNullableOpenid();
     const userColumns = this.db.pragma("table_info(mp_users)").map((column) => column.name);
     if (!userColumns.includes("blocked")) this.db.exec("ALTER TABLE mp_users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0");
     if (!userColumns.includes("web_password_hash")) this.db.exec("ALTER TABLE mp_users ADD COLUMN web_password_hash TEXT");
@@ -154,6 +147,42 @@ export class MpAuthService {
     this.#secureDatabaseFiles();
   }
 
+  #migrateNullableOpenid() {
+    if (!this.db.pragma("table_info(mp_users)").find((column) => column.name === "openid")?.notnull) return;
+    // Preserve the original column definitions, explicit indexes/triggers and IDs.
+    // A SQLite-consistent snapshot includes WAL data and is available for offline rollback.
+    const backup = `${this.dbPath}.before-openid-nullable-${randomBytes(6).toString("hex")}.sqlite`;
+    fs.writeFileSync(backup, "", { flag: "wx", mode: 0o600 });
+    this.db.prepare("VACUUM INTO ?").run(backup);
+    const original = this.db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mp_users'").get().sql;
+    const nullable = original.replace(/(\bopenid\s+TEXT\s+)NOT\s+NULL\b/i, "$1");
+    if (nullable === original) throw new Error("Unsupported legacy openid constraint; migration requires review.");
+    const schema = nullable.replace(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?["`\[]?mp_users["`\]]?/i, 'CREATE TABLE mp_users_nullable');
+    const dependents = this.db.prepare("SELECT sql FROM sqlite_master WHERE tbl_name = 'mp_users' AND type IN ('index', 'trigger') AND sql IS NOT NULL").all();
+    const sequence = this.db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'mp_users'").get()?.seq || 0;
+    const foreignKeys = this.db.pragma("foreign_keys", { simple: true });
+    this.db.pragma("foreign_keys = OFF");
+    try {
+      this.db.transaction(() => {
+        this.db.exec(schema);
+        this.db.exec("INSERT INTO mp_users_nullable SELECT * FROM mp_users; DROP TABLE mp_users; ALTER TABLE mp_users_nullable RENAME TO mp_users;");
+        for (const { sql } of dependents) this.db.exec(sql);
+        this.db.prepare("UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'mp_users'").run(sequence);
+        if (this.db.pragma("foreign_key_check").length) throw new Error("Foreign key validation failed after identity migration.");
+      })();
+    } finally {
+      this.db.pragma(`foreign_keys = ${foreignKeys ? "ON" : "OFF"}`);
+    }
+  }
+
+  claimPhoneCode(code) {
+    const now = this.now();
+    return this.db.transaction(() => {
+      this.db.prepare("DELETE FROM mp_phone_code_uses WHERE used_at < ?").run(now - 24 * 3600 * 1000);
+      return this.db.prepare("INSERT OR IGNORE INTO mp_phone_code_uses(code_hash, used_at) VALUES (?, ?)").run(tokenHash(code), now).changes === 1;
+    })();
+  }
+
   get configured() {
     return Boolean(this.appid && this.secret);
   }
@@ -169,13 +198,15 @@ export class MpAuthService {
     try {
       const response = await this.fetchImpl(`${this.code2SessionUrl}?${params.toString()}`, {
         signal: AbortSignal.timeout(10_000),
+        redirect: "error",
         headers: { accept: "application/json" },
       });
+      if (response.ok === false) throw new Error("WeChat HTTP failure");
       payload = await response.json();
     } catch {
       throw new PublicApiError(502, "微信登录服务暂时不可用，请稍后重试。", "MP_AUTH_UPSTREAM");
     }
-    if (!payload || typeof payload !== "object" || !payload.openid) {
+    if (!payload || typeof payload.openid !== "string" || !payload.openid || Number(payload.errcode || 0) !== 0) {
       const errcode = Number(payload?.errcode || 0);
       if (errcode === 40029 || errcode === 40163) {
         throw new PublicApiError(401, "登录凭证无效或已过期，请重新进入小程序。", "AUTH_INVALID_CODE");
@@ -202,7 +233,7 @@ export class MpAuthService {
     const timestamp = positiveSafeInteger(now, "now");
     const existingRow = this.selectUserByOpenid.get(openid);
     if (existingRow?.blocked) {
-      throw new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED");
+      throw Object.assign(new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED"), { userId: existingRow.id });
     }
     if (!existingRow) {
       const created = this.db.transaction(() => {
@@ -211,7 +242,7 @@ export class MpAuthService {
         this.markLogin.run(timestamp, row.id);
         return row;
       })();
-      return this.#issueToken(created, timestamp);
+      return { ...this.#issueToken(this.selectUserById.get(created.id), timestamp), registered: true };
     }
     const user = this.db.transaction(() => {
       this.markLogin.run(timestamp, existingRow.id);
@@ -269,13 +300,13 @@ export class MpAuthService {
     if (!name || !password) throw new PublicApiError(400, "请填写昵称和密码。", "INVALID_CREDENTIALS");
     const row = this.selectByNickname.get(name);
     if (!row || !row.web_password_hash) {
-      throw new PublicApiError(401, "昵称或密码不正确。", "AUTH_INVALID_CREDENTIALS");
+      throw Object.assign(new PublicApiError(401, "昵称或密码不正确。", "AUTH_INVALID_CREDENTIALS"), { userId: row?.id });
     }
     if (!verifyWebPassword(String(password ?? ""), row.web_password_hash)) {
-      throw new PublicApiError(401, "昵称或密码不正确。", "AUTH_INVALID_CREDENTIALS");
+      throw Object.assign(new PublicApiError(401, "昵称或密码不正确。", "AUTH_INVALID_CREDENTIALS"), { userId: row?.id });
     }
     if (row.blocked) {
-      throw new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED");
+      throw Object.assign(new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED"), { userId: row.id });
     }
     const timestamp = positiveSafeInteger(now, "now");
     this.markLogin.run(timestamp, row.id);
@@ -324,6 +355,8 @@ export class MpAuthService {
   setVerifiedPhone(userId, phone, { now = this.now() } = {}) {
     const account = this.selectUserById.get(Number(userId));
     if (!account) throw new PublicApiError(404, "账号不存在。", "USER_NOT_FOUND");
+    if (account.blocked) throw Object.assign(new PublicApiError(403, "该账号已被封禁。", "AUTH_USER_BLOCKED"), { userId: account.id });
+    if (typeof phone !== "string" || !/^\+?[0-9]{7,15}$/.test(phone)) throw new PublicApiError(502, "手机号验证结果无效。", "PHONE_VERIFY_FAILED");
     this.db.prepare("UPDATE mp_users SET phone = ?, phone_verified_at = ? WHERE id = ?").run(String(phone).slice(0, 20), Number(now), account.id);
     return this.selectUserById.get(account.id);
   }
@@ -397,6 +430,8 @@ export class MpAuthService {
   requireUser(authorizationHeader) {
     const user = this.verifyToken(authorizationHeader);
     if (!user) {
+      const identity = this.introspectToken(authorizationHeader);
+      if (identity.reason === "blocked") throw Object.assign(new PublicApiError(403, "该账号已被封禁。", "AUTH_USER_BLOCKED"), { userId: identity.user_id });
       throw new PublicApiError(401, "请先登录后再操作。", "AUTH_REQUIRED");
     }
     return user;

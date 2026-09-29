@@ -139,6 +139,7 @@ import Layout from "../layouts/Layout.astro";
             <div>
               <h2 id="me-nickname">${esc(user.nickname)}</h2>
               <p class="muted" style="margin:4px 0 0;font-size:13px;">${esc(user.email || "未设置邮箱")}</p>
+              <p class="muted" style="margin:6px 0 0;font-size:13px;">${user.phone_verified ? "手机号已认证，可提交公开内容。" : "手机号尚未认证，暂不能提交公开内容。认证需要微信小程序手机号授权；网页暂未提供授权或短信入口，接入问题请联系站点管理员。"}</p>
             </div>
             <div class="header-actions">
               <button type="button" class="button secondary" id="logout-btn">退出登录</button>

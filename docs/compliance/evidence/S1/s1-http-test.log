@@ -1,0 +1,22 @@
+TAP version 13
+# Subtest: S1 real HTTP identity acceptance: legacy openid nullable
+ok 1 - S1 real HTTP identity acceptance: legacy openid nullable
+  ---
+  duration_ms: 5338.791709
+  type: 'test'
+  ...
+# Subtest: S1 real HTTP identity acceptance: legacy openid NOT NULL
+ok 2 - S1 real HTTP identity acceptance: legacy openid NOT NULL
+  ---
+  duration_ms: 8057.791334
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13506.650833

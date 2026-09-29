@@ -50,6 +50,7 @@ test("public router exposes exactly the documented route set and no management r
       service: serviceFixture(),
       mpAuthService: {
         verifyToken: (auth) => (/^Bearer ok/.test(String(auth || "")) ? { id: 9, nickname: "u" } : null),
+        requireUser: () => ({ id: 9, nickname: "u" }),
         isPhoneVerified: () => true,
       },
       readBody: async () => ({}),

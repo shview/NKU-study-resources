@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-29",
+  "head": "d219f37f1df5f2e43c640134e3a3697e80b85312",
+  "syntheticOnly": true,
+  "sourceHashMatches": 9,
+  "evidenceHashMatches": 13,
+  "isolatedTrackedFilesCompared": 129,
+  "isolatedTrackedFileMismatches": 0,
+  "test": {
+    "passed": 213,
+    "failed": 0,
+    "skipped": 0
+  },
+  "httpAssertions": {
+    "nullable": 111,
+    "notNull": 111
+  },
+  "buildPages": 13,
+  "apiRoutes": 122,
+  "typecheck": {
+    "baselineErrors": 2022,
+    "currentErrors": 2022,
+    "changedErrorGroups": []
+  },
+  "smoke": "FAIL: Guide list response contract failed",
+  "evidenceHashes": {
+    "build-fixtures.log": "cba40e3f59a5893bc9c85bcd67ad2281669a01057ee58435f629476c581623f7",
+    "check.log": "97f0e1d824aa25e0984bd32e095791aa7921f72c8f993c98eb0881fe628b5df0",
+    "http-not-null.json": "854ae49642d35e5a54925399db4b662cb146083ab28cd77efa433a9d38d92c55",
+    "http-nullable.json": "8032892937b3ef7bb0052b8087c88ba3002e59510e644a9dae32fe9bff352a9d",
+    "npm-test.log": "87027b9d71a26b7bc9cfcd54b0418eeae5c8bc59cb0587740c304705e01aeb63",
+    "smoke.log": "11522b7df0329bf204fcb566dabbd2d732ee13cb3d5f784cd4771c282b732999"
+  }
+}

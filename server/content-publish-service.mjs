@@ -130,7 +130,7 @@ export class ContentPublishService {
     return { data, revision: manifestRevision(data) };
   }
 
-  publish(filePath, incoming, { expectedRevision, normalize = (value) => value } = {}) {
+  publish(filePath, incoming, { expectedRevision, normalize = (value) => value, preserve = (next) => next } = {}) {
     return this.mutationQueue.enqueue(async () => {
       this.journal ||= new ContentPublishJournal({ store: this.store, dataDir: path.dirname(filePath) });
       let nextRevision;
@@ -149,7 +149,7 @@ export class ContentPublishService {
           if (expectedRevision !== currentRevision) {
             throw new ManifestConflictError("Content changed after it was loaded; no changes were written. Refresh and retry.", currentRevision);
           }
-          const next = normalize(structuredClone(incoming));
+          const next = preserve(normalize(structuredClone(incoming)), current);
           nextRevision = manifestRevision(next);
           journalRecord = await this.journal.prepare(filePath, persisted, next, { requiresDeployment: true });
           return next;

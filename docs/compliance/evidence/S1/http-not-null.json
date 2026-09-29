@@ -1,0 +1,1297 @@
+{
+  "schema": "NOT NULL",
+  "syntheticOnly": true,
+  "requests": [
+    {
+      "method": "GET",
+      "route": "/api/v1/me",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/courses",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "public, max-age=60, stale-while-revalidate=300"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-register",
+      "expected": 400,
+      "actual": 400,
+      "code": "INVALID_PASSWORD",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-register",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-register",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": "PHONE_VERIFY_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 403,
+      "actual": 403,
+      "code": "PHONE_VERIFY_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": "PHONE_VERIFY_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": "PHONE_VERIFY_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 403,
+      "actual": 403,
+      "code": "PHONE_VERIFY_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": "PHONE_VERIFY_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-register",
+      "expected": 409,
+      "actual": 409,
+      "code": "NICKNAME_TAKEN",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 400,
+      "actual": 400,
+      "code": "INVALID_JSON",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 400,
+      "actual": 400,
+      "code": "INVALID_PHONE_CODE",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 400,
+      "actual": 400,
+      "code": "INVALID_PHONE_CODE",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 502,
+      "actual": 502,
+      "code": "PHONE_VERIFY_FAILED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 502,
+      "actual": 502,
+      "code": "PHONE_VERIFY_FAILED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 502,
+      "actual": 502,
+      "code": "PHONE_VERIFY_FAILED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 502,
+      "actual": 502,
+      "code": "PHONE_VERIFY_FAILED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 409,
+      "actual": 409,
+      "code": "PHONE_CODE_REPLAYED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/favorites",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/feedback",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/feedback",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/feedback",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/reviews",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/reviews",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/reviews",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/favorites",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/favorites",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me/favorites",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/review-api/reviews",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/review-groups",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "public, max-age=60, stale-while-revalidate=300"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/review-groups",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/review-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/reviews",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/wechat",
+      "expected": 400,
+      "actual": 400,
+      "code": "AUTH_INVALID_CODE",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/wechat",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CODE",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/wechat",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/wechat",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CODE",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/wechat",
+      "expected": 403,
+      "actual": 403,
+      "code": "AUTH_USER_BLOCKED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login/start",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login/confirm",
+      "expected": 403,
+      "actual": 403,
+      "code": "PHONE_VERIFY_REQUIRED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login/confirm",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/auth/web-login/status",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/auth/web-login/status",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/auth/web-login/status",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 403,
+      "actual": 403,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 400,
+      "actual": 400,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/feedback-api/submit",
+      "expected": 429,
+      "actual": 429,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/admin-api/login",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/admin-api/feedback",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/admin-api/feedback",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/feedback-api/feedback",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/admin-api/feedback",
+      "expected": 401,
+      "actual": 401,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 401,
+      "actual": 401,
+      "code": "AUTH_INVALID_CREDENTIALS",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/web-login",
+      "expected": 429,
+      "actual": 429,
+      "code": "AUTH_RATE_LIMITED",
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me",
+      "expected": 200,
+      "actual": 200,
+      "code": 0,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 409,
+      "actual": 409,
+      "code": "PHONE_CODE_REPLAYED",
+      "cache": "no-store"
+    },
+    {
+      "method": "GET",
+      "route": "/feedback-api/feedback",
+      "expected": 200,
+      "actual": 200,
+      "code": null,
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/phone-verify",
+      "expected": 503,
+      "actual": 503,
+      "code": "PHONE_VERIFY_NOT_CONFIGURED",
+      "cache": "no-store"
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/auth/wechat",
+      "expected": 503,
+      "actual": 503,
+      "code": "MP_AUTH_NOT_CONFIGURED",
+      "cache": "no-store"
+    }
+  ],
+  "summary": {
+    "usersRetained": true,
+    "historicalUnverified": true,
+    "backupChecked": true,
+    "restartChecked": true,
+    "phoneCalls": 7,
+    "privateComplaints": 5,
+    "identityLogCount": 49
+  },
+  "identityEvents": [
+    {
+      "action": "auth.register",
+      "result": "rejected",
+      "detail": "status=400 code=INVALID_PASSWORD",
+      "user_id": null,
+      "ip": "198.51.100.6",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.register",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 101,
+      "ip": "198.51.100.7",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.register",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 102,
+      "ip": "198.51.100.8",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.register",
+      "result": "rejected",
+      "detail": "status=409 code=NICKNAME_TAKEN",
+      "user_id": null,
+      "ip": "198.51.100.15",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": 101,
+      "ip": "198.51.100.16",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "198.51.100.17",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=400 code=INVALID_JSON",
+      "user_id": null,
+      "ip": "198.51.100.18",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 101,
+      "ip": "198.51.100.19",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.session_restore",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 101,
+      "ip": "198.51.100.20",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_REQUIRED",
+      "user_id": null,
+      "ip": "198.51.100.21",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "rejected",
+      "detail": "status=400 code=INVALID_PHONE_CODE",
+      "user_id": 101,
+      "ip": "198.51.100.22",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "rejected",
+      "detail": "status=400 code=INVALID_PHONE_CODE",
+      "user_id": 101,
+      "ip": "198.51.100.23",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "error",
+      "detail": "status=502 code=PHONE_VERIFY_FAILED",
+      "user_id": 101,
+      "ip": "198.51.100.24",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "error",
+      "detail": "status=502 code=PHONE_VERIFY_FAILED",
+      "user_id": 101,
+      "ip": "198.51.100.25",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "error",
+      "detail": "status=502 code=PHONE_VERIFY_FAILED",
+      "user_id": 101,
+      "ip": "198.51.100.26",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "error",
+      "detail": "status=502 code=PHONE_VERIFY_FAILED",
+      "user_id": 101,
+      "ip": "198.51.100.27",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 101,
+      "ip": "198.51.100.28",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "rejected",
+      "detail": "status=409 code=PHONE_CODE_REPLAYED",
+      "user_id": 102,
+      "ip": "198.51.100.29",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "rejected",
+      "detail": "status=403 code=AUTH_USER_BLOCKED",
+      "user_id": 101,
+      "ip": "198.51.100.67",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=403 code=AUTH_USER_BLOCKED",
+      "user_id": 101,
+      "ip": "198.51.100.68",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "rejected",
+      "detail": "status=403 code=AUTH_USER_BLOCKED",
+      "user_id": 102,
+      "ip": "198.51.100.69",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 102,
+      "ip": "198.51.100.70",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_REQUIRED",
+      "user_id": 102,
+      "ip": "198.51.100.71",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.wechat_login",
+      "result": "rejected",
+      "detail": "status=400 code=AUTH_INVALID_CODE",
+      "user_id": null,
+      "ip": "198.51.100.72",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.wechat_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CODE",
+      "user_id": null,
+      "ip": "198.51.100.73",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.wechat_register",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 103,
+      "ip": "198.51.100.74",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.wechat_login",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 103,
+      "ip": "198.51.100.74",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.wechat_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CODE",
+      "user_id": null,
+      "ip": "198.51.100.75",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.wechat_login",
+      "result": "rejected",
+      "detail": "status=403 code=AUTH_USER_BLOCKED",
+      "user_id": 8,
+      "ip": "198.51.100.76",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "weblogin.start",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": null,
+      "ip": "198.51.100.77",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "weblogin.confirm",
+      "result": "rejected",
+      "detail": "status=403 code=PHONE_VERIFY_REQUIRED",
+      "user_id": 102,
+      "ip": "198.51.100.78",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "weblogin.confirm",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 101,
+      "ip": "198.51.100.79",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "weblogin.granted",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": 101,
+      "ip": "198.51.100.80",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "weblogin.status",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": null,
+      "ip": "198.51.100.81",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "weblogin.status",
+      "result": "ok",
+      "detail": "status=200 code=OK",
+      "user_id": null,
+      "ip": "198.51.100.82",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=401 code=AUTH_INVALID_CREDENTIALS",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.web_login",
+      "result": "rejected",
+      "detail": "status=429 code=AUTH_RATE_LIMITED",
+      "user_id": null,
+      "ip": "203.0.113.90",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "rejected",
+      "detail": "status=409 code=PHONE_CODE_REPLAYED",
+      "user_id": 102,
+      "ip": "198.51.100.93",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "phone.verify",
+      "result": "error",
+      "detail": "status=503 code=PHONE_VERIFY_NOT_CONFIGURED",
+      "user_id": 102,
+      "ip": "198.51.100.95",
+      "user_agent": "S1-synthetic-acceptance"
+    },
+    {
+      "action": "auth.wechat_login",
+      "result": "error",
+      "detail": "status=503 code=MP_AUTH_NOT_CONFIGURED",
+      "user_id": null,
+      "ip": "198.51.100.96",
+      "user_agent": "S1-synthetic-acceptance"
+    }
+  ]
+}
