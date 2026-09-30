@@ -1,0 +1,5 @@
+
+> nkustudy@0.1.0 check:content
+> node scripts/validate-manifest.mjs
+
+Content OK: 1 courses, 0 files.

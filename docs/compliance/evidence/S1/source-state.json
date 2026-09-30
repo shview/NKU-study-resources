@@ -1,0 +1,39 @@
+{
+  "date": "2026-09-29",
+  "branch": "codex/fresh-start-20260928",
+  "baseHead": "d219f37f1df5f2e43c640134e3a3697e80b85312",
+  "committed": false,
+  "syntheticOnly": true,
+  "runtime": {
+    "node": "22.23.2",
+    "npm": "10.9.8",
+    "astro": "7.2.2",
+    "typescript": "5.9.3",
+    "better-sqlite3": "12.11.1"
+  },
+  "sourceFiles": {
+    "server/user-identity.mjs": "72d1beb14d3f6fddf90d67d47dbe8e2a6c894549c6c79af3a084d83fdcf062c2",
+    "server/admin-server.mjs": "e3c04bc62618520b57739362f6f307070362cbb270a4ada1339dbca512cf4519",
+    "server/content-publish-service.mjs": "1a3e0ffea6281602069cdf80115727120f967acc89e9f3015c1dc48c7bbb0930",
+    "server/mp-auth-service.mjs": "c757ac397ebac9baca6f24842e0d4b9a6afce21ec1addc28abeef149193a241d",
+    "server/public-api-router.mjs": "734b8492f63acaa94e2dc9ef6bae7be1fd4382d6f3997e73b6d4227c8d9d269c",
+    "server/wechat-phone.mjs": "fb2398448908bf22fddd3f46d66ba2115ecef1dbe4a4b2870a0188ec8dec9938",
+    "src/pages/me.astro": "06646f43232af8faaa687fc585b73f5d6096e7ebfe6e5d014d9cc46e38d1401c",
+    "test/public-api-router.test.mjs": "929cd73a0359324dfccc0a3c012cbf997baa554fb7f7337f45efcaee16bbf5f7",
+    "test/s1-identity.integration.test.mjs": "ec99521c0fda5a5b517498c717196a8f5047132485e5a725190742b1773f9dd5"
+  },
+  "evidence": {
+    "api-docs.log": "4c555cf671de6161cb84490b3328db0d02773daec28664017dbf755ee40c2fe5",
+    "build-fixtures.log": "39a728d5c32d9eb6eaeb7b326cf25a85e2e2c861112470a0de893d23c6e0a331",
+    "check-comparison.json": "628979dd6fad3ef6ee2e3418f6cdf7b84480fa1fc13e1b1e08ca173afc798f8a",
+    "check.log": "bc3cb5e23620d04b02f5b3a124e882502b093c42416bbe836024cbb0cb2feb5b",
+    "content.log": "fa77f1ae31b9c88c98cc18924aad2c6d9d696052253e44496d4c89b991500e62",
+    "encoding.log": "a11ad5dd793939ba53b6bcbc47589c197a727633543953b3b9dfcfa995d64f1d",
+    "fixtures.log": "ef818d1c731feb9e27e888d0a82cd794023241974898ddf921bf0c38f6d872d0",
+    "http-not-null.json": "854ae49642d35e5a54925399db4b662cb146083ab28cd77efa433a9d38d92c55",
+    "http-nullable.json": "3358700b9714e7d4e27d0a114dd74cc7c2840663042736c1465c62c999c93c9b",
+    "npm-test.log": "338d149234b123185ca56360cdc1e4fc70d8edec53baa6d7e414e87a952b9b70",
+    "s1-http-test.log": "7e8ecb981c82650e9801916313a395d20abbfc15ac46a2984b9dd564c8fadddb",
+    "smoke.log": "11522b7df0329bf204fcb566dabbd2d732ee13cb3d5f784cd4771c282b732999"
+  }
+}

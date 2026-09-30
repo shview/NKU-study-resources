@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 
 /**
  * 微信手机号验证（企业小程序 getPhoneNumber → code 换手机号）：
@@ -20,11 +19,13 @@ export function createWechatPhoneVerifier({ appid, secret, fetchImpl = fetch, no
     pendingToken = (async () => {
       const response = await fetchImpl(`${apiBase}/cgi-bin/stable_token`, {
         method: "POST",
+        signal: AbortSignal.timeout(10_000),
+        redirect: "error",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ grant_type: "client_credential", appid, secret, force_refresh: false }),
       });
       const data = await response.json();
-      if (!data?.access_token) {
+      if (response.ok === false || !data?.access_token) {
         const error = new Error(`WX_TOKEN_FAILED:${data?.errcode || "UNKNOWN"}`);
         error.detail = data?.errmsg || "";
         throw error;
@@ -45,12 +46,14 @@ export function createWechatPhoneVerifier({ appid, secret, fetchImpl = fetch, no
       const token = await accessToken();
       const response = await fetchImpl(`${apiBase}/wxa/business/getuserphonenumber?access_token=${token}`, {
         method: "POST",
+        signal: AbortSignal.timeout(10_000),
+        redirect: "error",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: String(code || "") }),
       });
       const data = await response.json();
       const phone = data?.phone_info?.phoneNumber;
-      if (Number(data?.errcode) === 0 && phone) return phone;
+      if (response.ok !== false && Number(data?.errcode) === 0 && typeof phone === "string" && /^\+?[0-9]{7,15}$/.test(phone) && (!data.phone_info.watermark?.appid || data.phone_info.watermark.appid === appid)) return phone;
       const error = new Error(`WX_PHONE_FAILED:${data?.errcode || "UNKNOWN"}`);
       error.detail = data?.errmsg || "";
       throw error;

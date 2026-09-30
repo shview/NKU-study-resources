@@ -1,0 +1,7 @@
+{
+  "baselineErrors": 2022,
+  "currentErrors": 2022,
+  "newDiagnostics": [],
+  "removedDiagnostics": [],
+  "comparison": "file + TS code + message multiplicity; line shifts ignored"
+}

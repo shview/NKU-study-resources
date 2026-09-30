@@ -1,0 +1,35 @@
+
+> nkustudy@0.1.0 build:fixtures
+> node scripts/build-with-fixtures.mjs
+
+18:37:11 [vite] Re-optimizing dependencies because vite config has changed
+18:37:11 [types] Generated 425ms
+18:37:11 [build] output: "static"
+18:37:11 [build] mode: "static"
+18:37:11 [build] directory: /private/tmp/nku-s1-validation/dist-fixture/
+18:37:11 [build] Collecting build info...
+18:37:11 [build] ✓ Completed in 550ms.
+18:37:11 [build] Building static entrypoints...
+18:37:12 [vite] ✓ built in 686ms
+18:37:12 [vite] ✓ built in 447ms
+18:37:12 [build] Rearranging server assets...
+
+ generating static routes 
+18:37:13   ├─ /about/index.html (+48ms) 
+18:37:13   ├─ /admin/index.html (+10ms) 
+18:37:13   ├─ /courses/示例课程/index.html (+16ms) 
+18:37:13   ├─ /courses/index.html (+8ms) 
+18:37:13   ├─ /donate/index.html (+11ms) 
+18:37:13   ├─ /feedback/index.html (+15ms) 
+18:37:13   ├─ /friends/index.html (+8ms) 
+18:37:13   ├─ /me/index.html (+7ms) 
+18:37:13   ├─ /participate/index.html (+17ms) 
+18:37:13   ├─ /privacy/index.html (+11ms) 
+18:37:13   ├─ /reviews/detail/index.html (+7ms) 
+18:37:13   ├─ /reviews/index.html (+10ms) 
+18:37:13   ├─ /index.html (+8ms) 
+18:37:13 ✓ Completed in 241ms.
+
+18:37:13 [build] ✓ Completed in 1.48s.
+18:37:13 [build] 13 page(s) built in 2.03s
+18:37:13 [build] Complete!

@@ -1,0 +1,5 @@
+
+> nkustudy@0.1.0 check:api-docs
+> node scripts/check-api-docs.mjs
+
+API documentation route registry matches 122 registered method/path pairs.

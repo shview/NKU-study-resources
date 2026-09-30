@@ -1,4 +1,5 @@
-﻿import { createCipheriv, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
+﻿import { authorizationOf, requirePhoneVerifiedUser } from "./user-identity.mjs";
+import { createCipheriv, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { PassThrough } from "node:stream";
@@ -1025,21 +1026,16 @@ function requirePermission(req, account, permission, res) {
   return false;
 }
 
-/** 公安合规门禁：公开 UGC（评价/反馈/举报）必须已登录且完成手机号验证。 */
+/** Public contributions share the same server-side identity boundary as v1. */
 function requirePhoneVerifiedUgcUser(req, res, ip) {
-  const authUser = mpAuthService ? mpAuthService.verifyToken(req.headers.authorization) : null;
-  if (!mpAuthService || !authUser) {
-    json(res, 401, { ok: false, error: "发布内容请先登录。", code: "AUTH_REQUIRED" });
+  try { return requirePhoneVerifiedUser(mpAuthService, req); }
+  catch (error) {
+    if (!(error instanceof PublicApiError)) throw error;
+    securityLogStore.record({ userId: error.userId, action: error.code === "PHONE_VERIFY_REQUIRED" ? "ugc.blocked_no_phone" : "ugc.rejected", path: new URL(req.url, adminOrigin).pathname, ip, userAgent: req.headers["user-agent"] || "", result: "rejected", detail: error.code });
+    json(res, error.statusCode, { ok: false, error: error.message, code: error.code });
     req.resume();
     return null;
   }
-  if (mpAuthService.isPhoneVerified && !mpAuthService.isPhoneVerified(authUser.id)) {
-    securityLogStore.record({ userId: authUser.id, action: "ugc.blocked_no_phone", path: req.url, ip, userAgent: req.headers["user-agent"] || "", result: "rejected" });
-    json(res, 403, { ok: false, error: "发布内容需先完成手机号验证（小程序-我的-手机号验证）。", code: "PHONE_VERIFY_REQUIRED" });
-    req.resume();
-    return null;
-  }
-  return authUser;
 }
 
 function requireAdminMutationProvenance(req, res, url) {
@@ -1508,13 +1504,11 @@ function cleanText(value, max = 2000) {
 }
 
 function publicReview(review) {
-  const { ipHash: _ipHash, userAgent: _userAgent, ...safe } = review;
-  return safe;
+  return Object.fromEntries(["id", "courseTitle", "teacher", "rating", "tags", "content", "status", "hidden", "createdAt", "updatedAt", "helpfulCount"].filter((key) => Object.hasOwn(review, key)).map((key) => [key, review[key]]));
 }
 
 function publicFeedback(item) {
-  const { ipHash: _ipHash, userAgent: _userAgent, contact: _contact, resourceRef: _resourceRef, user_id: _userId, ...safe } = item;
-  return safe;
+  return Object.fromEntries(["id", "title", "content", "type", "status", "hidden", "createdAt", "updatedAt", "reply", "repliedAt"].filter((key) => Object.hasOwn(item, key)).map((key) => [key, item[key]]));
 }
 
 function visibleFeedback() {
@@ -1527,7 +1521,7 @@ function visibleFeedback() {
       minLength: Number(data.rules?.minLength || 5),
     },
     items: data.items
-    .filter((item) => item.status !== "hidden" && !item.hidden)
+    .filter((item) => item.private !== true && item.status !== "hidden" && !item.hidden)
     .filter((item) => (item.status === "approved" || item.status === "completed") && !["report", "complaint"].includes(item.type))
     .map(publicFeedback),
   };
@@ -1557,7 +1551,6 @@ function approvedReviews() {
 
 async function handleFeedbackSubmit(req, res) {
   const ip = clientIp(req);
-  const authUser = mpAuthService.verifyToken(req.headers.authorization);
   if (!consumeLayeredAttempt("feedback-attempt", ip, { perIp: 30, global: 1_000 })) {
     json(res, 429, { ok: false, error: "请求太频繁，请稍后再试。" });
     req.resume();
@@ -1565,22 +1558,28 @@ async function handleFeedbackSubmit(req, res) {
   }
   const data = readFeedback();
   const rules = data.rules || {};
-  if (!rules.submissionOpen) {
-    json(res, 403, { ok: false, error: "反馈提交暂未开放。" });
-    return;
-  }
-
   const body = await readPublicBody(req);
   if (body.website) {
     json(res, 200, { ok: true });
     return;
   }
 
-  const ugcUser = requirePhoneVerifiedUgcUser(req, res, ip);
-  if (!ugcUser) return;
+  const type = cleanText(body.type, 40) || "bug";
+  const isReport = type === "report" || type === "complaint";
+  if (!isReport && !rules.submissionOpen) {
+    json(res, 403, { ok: false, error: "反馈提交暂未开放。" });
+    return;
+  }
+  // Private complaints accept no credentials; supplied credentials must still be valid.
+  let ugcUser = null;
+  if (isReport) {
+    if (authorizationOf(req)) ugcUser = mpAuthService.requireUser(authorizationOf(req));
+  } else {
+    ugcUser = requirePhoneVerifiedUgcUser(req, res, ip);
+    if (!ugcUser) return;
+  }
   const title = cleanText(body.title, 120);
   const content = cleanText(body.content, 2000);
-  const type = cleanText(body.type, 40) || "bug";
   const contact = cleanText(body.contact, 120);
   const resourceRef = cleanText(body.resourceRef, 200);
   const reportUrl = cleanText(body.reportUrl, 300);
@@ -1596,7 +1595,7 @@ async function handleFeedbackSubmit(req, res) {
   }
 
   const guideShaped = title.startsWith("指南反馈：") || /^\s*\[guide_id=/.test(content);
-  if (guideShaped) {
+  if (guideShaped && !isReport) {
     let guideFeedbackEnabled = true;
     try {
       guideFeedbackEnabled = (await readJsonFile(notifySettingsPath)).guide_feedback_enabled !== false;
@@ -1608,7 +1607,6 @@ async function handleFeedbackSubmit(req, res) {
     }
   }
 
-  const isReport = type === "report" || type === "complaint";
   const itemId = `feedback-${Date.now()}-${randomBytes(4).toString("hex")}`;
   await jsonStore.update(feedbackPath, (current) => {
     current.items = Array.isArray(current.items) ? current.items : [];
@@ -1621,7 +1619,8 @@ async function handleFeedbackSubmit(req, res) {
       ...(resourceRef ? { resourceRef } : {}),
       ...(reportUrl ? { report_url: reportUrl } : {}),
       ...(reportTarget ? { report_target: reportTarget } : {}),
-      user_id: ugcUser.id,
+      user_id: ugcUser?.id || null,
+      ...(isReport ? { private: true } : {}),
       status: "pending",
       hidden: false,
       createdAt: nowIso(),
@@ -1632,7 +1631,7 @@ async function handleFeedbackSubmit(req, res) {
     current.updated = today();
     return current;
   });
-  securityLogStore.record({ userId: ugcUser.id, action: isReport ? "report.submit" : "feedback.submit", targetType: "feedback", targetId: itemId, path: "/feedback-api/submit", ip, userAgent: req.headers["user-agent"] || "", result: "pending", detail: isReport ? `type=${type} target=${reportTarget || reportUrl || "-"}` : "" });
+  securityLogStore.record({ userId: ugcUser?.id || null, action: isReport ? "report.submit" : "feedback.submit", targetType: "feedback", targetId: itemId, path: "/feedback-api/submit", ip, userAgent: req.headers["user-agent"] || "", result: "pending", detail: isReport ? `type=${type} target=${reportTarget || reportUrl || "-"}` : "" });
   Promise.resolve(notifyModerators({ type: isReport ? "report.pending" : "feedback.pending", title, feedbackType: type, content, resourceRef })).catch(() => {});
   json(res, 200, { ok: true });
 }
@@ -2365,7 +2364,13 @@ async function publishContent(filePath, data, expectedRevision, normalize) {
       data = migrated.data;
       migratedImages = migrated.migrated;
     }
-    const result = await contentPublishService.publish(filePath, data, { expectedRevision, normalize });
+    const result = await contentPublishService.publish(filePath, data, { expectedRevision, normalize,
+      preserve: filePath === feedbackPath ? (next, current) => {
+        const privateIds = new Set((current.items || []).filter((item) => item.private === true).map((item) => item.id));
+        for (const item of next.items || []) if (privateIds.has(item.id)) item.private = true;
+        return next;
+      } : undefined,
+    });
     if (result.ok && oldData) {
       const cleanup = await cleanupOrphanContentImages(owner, oldData, result.data ?? data);
       if (cleanup.warning) result.contentImageWarning = cleanup.warning;

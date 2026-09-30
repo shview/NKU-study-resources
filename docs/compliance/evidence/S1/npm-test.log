@@ -1,0 +1,1292 @@
+
+> nkustudy@0.1.0 test
+> node --test
+
+TAP version 13
+# Subtest: create and verify accounts with scrypt hashes
+ok 1 - create and verify accounts with scrypt hashes
+  ---
+  duration_ms: 1431.081625
+  type: 'test'
+  ...
+# Subtest: disabled accounts fail verification but keep their row
+ok 2 - disabled accounts fail verification but keep their row
+  ---
+  duration_ms: 301.531
+  type: 'test'
+  ...
+# Subtest: last accounts.manage holder cannot be disabled, demoted, or removed
+ok 3 - last accounts.manage holder cannot be disabled, demoted, or removed
+  ---
+  duration_ms: 230.395416
+  type: 'test'
+  ...
+# Subtest: self deletion is rejected
+ok 4 - self deletion is rejected
+  ---
+  duration_ms: 307.8135
+  type: 'test'
+  ...
+# Subtest: password policy and username policy are enforced
+ok 5 - password policy and username policy are enforced
+  ---
+  duration_ms: 38.302459
+  type: 'test'
+  ...
+# Subtest: setPassword clears or forces the must-change notice
+ok 6 - setPassword clears or forces the must-change notice
+  ---
+  duration_ms: 481.703834
+  type: 'test'
+  ...
+# Subtest: audit entries are recorded, filtered, and trimmed
+ok 7 - audit entries are recorded, filtered, and trimmed
+  ---
+  duration_ms: 67.862958
+  type: 'test'
+  ...
+# Subtest: backup export and restore round-trip accounts without passwords
+ok 8 - backup export and restore round-trip accounts without passwords
+  ---
+  duration_ms: 709.160833
+  type: 'test'
+  ...
+# Subtest: normalizeAdminPermissions drops unknown points and hasAdminPermission respects enabled state
+ok 9 - normalizeAdminPermissions drops unknown points and hasAdminPermission respects enabled state
+  ---
+  duration_ms: 357.964542
+  type: 'test'
+  ...
+# Subtest: audit batches archive only at threshold and keeps the newest rows
+ok 10 - audit batches archive only at threshold and keeps the newest rows
+  ---
+  duration_ms: 188.919542
+  type: 'test'
+  ...
+# Subtest: admin status aggregates publish and R2 cleanup warnings
+ok 11 - admin status aggregates publish and R2 cleanup warnings
+  ---
+  duration_ms: 38.157708
+  type: 'test'
+  ...
+# Subtest: the sync-r2 route uses the tested response shaper
+ok 12 - the sync-r2 route uses the tested response shaper
+  ---
+  duration_ms: 26.167375
+  type: 'test'
+  ...
+# Subtest: sync-r2 response preserves publish warnings without changing its public fields
+ok 13 - sync-r2 response preserves publish warnings without changing its public fields
+  ---
+  duration_ms: 10.735333
+  type: 'test'
+  ...
+# Subtest: every static /admin-api route declares a permission in the registry
+ok 14 - every static /admin-api route declares a permission in the registry
+  ---
+  duration_ms: 2.410083
+  type: 'test'
+  ...
+# Subtest: registry contains no stale routes absent from code
+ok 15 - registry contains no stale routes absent from code
+  ---
+  duration_ms: 1.843583
+  type: 'test'
+  ...
+# Subtest: declared permissions are valid permission points
+ok 16 - declared permissions are valid permission points
+  ---
+  duration_ms: 4.527416
+  type: 'test'
+  ...
+# Subtest: law enforcement routes require the dedicated law.manage permission
+ok 17 - law enforcement routes require the dedicated law.manage permission
+  ---
+  duration_ms: 0.896333
+  type: 'test'
+  ...
+# Subtest: legacy public write routes start with isolated DATA_DIR and persist submissions
+ok 18 - legacy public write routes start with isolated DATA_DIR and persist submissions
+  ---
+  duration_ms: 16164.784
+  type: 'test'
+  ...
+# Subtest: admin sessions persist, expire server-side, and can be revoked
+ok 19 - admin sessions persist, expire server-side, and can be revoked
+  ---
+  duration_ms: 221.771208
+  type: 'test'
+  ...
+# Subtest: admin session count is bounded
+ok 20 - admin session count is bounded
+  ---
+  duration_ms: 10.53725
+  type: 'test'
+  ...
+# Subtest: admin server uses shared runtime paths and no direct runtime JSON writes
+ok 21 - admin server uses shared runtime paths and no direct runtime JSON writes
+  ---
+  duration_ms: 1.509458
+  type: 'test'
+  ...
+# Subtest: public writes use persistent limits and queued read-modify-write
+ok 22 - public writes use persistent limits and queued read-modify-write
+  ---
+  duration_ms: 2.342459
+  type: 'test'
+  ...
+# Subtest: legacy destructive R2 routes are disabled and safe route remains admin-only
+ok 23 - legacy destructive R2 routes are disabled and safe route remains admin-only
+  ---
+  duration_ms: 0.360417
+  type: 'test'
+  ...
+# Subtest: public v1 routing remains separate from mini-program administration
+ok 24 - public v1 routing remains separate from mini-program administration
+  ---
+  duration_ms: 130.518375
+  type: 'test'
+  ...
+# Subtest: static publish warnings remain in management responses and are visible in the admin UI
+ok 25 - static publish warnings remain in management responses and are visible in the admin UI
+  ---
+  duration_ms: 15.339333
+  type: 'test'
+  ...
+# Subtest: defaults come from env seed and never leak into masked reads
+ok 26 - defaults come from env seed and never leak into masked reads
+  ---
+  duration_ms: 4.682208
+  type: 'test'
+  ...
+# Subtest: update persists settings and key, keeping previous key when omitted
+ok 27 - update persists settings and key, keeping previous key when omitted
+  ---
+  duration_ms: 478.571125
+  type: 'test'
+  ...
+# Subtest: clearApiKey removes the key and clamps invalid values
+ok 28 - clearApiKey removes the key and clamps invalid values
+  ---
+  duration_ms: 238.208625
+  type: 'test'
+  ...
+# Subtest: disabled flag is honored by runtime projection
+ok 29 - disabled flag is honored by runtime projection
+  ---
+  duration_ms: 123.378
+  type: 'test'
+  ...
+# Subtest: cleanup temp dirs
+ok 30 - cleanup temp dirs
+  ---
+  duration_ms: 1.428083
+  type: 'test'
+  ...
+# Subtest: route extractor supports standard verbs, condition order, lists, and registered dynamic routes
+ok 31 - route extractor supports standard verbs, condition order, lists, and registered dynamic routes
+  ---
+  duration_ms: 16.104791
+  type: 'test'
+  ...
+# Subtest: documentation registry accepts every standard HTTP verb and normalizes parameter names
+ok 32 - documentation registry accepts every standard HTTP verb and normalizes parameter names
+  ---
+  duration_ms: 20.283917
+  type: 'test'
+  ...
+# Subtest: unsupported dynamic route regex fails closed
+ok 33 - unsupported dynamic route regex fails closed
+  ---
+  duration_ms: 39.288875
+  type: 'test'
+  ...
+# Subtest: cross-line exact method and path conditions are extracted
+ok 34 - cross-line exact method and path conditions are extracted
+  ---
+  duration_ms: 0.444042
+  type: 'test'
+  ...
+# Subtest: variable paths and startsWith route candidates fail closed
+ok 35 - variable paths and startsWith route candidates fail closed
+  ---
+  duration_ms: 0.483458
+  type: 'test'
+  ...
+# Subtest: 50 concurrent updates do not lose data
+ok 36 - 50 concurrent updates do not lose data
+  ---
+  duration_ms: 1810.643583
+  type: 'test'
+  ...
+# Subtest: a failure before rename preserves the original and removes temp files
+ok 37 - a failure before rename preserves the original and removes temp files
+  ---
+  duration_ms: 176.542834
+  type: 'test'
+  ...
+# Subtest: allowedRoot rejects traversal and symbolic-link targets
+ok 38 - allowedRoot rejects traversal and symbolic-link targets
+  ---
+  duration_ms: 34.342709
+  type: 'test'
+  ...
+# Subtest: afterWrite rollback and a queued public update are serialized without data loss
+ok 39 - afterWrite rollback and a queued public update are serialized without data loss
+  ---
+  duration_ms: 533.887833
+  type: 'test'
+  ...
+# Subtest: cleanCatalogCourseName removes only CJK-internal spaces
+ok 40 - cleanCatalogCourseName removes only CJK-internal spaces
+  ---
+  duration_ms: 1.094
+  type: 'test'
+  ...
+# Subtest: bulk import creates shells, dedupes by basePath and normalized title, and is idempotent
+ok 41 - bulk import creates shells, dedupes by basePath and normalized title, and is idempotent
+  ---
+  duration_ms: 1.277667
+  type: 'test'
+  ...
+# Subtest: imported ids stay unique against manifest and each other
+ok 42 - imported ids stay unique against manifest and each other
+  ---
+  duration_ms: 0.47125
+  type: 'test'
+  ...
+# Subtest: untrusted peers cannot spoof X-Forwarded-For
+ok 43 - untrusted peers cannot spoof X-Forwarded-For
+  ---
+  duration_ms: 9.818792
+  type: 'test'
+  ...
+# Subtest: trusted reverse proxy chain yields the nearest untrusted client
+ok 44 - trusted reverse proxy chain yields the nearest untrusted client
+  ---
+  duration_ms: 61.570709
+  type: 'test'
+  ...
+# Subtest: actor hashing is secret-bound and does not expose the address
+ok 45 - actor hashing is secret-bound and does not expose the address
+  ---
+  duration_ms: 19.671
+  type: 'test'
+  ...
+# Subtest: invalid forwarded hops fail closed and IPv6/CIDR chains canonicalize
+ok 46 - invalid forwarded hops fail closed and IPv6/CIDR chains canonicalize
+  ---
+  duration_ms: 1.055625
+  type: 'test'
+  ...
+# Subtest: contentPublicRoot derives from manifest resourceRoot strictly
+ok 47 - contentPublicRoot derives from manifest resourceRoot strictly
+  ---
+  duration_ms: 2.794625
+  type: 'test'
+  ...
+# Subtest: validateContentImage accepts known image types within the size cap
+ok 48 - validateContentImage accepts known image types within the size cap
+  ---
+  duration_ms: 0.961334
+  type: 'test'
+  ...
+# Subtest: newContentImageName is flat, random and extension-safe
+ok 49 - newContentImageName is flat, random and extension-safe
+  ---
+  duration_ms: 3.598375
+  type: 'test'
+  ...
+# Subtest: extractContentImageKeys only honors same-owner absolute URLs
+ok 50 - extractContentImageKeys only honors same-owner absolute URLs
+  ---
+  duration_ms: 0.553125
+  type: 'test'
+  ...
+# Subtest: orphanContentImageKeys computes old-minus-next within the owner
+ok 51 - orphanContentImageKeys computes old-minus-next within the owner
+  ---
+  duration_ms: 0.398375
+  type: 'test'
+  ...
+# Subtest: owner whitelist guards the prefix helper
+ok 52 - owner whitelist guards the prefix helper
+  ---
+  duration_ms: 0.165084
+  type: 'test'
+  ...
+# Subtest: sniffImageType detects real image signatures
+ok 53 - sniffImageType detects real image signatures
+  ---
+  duration_ms: 0.537209
+  type: 'test'
+  ...
+# Subtest: validateContentImage rejects spoofed content types via magic bytes
+ok 54 - validateContentImage rejects spoofed content types via magic bytes
+  ---
+  duration_ms: 1.173083
+  type: 'test'
+  ...
+# Subtest: extractDataUriImages walks nested content and normalizes jpeg mime
+ok 55 - extractDataUriImages walks nested content and normalizes jpeg mime
+  ---
+  duration_ms: 3.665833
+  type: 'test'
+  ...
+# Subtest: content publish uses CAS and returns the new revision
+ok 56 - content publish uses CAS and returns the new revision
+  ---
+  duration_ms: 558.898
+  type: 'test'
+  ...
+# Subtest: content publish exposes deployment warnings while journal stores only durable proof
+ok 57 - content publish exposes deployment warnings while journal stores only durable proof
+  ---
+  duration_ms: 328.832833
+  type: 'test'
+  ...
+# Subtest: content journal never hides directory fsync permission failures
+ok 58 - content journal never hides directory fsync permission failures
+  ---
+  duration_ms: 346.728208
+  type: 'test'
+  ...
+# Subtest: content build failure atomically restores prior JSON
+ok 59 - content build failure atomically restores prior JSON
+  ---
+  duration_ms: 223.161583
+  type: 'test'
+  ...
+# Subtest: startup fails closed for an ambiguous crash after JSON replacement
+ok 60 - startup fails closed for an ambiguous crash after JSON replacement
+  ---
+  duration_ms: 214.185042
+  type: 'test'
+  ...
+# Subtest: startup safely clears journals from pre-write and confirmed-published crashes
+ok 61 - startup safely clears journals from pre-write and confirmed-published crashes
+  ---
+  duration_ms: 1008.6525
+  type: 'test'
+  ...
+# Subtest: markPublished failure after deployment never rolls JSON back or removes the ambiguous journal
+ok 62 - markPublished failure after deployment never rolls JSON back or removes the ambiguous journal
+  ---
+  duration_ms: 249.383459
+  type: 'test'
+  ...
+# Subtest: complete failure retains a published proof and startup forward-completes only when the active release matches
+ok 63 - complete failure retains a published proof and startup forward-completes only when the active release matches
+  ---
+  duration_ms: 354.00475
+  type: 'test'
+  ...
+# Subtest: catalog loads courses, resolves ids, names and aliases
+ok 64 - catalog loads courses, resolves ids, names and aliases
+  ---
+  duration_ms: 8.475333
+  type: 'test'
+  ...
+# Subtest: catalog search supports keyword, paging and teacher matching
+ok 65 - catalog search supports keyword, paging and teacher matching
+  ---
+  duration_ms: 1.796
+  type: 'test'
+  ...
+# Subtest: empty catalog degrades to not-loaded
+ok 66 - empty catalog degrades to not-loaded
+  ---
+  duration_ms: 8.468083
+  type: 'test'
+  ...
+# Subtest: addCourse validates input, dedupes, persists, and hot-reloads
+ok 67 - addCourse validates input, dedupes, persists, and hot-reloads
+  ---
+  duration_ms: 15.534667
+  type: 'test'
+  ...
+# Subtest: UID backfill is dry-run by default
+ok 68 - UID backfill is dry-run by default
+  ---
+  duration_ms: 147.572834
+  type: 'test'
+  ...
+# Subtest: UID backfill writes a backup and is idempotent
+ok 69 - UID backfill writes a backup and is idempotent
+  ---
+  duration_ms: 293.921334
+  type: 'test'
+  ...
+# Subtest: duplicate UIDs are rejected
+ok 70 - duplicate UIDs are rejected
+  ---
+  duration_ms: 106.694834
+  type: 'test'
+  ...
+# Subtest: manifest validation rejects non-canonical or unsafe basePath and file paths
+ok 71 - manifest validation rejects non-canonical or unsafe basePath and file paths
+  ---
+  duration_ms: 0.640084
+  type: 'test'
+  ...
+# Subtest: write migration requires matching CAS hash and exclusive lock
+ok 72 - write migration requires matching CAS hash and exclusive lock
+  ---
+  duration_ms: 80.103458
+  type: 'test'
+  ...
+# Subtest: donate() returns title, sanitized amounts and pay_enabled flag
+ok 73 - donate() returns title, sanitized amounts and pay_enabled flag
+  ---
+  duration_ms: 14.644833
+  type: 'test'
+  ...
+# Subtest: donate() throws when unconfigured
+ok 74 - donate() throws when unconfigured
+  ---
+  duration_ms: 7.650833
+  type: 'test'
+  ...
+# Subtest: donate() is a pure projector: empty amounts pass through (defaults applied on save)
+ok 75 - donate() is a pure projector: empty amounts pass through (defaults applied on save)
+  ---
+  duration_ms: 9.877542
+  type: 'test'
+  ...
+# Subtest: DonatePayStore masks secrets, keeps empty-by-meansing private key, and reports readiness
+ok 76 - DonatePayStore masks secrets, keeps empty-by-meansing private key, and reports readiness
+  ---
+  duration_ms: 216.37
+  type: 'test'
+  ...
+# Subtest: public router: donate GET works and pay returns 503 until configured
+ok 77 - public router: donate GET works and pay returns 503 until configured
+  ---
+  duration_ms: 7.98175
+  type: 'test'
+  ...
+# Subtest: wxpay-v3: sign/verify roundtrip, auth header format, AES-GCM decrypt, mini pay params
+ok 78 - wxpay-v3: sign/verify roundtrip, auth header format, AES-GCM decrypt, mini pay params
+  ---
+  duration_ms: 359.758916
+  type: 'test'
+  ...
+# Subtest: DonateOrderStore creates, validates amount, and markPaid is idempotent
+ok 79 - DonateOrderStore creates, validates amount, and markPaid is idempotent
+  ---
+  duration_ms: 50.689083
+  type: 'test'
+  ...
+# Subtest: createDonateOrder: full flow with stubbed prepay fetch
+ok 80 - createDonateOrder: full flow with stubbed prepay fetch
+  ---
+  duration_ms: 424.136708
+  type: 'test'
+  ...
+# Subtest: createDonateOrderNative: no login needed, returns code_url and records order; order-status tracks it
+ok 81 - createDonateOrderNative: no login needed, returns code_url and records order; order-status tracks it
+  ---
+  duration_ms: 117.701292
+  type: 'test'
+  ...
+# Subtest: donate-records: normalize keeps sane rows, appendDonateRecord appends with beijing date
+ok 82 - donate-records: normalize keeps sane rows, appendDonateRecord appends with beijing date
+  ---
+  duration_ms: 224.54925
+  type: 'test'
+  ...
+# Subtest: DonateOrderStore stores nickname/remark/source and summary groups by source
+ok 83 - DonateOrderStore stores nickname/remark/source and summary groups by source
+  ---
+  duration_ms: 107.215584
+  type: 'test'
+  ...
+# Subtest: UserSecurityLogStore records with raw ip, queries by user/target, prunes only old entries
+ok 84 - UserSecurityLogStore records with raw ip, queries by user/target, prunes only old entries
+  ---
+  duration_ms: 65.745833
+  type: 'test'
+  ...
+# Subtest: every reviewed fixture JSON is explicitly unignored and staged by the fixture build
+ok 85 - every reviewed fixture JSON is explicitly unignored and staged by the fixture build
+  ---
+  duration_ms: 25.381875
+  type: 'test'
+  ...
+# Subtest: rejects invalid question, history, and profile before any provider call
+ok 86 - rejects invalid question, history, and profile before any provider call
+  ---
+  duration_ms: 40.452084
+  type: 'test'
+  ...
+# Subtest: conflict topic refuses with SOURCE_CONFLICT without calling provider
+ok 87 - conflict topic refuses with SOURCE_CONFLICT without calling provider
+  ---
+  duration_ms: 4.777667
+  type: 'test'
+  ...
+# Subtest: out-of-scope question refuses with INSUFFICIENT_EVIDENCE
+ok 88 - out-of-scope question refuses with INSUFFICIENT_EVIDENCE
+  ---
+  duration_ms: 1.787166
+  type: 'test'
+  ...
+# Subtest: evidence-backed answer returns citations from matched sources
+ok 89 - evidence-backed answer returns citations from matched sources
+  ---
+  duration_ms: 13.1985
+  type: 'test'
+  ...
+# Subtest: provider failure retries once then maps to 503 AI_UNAVAILABLE
+ok 90 - provider failure retries once then maps to 503 AI_UNAVAILABLE
+  ---
+  duration_ms: 2.320875
+  type: 'test'
+  ...
+# Subtest: missing provider is a stable 503 instead of a crash
+ok 91 - missing provider is a stable 503 instead of a crash
+  ---
+  duration_ms: 2.045459
+  type: 'test'
+  ...
+# Subtest: limiter is consulted per user and maps to 429
+ok 92 - limiter is consulted per user and maps to 429
+  ---
+  duration_ms: 0.703458
+  type: 'test'
+  ...
+# Subtest: snapshot has validated counts: 5 categories, 18 guides, 29 variants, 205 chunks, 35 sources
+ok 93 - snapshot has validated counts: 5 categories, 18 guides, 29 variants, 205 chunks, 35 sources
+  ---
+  duration_ms: 3.578083
+  type: 'test'
+  ...
+# Subtest: guide list summaries expose new taxonomy without legacy fields
+ok 94 - guide list summaries expose new taxonomy without legacy fields
+  ---
+  duration_ms: 1.957625
+  type: 'test'
+  ...
+# Subtest: guide detail returns sections/sources and transfer overview keeps college payload light
+ok 95 - guide detail returns sections/sources and transfer overview keeps college payload light
+  ---
+  duration_ms: 0.549333
+  type: 'test'
+  ...
+# Subtest: variant endpoint isolates college content and validates ids
+ok 96 - variant endpoint isolates college content and validates ids
+  ---
+  duration_ms: 0.625041
+  type: 'test'
+  ...
+# Subtest: search projection lists 18 top-level guides with transfer exactly once
+ok 97 - search projection lists 18 top-level guides with transfer exactly once
+  ---
+  duration_ms: 0.490667
+  type: 'test'
+  ...
+# Subtest: retrieval and conflicts stay private but available for AI batch
+ok 98 - retrieval and conflicts stay private but available for AI batch
+  ---
+  duration_ms: 0.746917
+  type: 'test'
+  ...
+# Subtest: UID survives title/id rename and basePath changes require explicit R2 authorization
+ok 99 - UID survives title/id rename and basePath changes require explicit R2 authorization
+  ---
+  duration_ms: 754.317666
+  type: 'test'
+  ...
+# Subtest: manifest publish exposes deployment warnings to the management caller
+ok 100 - manifest publish exposes deployment warnings to the management caller
+  ---
+  duration_ms: 337.017875
+  type: 'test'
+  ...
+# Subtest: existing courses require UID while replacement and client-supplied new UID are rejected
+ok 101 - existing courses require UID while replacement and client-supplied new UID are rejected
+  ---
+  duration_ms: 32.813959
+  type: 'test'
+  ...
+# Subtest: new, deleted, and re-added courses receive server-owned non-reused UIDs
+ok 102 - new, deleted, and re-added courses receive server-owned non-reused UIDs
+  ---
+  duration_ms: 1499.460167
+  type: 'test'
+  ...
+# Subtest: concurrent mutations reread latest and publish failure rolls back in the same queue
+ok 103 - concurrent mutations reread latest and publish failure rolls back in the same queue
+  ---
+  duration_ms: 4938.559208
+  type: 'test'
+  ...
+# Subtest: two stale tabs cannot overwrite one another and missing CAS is rejected
+ok 104 - two stale tabs cannot overwrite one another and missing CAS is rejected
+  ---
+  duration_ms: 159.906833
+  type: 'test'
+  ...
+# Subtest: publish creates durable mode-0600 backup and retains it after rollback
+ok 105 - publish creates durable mode-0600 backup and retains it after rollback
+  ---
+  duration_ms: 451.109708
+  type: 'test'
+  ...
+# Subtest: draft also creates a durable backup before replacing live manifest JSON
+ok 106 - draft also creates a durable backup before replacing live manifest JSON
+  ---
+  duration_ms: 2224.058875
+  type: 'test'
+  ...
+# Subtest: manifest startup fails closed after a crash between JSON replacement and journal publish
+ok 107 - manifest startup fails closed after a crash between JSON replacement and journal publish
+  ---
+  duration_ms: 546.111041
+  type: 'test'
+  ...
+# Subtest: login exchanges code, returns token and user without openid
+ok 108 - login exchanges code, returns token and user without openid
+  ---
+  duration_ms: 30.645833
+  type: 'test'
+  ...
+# Subtest: same openid reuses the user and bumps login_count
+ok 109 - same openid reuses the user and bumps login_count
+  ---
+  duration_ms: 28.75725
+  type: 'test'
+  ...
+# Subtest: verifyToken accepts Bearer tokens and rejects everything else
+ok 110 - verifyToken accepts Bearer tokens and rejects everything else
+  ---
+  duration_ms: 92.101334
+  type: 'test'
+  ...
+# Subtest: expired code and upstream failures map to public errors
+ok 111 - expired code and upstream failures map to public errors
+  ---
+  duration_ms: 45.232541
+  type: 'test'
+  ...
+# Subtest: network failure becomes MP_AUTH_UPSTREAM
+ok 112 - network failure becomes MP_AUTH_UPSTREAM
+  ---
+  duration_ms: 34.239458
+  type: 'test'
+  ...
+# Subtest: malformed codes are rejected before hitting WeChat
+ok 113 - malformed codes are rejected before hitting WeChat
+  ---
+  duration_ms: 14.14875
+  type: 'test'
+  ...
+# Subtest: unconfigured service refuses login with 503
+ok 114 - unconfigured service refuses login with 503
+  ---
+  duration_ms: 21.899625
+  type: 'test'
+  ...
+# Subtest: updateProfile sanitizes nickname and avatar url
+ok 115 - updateProfile sanitizes nickname and avatar url
+  ---
+  duration_ms: 25.407834
+  type: 'test'
+  ...
+# Subtest: revoke invalidates the token server-side
+ok 116 - revoke invalidates the token server-side
+  ---
+  duration_ms: 28.409875
+  type: 'test'
+  ...
+# Subtest: requireUser raises AUTH_REQUIRED when missing
+ok 117 - requireUser raises AUTH_REQUIRED when missing
+  ---
+  duration_ms: 18.264209
+  type: 'test'
+  ...
+# Subtest: blocked users cannot log in and their sessions die
+ok 118 - blocked users cannot log in and their sessions die
+  ---
+  duration_ms: 69.900666
+  type: 'test'
+  ...
+# Subtest: admin overview includes blocked flag
+ok 119 - admin overview includes blocked flag
+  ---
+  duration_ms: 83.282917
+  type: 'test'
+  ...
+# Subtest: keyword flagged reviews are forced pending with a hit record
+ok 120 - keyword flagged reviews are forced pending with a hit record
+  ---
+  duration_ms: 13.97475
+  type: 'test'
+  ...
+# Subtest: webRegister and webLogin issue session tokens
+ok 121 - webRegister and webLogin issue session tokens
+  ---
+  duration_ms: 356.185875
+  type: 'test'
+  ...
+# Subtest: changeWebPassword verifies current password before setting a new one
+ok 122 - changeWebPassword verifies current password before setting a new one
+  ---
+  duration_ms: 1757.3435
+  type: 'test'
+  ...
+# Subtest: changeWebPassword rejects accounts without a web password
+ok 123 - changeWebPassword rejects accounts without a web password
+  ---
+  duration_ms: 13.091917
+  type: 'test'
+  ...
+# Subtest: favorites add/remove/list round-trip with course summaries
+ok 124 - favorites add/remove/list round-trip with course summaries
+  ---
+  duration_ms: 47.172083
+  type: 'test'
+  ...
+# Subtest: favorites reject unknown or invalid courses
+ok 125 - favorites reject unknown or invalid courses
+  ---
+  duration_ms: 59.785
+  type: 'test'
+  ...
+# Subtest: favorites drop entries for deleted courses on list
+ok 126 - favorites drop entries for deleted courses on list
+  ---
+  duration_ms: 58.645875
+  type: 'test'
+  ...
+# Subtest: feishu webhook url validation and signing
+ok 127 - feishu webhook url validation and signing
+  ---
+  duration_ms: 1.548041
+  type: 'test'
+  ...
+# Subtest: feishu card builds interactive message with action button
+ok 128 - feishu card builds interactive message with action button
+  ---
+  duration_ms: 0.30925
+  type: 'test'
+  ...
+# Subtest: notify bots CRUD validates and masks secrets
+ok 129 - notify bots CRUD validates and masks secrets
+  ---
+  duration_ms: 4.870375
+  type: 'test'
+  ...
+# Subtest: legacy single-bot config migrates to the bot list
+ok 130 - legacy single-bot config migrates to the bot list
+  ---
+  duration_ms: 0.387292
+  type: 'test'
+  ...
+# Subtest: notify skips disabled bots and reports upstream failures
+ok 131 - notify skips disabled bots and reports upstream failures
+  ---
+  duration_ms: 1.33275
+  type: 'test'
+  ...
+# Subtest: bot purposes filter which bots receive which cards
+ok 132 - bot purposes filter which bots receive which cards
+  ---
+  duration_ms: 1.130917
+  type: 'test'
+  ...
+# Subtest: describe exposes guide_feedback_enabled with default true
+ok 133 - describe exposes guide_feedback_enabled with default true
+  ---
+  duration_ms: 1.58975
+  type: 'test'
+  ...
+# Subtest: setGuideFeedbackEnabled persists the flag and keeps bots
+ok 134 - setGuideFeedbackEnabled persists the flag and keeps bots
+  ---
+  duration_ms: 4.546583
+  type: 'test'
+  ...
+# Subtest: limits persist across instances and database reopen
+ok 135 - limits persist across instances and database reopen
+  ---
+  duration_ms: 167.347417
+  type: 'test'
+  ...
+# Subtest: transactional counters are shared and never persist raw actors
+ok 136 - transactional counters are shared and never persist raw actors
+  ---
+  duration_ms: 139.174958
+  type: 'test'
+  ...
+# Subtest: invalid numeric and key inputs fail closed
+ok 137 - invalid numeric and key inputs fail closed
+  ---
+  duration_ms: 57.719458
+  type: 'test'
+  ...
+# Subtest: layered consume is atomic and actor rejection does not consume global capacity
+ok 138 - layered consume is atomic and actor rejection does not consume global capacity
+  ---
+  duration_ms: 69.616792
+  type: 'test'
+  ...
+# Subtest: layered global capacity is shared transactionally across database instances
+ok 139 - layered global capacity is shared transactionally across database instances
+  ---
+  duration_ms: 111.461292
+  type: 'test'
+  ...
+# Subtest: persistent windows are anchored to the first attempt instead of resetting at epoch bucket boundaries
+ok 140 - persistent windows are anchored to the first attempt instead of resetting at epoch bucket boundaries
+  ---
+  duration_ms: 44.000125
+  type: 'test'
+  ...
+# Subtest: public router exposes exactly the documented route set and no management route
+ok 141 - public router exposes exactly the documented route set and no management route
+  ---
+  duration_ms: 13.72925
+  type: 'test'
+  ...
+# Subtest: GET cache emits a stable ETag, honors If-None-Match, and health stays no-store
+ok 142 - GET cache emits a stable ETag, honors If-None-Match, and health stays no-store
+  ---
+  duration_ms: 14.130708
+  type: 'test'
+  ...
+# Subtest: unexpected errors are sanitized and never expose exception details
+ok 143 - unexpected errors are sanitized and never expose exception details
+  ---
+  duration_ms: 0.441709
+  type: 'test'
+  ...
+# Subtest: web login issues an httpOnly session cookie, restores via empty call, and logout clears it
+ok 144 - web login issues an httpOnly session cookie, restores via empty call, and logout clears it
+  ---
+  duration_ms: 1.0895
+  type: 'test'
+  ...
+# Subtest: web password change routes require a session and proxy to the service
+ok 145 - web password change routes require a session and proxy to the service
+  ---
+  duration_ms: 1.107916
+  type: 'test'
+  ...
+# Subtest: search-data returns compact searchable payload
+ok 146 - search-data returns compact searchable payload
+  ---
+  duration_ms: 0.577791
+  type: 'test'
+  ...
+# Subtest: public DTOs whitelist fields and preserve server taxonomy
+ok 147 - public DTOs whitelist fields and preserve server taxonomy
+  ---
+  duration_ms: 35.878375
+  type: 'test'
+  ...
+# Subtest: course search, pagination, and bounds are deterministic
+ok 148 - course search, pagination, and bounds are deterministic
+  ---
+  duration_ms: 2.645792
+  type: 'test'
+  ...
+# Subtest: complete search index exposes four whitelisted result types with a stable version
+ok 149 - complete search index exposes four whitelisted result types with a stable version
+  ---
+  duration_ms: 16.066458
+  type: 'test'
+  ...
+# Subtest: guide list and detail validate categories and expose sections/sources
+ok 150 - guide list and detail validate categories and expose sections/sources
+  ---
+  duration_ms: 1.282458
+  type: 'test'
+  ...
+# Subtest: review groups use website courseTitle + teacher and preserve unmatched groups
+ok 151 - review groups use website courseTitle + teacher and preserve unmatched groups
+  ---
+  duration_ms: 1.236792
+  type: 'test'
+  ...
+# Subtest: resource URLs are HTTPS, segment encoded, origin constrained, and path-free
+ok 152 - resource URLs are HTTPS, segment encoded, origin constrained, and path-free
+  ---
+  duration_ms: 1.280333
+  type: 'test'
+  ...
+# Subtest: mini-program review body maps into the shared submission service
+ok 153 - mini-program review body maps into the shared submission service
+  ---
+  duration_ms: 1.191208
+  type: 'test'
+  ...
+# Subtest: mini-program can review a historical group by exact course_title
+ok 154 - mini-program can review a historical group by exact course_title
+  ---
+  duration_ms: 2.116541
+  type: 'test'
+  ...
+# Subtest: my feedback list carries admin replies for logged-in submitters
+ok 155 - my feedback list carries admin replies for logged-in submitters
+  ---
+  duration_ms: 1.312791
+  type: 'test'
+  ...
+# Subtest: review groups merge punctuation variants and resolve catalog aliases
+ok 156 - review groups merge punctuation variants and resolve catalog aliases
+  ---
+  duration_ms: 1.873084
+  type: 'test'
+  ...
+# Subtest: about() returns sanitized about-page content for the mini-program
+ok 157 - about() returns sanitized about-page content for the mini-program
+  ---
+  duration_ms: 26.807459
+  type: 'test'
+  ...
+# Subtest: settings provider maps snake_case runtime config to client fields (regression: Bearer undefined 401)
+ok 158 - settings provider maps snake_case runtime config to client fields (regression: Bearer undefined 401)
+  ---
+  duration_ms: 17.258708
+  type: 'test'
+  ...
+# Subtest: settings provider returns null when disabled or key missing
+ok 159 - settings provider returns null when disabled or key missing
+  ---
+  duration_ms: 0.2755
+  type: 'test'
+  ...
+# Subtest: provider errors carry http status and non-sensitive provider code
+ok 160 - provider errors carry http status and non-sensitive provider code
+  ---
+  duration_ms: 6.039959
+  type: 'test'
+  ...
+# Subtest: empty R2 discovery preserves every web-managed course
+ok 161 - empty R2 discovery preserves every web-managed course
+  ---
+  duration_ms: 7.679625
+  type: 'test'
+  ...
+# Subtest: empty discovery retains data; non-empty discovery replaces from R2 truth and preserves metadata
+ok 162 - empty discovery retains data; non-empty discovery replaces from R2 truth and preserves metadata
+  ---
+  duration_ms: 25.128459
+  type: 'test'
+  ...
+# Subtest: moved files are recorded at the new location only (old entries dropped)
+ok 163 - moved files are recorded at the new location only (old entries dropped)
+  ---
+  duration_ms: 2.042042
+  type: 'test'
+  ...
+# Subtest: manifest schema rejects overlapping course prefixes and duplicate declared resource paths
+ok 164 - manifest schema rejects overlapping course prefixes and duplicate declared resource paths
+  ---
+  duration_ms: 6.10925
+  type: 'test'
+  ...
+# Subtest: partial discovery updates matches, creates shells for new empty folders and retains unmatched courses
+ok 165 - partial discovery updates matches, creates shells for new empty folders and retains unmatched courses
+  ---
+  duration_ms: 0.591458
+  type: 'test'
+  ...
+# Subtest: R2 prepare failure never publishes or deletes
+ok 166 - R2 prepare failure never publishes or deletes
+  ---
+  duration_ms: 1.272417
+  type: 'test'
+  ...
+# Subtest: R2 publish failure leaves verified copies and keeps old keys
+ok 167 - R2 publish failure leaves verified copies and keeps old keys
+  ---
+  duration_ms: 0.514834
+  type: 'test'
+  ...
+# Subtest: R2 cleanup runs only after publish and failure becomes a non-destructive warning
+ok 168 - R2 cleanup runs only after publish and failure becomes a non-destructive warning
+  ---
+  duration_ms: 0.428125
+  type: 'test'
+  ...
+# Subtest: strict R2 paths reject traversal, encoded separators and non-canonical segments
+ok 169 - strict R2 paths reject traversal, encoded separators and non-canonical segments
+  ---
+  duration_ms: 2.215958
+  type: 'test'
+  ...
+# Subtest: R2 mutation plan requires a one-to-one move for every basePath change
+ok 170 - R2 mutation plan requires a one-to-one move for every basePath change
+  ---
+  duration_ms: 3.620084
+  type: 'test'
+  ...
+# Subtest: R2 mutation plan rejects overlapping targets and requires exact file cleanup authorization
+ok 171 - R2 mutation plan rejects overlapping targets and requires exact file cleanup authorization
+  ---
+  duration_ms: 1.557167
+  type: 'test'
+  ...
+# Subtest: R2 object copy planning refuses occupied or colliding targets and skips authorized removals
+ok 172 - R2 object copy planning refuses occupied or colliding targets and skips authorized removals
+  ---
+  duration_ms: 0.322292
+  type: 'test'
+  ...
+# Subtest: R2 move refuses to publish when any manifest-declared source object is absent
+ok 173 - R2 move refuses to publish when any manifest-declared source object is absent
+  ---
+  duration_ms: 0.146166
+  type: 'test'
+  ...
+# Subtest: cleanup authorization is exact and cannot overlap any move target
+ok 174 - cleanup authorization is exact and cannot overlap any move target
+  ---
+  duration_ms: 0.454083
+  type: 'test'
+  ...
+# Subtest: same-revision R2 mutations serialize and the loser conflicts before copy
+ok 175 - same-revision R2 mutations serialize and the loser conflicts before copy
+  ---
+  duration_ms: 323.277041
+  type: 'test'
+  ...
+# Subtest: upload-style R2 work shares the destructive mutation queue
+ok 176 - upload-style R2 work shares the destructive mutation queue
+  ---
+  duration_ms: 14.021583
+  type: 'test'
+  ...
+# Subtest: placeholder-only folders never create courses on rebuild (name-pool placeholders are safe)
+ok 177 - placeholder-only folders never create courses on rebuild (name-pool placeholders are safe)
+  ---
+  duration_ms: 0.45475
+  type: 'test'
+  ...
+# Subtest: placeholder-only folders outside the E课 name pool create course shells
+ok 178 - placeholder-only folders outside the E课 name pool create course shells
+  ---
+  duration_ms: 2.311958
+  type: 'test'
+  ...
+# Subtest: compareManifestWithDiscovery classifies moved, deleted, new and empty without mutating
+ok 179 - compareManifestWithDiscovery classifies moved, deleted, new and empty without mutating
+  ---
+  duration_ms: 6.747959
+  type: 'test'
+  ...
+# Subtest: JSON body preserves Chinese text split across UTF-8 chunks
+ok 180 - JSON body preserves Chinese text split across UTF-8 chunks
+  ---
+  duration_ms: 7.102083
+  type: 'test'
+  ...
+# Subtest: JSON body byte limit counts UTF-8 bytes and aborts oversized input
+ok 181 - JSON body byte limit counts UTF-8 bytes and aborts oversized input
+  ---
+  duration_ms: 5.443333
+  type: 'test'
+  ...
+# Subtest: JSON body rejects malformed UTF-8 before JSON parsing
+ok 182 - JSON body rejects malformed UTF-8 before JSON parsing
+  ---
+  duration_ms: 76.202875
+  type: 'test'
+  ...
+# Subtest: public JSON bodies can reject already-decoded replacement characters
+ok 183 - public JSON bodies can reject already-decoded replacement characters
+  ---
+  duration_ms: 20.466708
+  type: 'test'
+  ...
+# Subtest: helpful reaction marks, dedupes and cancels per user
+ok 184 - helpful reaction marks, dedupes and cancels per user
+  ---
+  duration_ms: 2.610625
+  type: 'test'
+  ...
+# Subtest: helpful reaction rejects down votes and unknown reviews
+ok 185 - helpful reaction rejects down votes and unknown reviews
+  ---
+  duration_ms: 1.338917
+  type: 'test'
+  ...
+# Subtest: DATA_DIR and STATE_DB_PATH resolve runtime paths
+ok 186 - DATA_DIR and STATE_DB_PATH resolve runtime paths
+  ---
+  duration_ms: 53.568833
+  type: 'test'
+  ...
+# Subtest: production runtime paths are explicit, absolute, and outside releases
+ok 187 - production runtime paths are explicit, absolute, and outside releases
+  ---
+  duration_ms: 4.055459
+  type: 'test'
+  ...
+# Subtest: production preflight fails before creating SQLite or mutable files
+ok 188 - production preflight fails before creating SQLite or mutable files
+  ---
+  duration_ms: 531.841834
+  type: 'test'
+  ...
+# Subtest: runtime migration plan is deterministic and record-loss free
+ok 189 - runtime migration plan is deterministic and record-loss free
+  ---
+  duration_ms: 154.281708
+  type: 'test'
+  ...
+# Subtest: unmatched or deleted records require exact operator confirmation
+ok 190 - unmatched or deleted records require exact operator confirmation
+  ---
+  duration_ms: 68.878
+  type: 'test'
+  ...
+# Subtest: invalid approved reviews and mismatched counts require direct source repair
+ok 191 - invalid approved reviews and mismatched counts require direct source repair
+  ---
+  duration_ms: 73.5255
+  type: 'test'
+  ...
+# Subtest: path-changing write requires exact confirmation and a complete server R2 inventory
+ok 192 - path-changing write requires exact confirmation and a complete server R2 inventory
+  ---
+  duration_ms: 458.75925
+  type: 'test'
+  ...
+# Subtest: S1 real HTTP identity acceptance: legacy openid nullable
+ok 193 - S1 real HTTP identity acceptance: legacy openid nullable
+  ---
+  duration_ms: 21425.677375
+  type: 'test'
+  ...
+# Subtest: S1 real HTTP identity acceptance: legacy openid NOT NULL
+ok 194 - S1 real HTTP identity acceptance: legacy openid NOT NULL
+  ---
+  duration_ms: 15212.725375
+  type: 'test'
+  ...
+# Subtest: service keys are created once, verified by hash, and revocable
+ok 195 - service keys are created once, verified by hash, and revocable
+  ---
+  duration_ms: 33.902708
+  type: 'test'
+  ...
+# Subtest: introspection distinguishes active, blocked, expired and revoked tokens
+ok 196 - introspection distinguishes active, blocked, expired and revoked tokens
+  ---
+  duration_ms: 48.591792
+  type: 'test'
+  ...
+# Subtest: blacklist bulk check caps input and reports blocked state
+ok 197 - blacklist bulk check caps input and reports blocked state
+  ---
+  duration_ms: 16.715625
+  type: 'test'
+  ...
+# Subtest: service rate limit namespaces scopes, counts down and resets
+ok 198 - service rate limit namespaces scopes, counts down and resets
+  ---
+  duration_ms: 32.135208
+  type: 'test'
+  ...
+# Subtest: settings caps are persisted and shrink rate-limit validation
+ok 199 - settings caps are persisted and shrink rate-limit validation
+  ---
+  duration_ms: 32.464292
+  type: 'test'
+  ...
+# Subtest: rate limiter peek is read-only
+ok 200 - rate limiter peek is read-only
+  ---
+  duration_ms: 20.065125
+  type: 'test'
+  ...
+# Subtest: production layout confines releases and the mutable current symlink to one publish root
+ok 201 - production layout confines releases and the mutable current symlink to one publish root
+  ---
+  duration_ms: 2.483042
+  type: 'test'
+  ...
+# Subtest: publishes a Caddy-readable tree and atomically advances current
+ok 202 - publishes a Caddy-readable tree and atomically advances current
+  ---
+  duration_ms: 80.947166
+  type: 'test'
+  ...
+# Subtest: first local publish succeeds when current does not exist
+ok 203 - first local publish succeeds when current does not exist
+  ---
+  duration_ms: 52.994
+  type: 'test'
+  ...
+# Subtest: production startup fails closed when current is missing
+ok 204 - production startup fails closed when current is missing
+  ---
+  duration_ms: 21.587708
+  type: 'test'
+  ...
+# Subtest: production startup fails closed when current is a dangling symlink
+ok 205 - production startup fails closed when current is a dangling symlink
+  ---
+  duration_ms: 30.754541
+  type: 'test'
+  ...
+# Subtest: serializes concurrent rebuilds
+ok 206 - serializes concurrent rebuilds
+  ---
+  duration_ms: 170.687541
+  type: 'test'
+  ...
+# Subtest: failed build keeps the active release and leaves no publishing residue
+ok 207 - failed build keeps the active release and leaves no publishing residue
+  ---
+  duration_ms: 48.081791
+  type: 'test'
+  ...
+# Subtest: startup recovery removes only managed stale artifacts and validates current
+ok 208 - startup recovery removes only managed stale artifacts and validates current
+  ---
+  duration_ms: 106.023291
+  type: 'test'
+  ...
+# Subtest: directory fsync never hides EACCES or EPERM and closes its handle
+ok 209 - directory fsync never hides EACCES or EPERM and closes its handle
+  ---
+  duration_ms: 5.182125
+  type: 'test'
+  ...
+# Subtest: unsupported directory fsync is tolerated only for explicit unsupported errors
+ok 210 - unsupported directory fsync is tolerated only for explicit unsupported errors
+  ---
+  duration_ms: 1.160959
+  type: 'test'
+  ...
+# Subtest: post-switch fsync failure advances current but returns an explicit durability warning
+ok 211 - post-switch fsync failure advances current but returns an explicit durability warning
+  ---
+  duration_ms: 94.084959
+  type: 'test'
+  ...
+# Subtest: unsupported post-switch directory fsync is reported instead of claiming full durability
+ok 212 - unsupported post-switch directory fsync is reported instead of claiming full durability
+  ---
+  duration_ms: 48.0075
+  type: 'test'
+  ...
+# Subtest: retains the active release and only the configured number of newest releases
+ok 213 - retains the active release and only the configured number of newest releases
+  ---
+  duration_ms: 164.31525
+  type: 'test'
+  ...
+1..213
+# tests 213
+# suites 0
+# pass 213
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 41561.265333

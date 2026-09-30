@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { authorizationOf, WEB_SESSION_COOKIE, accountUserDto, requirePhoneVerifiedUser } from "./user-identity.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 
 function responseBody(data) {
@@ -23,17 +24,6 @@ function writeJson(req, res, statusCode, body, { cache = false, setCookies = [] 
   if (setCookies.length) headers["set-cookie"] = setCookies;
   res.writeHead(statusCode, headers);
   res.end(body);
-}
-
-const WEB_SESSION_COOKIE = "nkustudy_web_session";
-
-/** 网页会话：优先 Authorization 头（小程序/开放接口），否则回落到 httpOnly 会话 cookie。 */
-function authorizationOf(req) {
-  const header = String(req.headers.authorization || "");
-  if (header) return header;
-  const cookies = String(req.headers.cookie || "");
-  const match = cookies.match(new RegExp(`(?:^|;[ 	]*)${WEB_SESSION_COOKIE}=([A-Za-z0-9_-]+)(?:;|$)`));
-  return match ? `Bearer ${match[1]}` : "";
 }
 
 function webSessionCookie(token, expiresIn) {
@@ -72,6 +62,19 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
   }
   return async function handlePublicApi(req, res, url) {
     if (url.pathname !== "/api/v1" && !url.pathname.startsWith("/api/v1/")) return false;
+    const identityActions = {
+      "POST /api/v1/auth/web-register": "auth.register",
+      "POST /api/v1/auth/web-login": "auth.web_login",
+      "POST /api/v1/auth/wechat": "auth.wechat_login",
+      "POST /api/v1/auth/phone-verify": "phone.verify",
+      "POST /api/v1/auth/web-login/start": "weblogin.start",
+      "POST /api/v1/auth/web-login/confirm": "weblogin.confirm",
+      "GET /api/v1/auth/web-login/status": "weblogin.status",
+    };
+    let identityAction = identityActions[`${req.method} ${url.pathname}`];
+    let identityUserId = null;
+    let identityStatus = 200;
+    let identityCode = "OK";
     try {
       let data;
       const setCookies = [];
@@ -133,29 +136,34 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         } catch {
           throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
         }
-        data = await mpAuthService.loginWithCode(body.code);
+        const session = await mpAuthService.loginWithCode(body?.code);
+        identityUserId = session.user.id;
+        const { registered, ...publicSession } = session;
+        data = publicSession;
+        if (registered) securityLog?.record({ userId: identityUserId, action: "auth.wechat_register", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok", detail: "status=200 code=OK" });
       } else if (req.method === "GET" && url.pathname === "/api/v1/me") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
-        data = { user: mpAuthService.requireUser(authorizationOf(req)) };
+        data = { user: accountUserDto(mpAuthService.requireUser(authorizationOf(req))) };
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/phone-verify") {
         if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "操作过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
         const user = mpAuthService.requireUser(authorizationOf(req));
         let body;
         try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
-        const code = String(body?.code || "").slice(0, 128);
-        if (!code) throw new PublicApiError(400, "缺少微信手机号授权码。", "INVALID_PHONE_CODE");
+        identityUserId = user.id;
+        const code = body?.code;
+        if (typeof code !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(code)) throw new PublicApiError(400, "缺少微信手机号授权码。", "INVALID_PHONE_CODE");
         if (!phoneVerifier || !phoneVerifier.configured) throw new PublicApiError(503, "手机号验证暂未配置。", "PHONE_VERIFY_NOT_CONFIGURED");
+        if (!mpAuthService.claimPhoneCode(code)) throw new PublicApiError(409, "授权码已使用，请重新授权。", "PHONE_CODE_REPLAYED");
         let phone;
         try {
           phone = await phoneVerifier.getPhoneNumber(code);
-        } catch (error) {
-          console.error(`[phone-verify] wechat failed: ${error.message} ${error.detail || ""}`);
-          securityLog?.record({ userId: user.id, action: "phone.verify", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "error" });
+        } catch {
           throw new PublicApiError(502, "手机号验证失败，请重新授权。", "PHONE_VERIFY_FAILED");
         }
+        // Recheck after the upstream await: a revoked or blocked session cannot finish verification.
+        mpAuthService.requireUser(authorizationOf(req));
         mpAuthService.setVerifiedPhone(user.id, phone);
-        securityLog?.record({ userId: user.id, action: "phone.verify", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
         data = { ok: true, phone_masked: String(phone).slice(0, 3) + "****" + String(phone).slice(-4) };
       } else if (req.method === "POST" && url.pathname === "/api/v1/me/avatar") {
         if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
@@ -211,23 +219,26 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         let body;
         try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
         const session = mpAuthService.webRegister(body);
+        identityUserId = session.user.id;
         setCookies.push(webSessionCookie(session.token, session.expires_in));
-        data = { user: { id: session.user.id, nickname: session.user.nickname, email: session.user.email || "", has_web_password: true } };
+        data = { user: session.user };
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-login") {
         if (!mpAuthService) throw new PublicApiError(503, "登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         let body;
-        try { body = await readBody(req); } catch { body = {}; }
+        try { body = await readBody(req); } catch { throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON"); }
         if (body && (body.nickname || body.password)) {
           // 凭据登录：签发会话令牌并通过 httpOnly cookie 下发
           if (!service.assertMpAuthAttempt(clientIp(req))) throw new PublicApiError(429, "登录尝试过于频繁，请稍后再试。", "AUTH_RATE_LIMITED");
           const session = mpAuthService.webLogin(body);
+          identityUserId = session.user.id;
           setCookies.push(webSessionCookie(session.token, session.expires_in));
-          data = { user: { id: session.user.id, nickname: session.user.nickname, email: session.user.email || "", has_web_password: true } };
+          data = { user: session.user };
         } else {
           // 空请求：仅凭既有 cookie 恢复会话，不消耗登录限流额度
-          const user = mpAuthService.verifyToken(authorizationOf(req));
-          if (!user) throw new PublicApiError(401, "未登录或会话已过期。", "AUTH_REQUIRED");
-          data = { user: { id: user.id, nickname: user.nickname, email: user.email || "", has_web_password: true } };
+          identityAction = "auth.session_restore";
+          const user = mpAuthService.requireUser(authorizationOf(req));
+          identityUserId = user.id;
+          data = { user: accountUserDto(user) };
         }
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-login/start") {
         if (!mpAuthService || !webLoginTickets) throw new PublicApiError(503, "扫码登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
@@ -246,16 +257,15 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-login/confirm") {
         if (!mpAuthService || !webLoginTickets) throw new PublicApiError(503, "扫码登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const user = mpAuthService.requireUser(authorizationOf(req));
+        identityUserId = user.id;
         if (user.blocked) throw new PublicApiError(403, "该账号已被封禁，如有疑问请联系管理员。", "AUTH_USER_BLOCKED");
         if (typeof mpAuthService.isPhoneVerified === "function" && !mpAuthService.isPhoneVerified(user.id)) {
-          securityLog?.record({ userId: user.id, action: "weblogin.blocked_no_phone", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "rejected" });
           throw new PublicApiError(403, "请先在小程序完成手机号验证，再扫码登录网页。", "PHONE_VERIFY_REQUIRED");
         }
         const body = await readJsonBody(req);
         const ticketId = String(body?.ticket || "");
         if (!/^[A-Za-z0-9_-]{10,64}$/.test(ticketId)) throw new PublicApiError(400, "登录码无效。", "WEB_LOGIN_TICKET_INVALID");
         if (!webLoginTickets.confirm(ticketId, user.id)) throw new PublicApiError(404, "登录码不存在或已使用。", "WEB_LOGIN_TICKET_INVALID");
-        securityLog?.record({ userId: user.id, action: "weblogin.confirm", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
         data = { confirmed: true };
       } else if (req.method === "GET" && url.pathname === "/api/v1/auth/web-login/status") {
         if (!mpAuthService || !webLoginTickets) throw new PublicApiError(503, "扫码登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
@@ -265,11 +275,12 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         if (!ticket) {
           data = { status: "expired" };
         } else if (ticket.status === "confirmed") {
+          identityUserId = ticket.userId;
+          identityAction = "weblogin.granted";
           const session = mpAuthService.issueSessionForUser(ticket.userId);
           webLoginTickets.markUsed(ticket.id);
           setCookies.push(webSessionCookie(session.token, session.expires_in));
-          securityLog?.record({ userId: ticket.userId, action: "weblogin.granted", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
-          data = { status: "confirmed", user: { id: session.user.id, nickname: session.user.nickname, has_web_password: false } };
+          data = { status: "confirmed", user: session.user };
         } else {
           data = { status: ticket.status, expires_in: Math.max(1, Math.floor((ticket.expiresAt - Date.now()) / 1000)) };
         }
@@ -366,12 +377,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 data = await service.guideAssistantAnswer(user.id, body);
               } else if (req.method === "POST" && url.pathname === "/api/v1/reviews") {
                 const ip = clientIp(req);
-                // 公安合规：公开 UGC 必须已登录且完成手机号验证
-                if (!mpAuthService || !authUser) throw new PublicApiError(401, "发布评价请先登录。", "AUTH_REQUIRED");
-                if (typeof mpAuthService.isPhoneVerified === "function" && !mpAuthService.isPhoneVerified(authUser.id)) {
-                  securityLog?.record({ userId: authUser.id, action: "ugc.blocked_no_phone", path: url.pathname, ip, userAgent: req.headers["user-agent"] || "", result: "rejected" });
-                  throw new PublicApiError(403, "发布内容需先完成手机号验证。", "PHONE_VERIFY_REQUIRED");
-                }
+                const ugcUser = requirePhoneVerifiedUser(mpAuthService, req);
                 service.assertReviewAttempt(ip);
                 let body;
                 try {
@@ -379,8 +385,8 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 } catch {
                   throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
                 }
-                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: authUser.id, notify });
-                securityLog?.record({ userId: authUser.id, action: "review.submit", targetType: "review", targetId: data?.reviewId || "", path: url.pathname, ip, userAgent: req.headers["user-agent"] || "", result: data?.pending ? "pending" : "ok" });
+                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: ugcUser.id, notify });
+                securityLog?.record({ userId: ugcUser.id, action: "review.submit", targetType: "review", targetId: data?.reviewId || "", path: url.pathname, ip, userAgent: req.headers["user-agent"] || "", result: data?.pending ? "pending" : "ok" });
               } else {
                 throw new PublicApiError(404, "接口不存在。", "NOT_FOUND");
               }
@@ -391,12 +397,28 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       }
       }
       }
-      writeJson(req, res, 200, responseBody(data), { cache: req.method === "GET" && url.pathname !== "/api/v1/health", setCookies });
+      writeJson(req, res, 200, responseBody(data), { cache: req.method === "GET" && !authorizationOf(req) && !url.pathname.startsWith("/api/v1/me") && !url.pathname.startsWith("/api/v1/auth/") && !url.pathname.startsWith("/api/v1/donate/order-status") && url.pathname !== "/api/v1/health", setCookies });
     } catch (error) {
       const statusCode = error instanceof PublicApiError ? error.statusCode : 500;
       const code = error instanceof PublicApiError ? error.code : "INTERNAL_ERROR";
       const message = error instanceof PublicApiError ? error.message : "服务器暂时无法处理请求。";
+      if (req.method === "POST" && url.pathname === "/api/v1/reviews" && code === "PHONE_VERIFY_REQUIRED") {
+        securityLog?.record({ userId: error.userId, action: "ugc.blocked_no_phone", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "rejected" });
+      }
+      identityStatus = statusCode;
+      identityCode = code;
+      identityUserId = error.userId || identityUserId;
       writeJson(req, res, statusCode, JSON.stringify({ code, message }));
+    } finally {
+      if (identityAction) {
+        if (!identityUserId && ["phone.verify", "weblogin.confirm", "auth.session_restore"].includes(identityAction)) {
+          identityUserId = mpAuthService?.introspectToken?.(authorizationOf(req))?.user_id || null;
+        }
+        securityLog?.record({ userId: identityUserId, action: identityAction, path: url.pathname,
+          ip: clientIp(req), userAgent: req.headers["user-agent"] || "",
+          result: identityStatus < 400 ? "ok" : identityStatus >= 500 ? "error" : "rejected",
+          detail: `status=${identityStatus} code=${identityCode}` });
+      }
     }
     return true;
   };

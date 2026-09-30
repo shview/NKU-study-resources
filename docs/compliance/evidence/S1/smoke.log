@@ -1,0 +1,17 @@
+
+> nkustudy@0.1.0 smoke:public-api
+> node scripts/smoke-public-api.mjs
+
+file:///private/tmp/nku-s1-validation/scripts/smoke-public-api.mjs:79
+  throw new Error(`${error.message}${child ? "" : " (child was not started)"}`, { cause: error });
+        ^
+
+Error: Guide list response contract failed.
+    at file:///private/tmp/nku-s1-validation/scripts/smoke-public-api.mjs:79:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+  [cause]: Error: Guide list response contract failed.
+      at file:///private/tmp/nku-s1-validation/scripts/smoke-public-api.mjs:73:68
+      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+}
+
+Node.js v22.23.2
