@@ -216,10 +216,18 @@ for (const notNull of [false, true]) test(`S1 real HTTP identity acceptance: leg
   await request("/api/v1/auth/wechat", { body: { code: "blocked-login" }, expected: 403 });
   const qr = await request("/api/v1/auth/web-login/start", { body: {} });
   const ticket = qr.data.ticket;
+  // Pending responses must not pin the browser to an old status or permit a 304.
+  const pending = await request(`/api/v1/auth/web-login/status?ticket=${ticket}`, { headers: { "if-none-match": '"invented"' } });
+  assert.equal(pending.data.status, "pending");
+  assert.equal(pending.response.headers.get("cache-control"), "no-store");
+  assert.equal(pending.response.headers.has("etag"), false);
   await request("/api/v1/auth/web-login/confirm", { body: { ticket }, headers: cookieB, expected: 403 });
   await request("/api/v1/auth/web-login/confirm", { body: { ticket }, headers: cookieA });
   const qrSession = await request(`/api/v1/auth/web-login/status?ticket=${ticket}`);
   assert.equal(qrSession.response.headers.get("cache-control"), "no-store"); assert.ok(qrSession.cookie); safeDto(qrSession.data);
+  assert.equal(qrSession.response.headers.has("etag"), false);
+  const restoredQrSession = await request("/api/v1/auth/web-login", { body: {}, headers: { cookie: qrSession.cookie } });
+  assert.equal(restoredQrSession.data.user.id, qrSession.data.user.id);
   assert.equal((await request(`/api/v1/auth/web-login/status?ticket=${ticket}`)).data.status, "used");
   assert.equal((await request("/api/v1/auth/web-login/status?ticket=missing-ticket")).data.status, "expired");
   // Anonymous complaints must survive ordinary-submission and guide-feedback switches.

@@ -140,7 +140,8 @@ const footer = {
             <p id="auth-qr-placeholder" class="field-hint" style="margin:0;">正在获取二维码…</p>
             <p class="field-hint" style="margin:0;text-align:center;">用微信「扫一扫」上方二维码，在小程序里确认登录。<br />需已在小程序完成手机号验证。</p>
             <p class="field-hint" style="margin:0;text-align:center;">无法扫码？在小程序「网页登录确认」页输入：<code id="auth-qr-ticket" style="user-select:all;"></code></p>
-            <button type="button" class="button secondary" id="auth-qr-refresh" style="min-height:34px;">刷新二维码</button>
+            <button type="button" class="button" id="auth-qr-check" disabled style="min-height:34px;">我已在手机确认，检查登录</button>
+            <button type="button" class="button secondary" id="auth-qr-refresh" style="min-height:34px;">刷新登录码</button>
           </div>
         </div>
         <div id="auth-login-form">
@@ -181,6 +182,8 @@ const footer = {
         <p id="auth-status" style="text-align:center;font-size:0.85em;color:#dc2626;margin:8px 0 0;"></p>
       </dialog>
       <script>
+        import { createWebLoginController } from "../lib/web-login-controller.js";
+
         (async () => {
           const loginBtn = document.querySelector("#login-btn");
           try {
@@ -199,53 +202,38 @@ const footer = {
           loginBtn.style.display = "";
         })();
         const authModal = document.querySelector("#auth-modal");
-        let authQrTimer = null;
-        function authStopQrPolling() { if (authQrTimer) { clearInterval(authQrTimer); authQrTimer = null; } }
+        const qrCheck = document.querySelector<HTMLButtonElement>("#auth-qr-check");
+        const qrPlaceholder = document.querySelector<HTMLElement>("#auth-qr-placeholder");
+        qrPlaceholder?.setAttribute("role", "status");
+        const qrLogin = createWebLoginController({
+          onState({ phase, message, ticket, qr }) {
+            const img = document.querySelector<HTMLImageElement>("#auth-qr-img");
+            const ticketEl = document.querySelector("#auth-qr-ticket");
+            if (!img || !ticketEl || !qrPlaceholder || !qrCheck) return;
+            img.style.display = qr ? "" : "none";
+            if (qr) img.src = qr;
+            ticketEl.textContent = ticket;
+            qrPlaceholder.textContent = message;
+            qrCheck.disabled = !["pending", "retry"].includes(phase);
+          },
+          onLogin() { location.href = "/me/"; },
+        });
         function authSwitchTab(wechat) {
+          const status = document.querySelector("#auth-status");
+          if (status) status.textContent = "";
           document.querySelector("#auth-tab-password")?.classList.toggle("secondary", wechat);
           document.querySelector("#auth-tab-wechat")?.classList.toggle("secondary", !wechat);
           document.querySelector("#auth-login-form").style.display = wechat ? "none" : "";
           document.querySelector("#auth-register-form").style.display = "none";
           document.querySelector("#auth-wechat-form").style.display = wechat ? "" : "none";
-          if (wechat) startAuthQr(); else authStopQrPolling();
-        }
-        async function startAuthQr() {
-          authStopQrPolling();
-          const img = document.querySelector("#auth-qr-img");
-          const placeholder = document.querySelector("#auth-qr-placeholder");
-          const ticketEl = document.querySelector("#auth-qr-ticket");
-          const status = document.querySelector("#auth-status");
-          img.style.display = "none";
-          placeholder.textContent = "正在获取二维码…";
-          ticketEl.textContent = "";
-          try {
-            const r = await fetch("/api/v1/auth/web-login/start", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-            const d = await r.json();
-            if (!r.ok || d.code !== 0) { placeholder.textContent = d.message || "二维码获取失败，请刷新重试"; return; }
-            const ticket = d.data.ticket;
-            ticketEl.textContent = ticket;
-            if (d.data.qr_available && d.data.qr_image) {
-              img.src = d.data.qr_image;
-              img.style.display = "";
-              placeholder.textContent = "二维码 5 分钟内有效";
-            } else {
-              placeholder.textContent = "二维码暂不可用，可手动输入登录码";
-            }
-            authQrTimer = setInterval(async () => {
-              try {
-                const sr = await fetch(`/api/v1/auth/web-login/status?ticket=${encodeURIComponent(ticket)}`);
-                const sd = await sr.json();
-                if (!sr.ok || sd.code !== 0) { authStopQrPolling(); placeholder.textContent = sd.message || "查询失败，请刷新"; return; }
-                if (sd.data.status === "confirmed") { authStopQrPolling(); location.href = "/me/"; return; }
-                if (sd.data.status === "expired" || sd.data.status === "used") { authStopQrPolling(); placeholder.textContent = "二维码已过期，请刷新"; }
-              } catch {}
-            }, 2000);
-          } catch { placeholder.textContent = "网络错误，请刷新重试"; }
+          if (wechat) qrLogin.start(); else qrLogin.stop();
         }
         document.querySelector("#auth-tab-password")?.addEventListener("click", () => authSwitchTab(false));
         document.querySelector("#auth-tab-wechat")?.addEventListener("click", () => authSwitchTab(true));
-        document.querySelector("#auth-qr-refresh")?.addEventListener("click", () => startAuthQr());
-        authModal?.addEventListener("close", authStopQrPolling);
+        document.querySelector("#auth-qr-refresh")?.addEventListener("click", () => qrLogin.start());
+        qrCheck?.addEventListener("click", () => qrLogin.check());
+        // Reopening must not display an old ticket whose polling has stopped.
+        authModal?.addEventListener("close", () => authSwitchTab(false));
         document.querySelector("#auth-show-register")?.addEventListener("click", (e) => { e.preventDefault(); document.querySelector("#auth-login-form").style.display = "none"; document.querySelector("#auth-register-form").style.display = ""; });
         document.querySelector("#auth-show-login")?.addEventListener("click", (e) => { e.preventDefault(); document.querySelector("#auth-register-form").style.display = "none"; document.querySelector("#auth-login-form").style.display = ""; });
         document.querySelector("#auth-login-submit")?.addEventListener("click", async () => {
