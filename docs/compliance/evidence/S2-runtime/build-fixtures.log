@@ -1,0 +1,35 @@
+
+> nkustudy@0.1.0 build:fixtures
+> node scripts/build-with-fixtures.mjs
+
+14:27:48 [vite] Re-optimizing dependencies because vite config has changed
+14:27:48 [types] Generated 129ms
+14:27:48 [build] output: "static"
+14:27:48 [build] mode: "static"
+14:27:48 [build] directory: /Users/carlos/Documents/ChatGPT/New project 2/NKU-study-resources-s2/dist-fixture/
+14:27:48 [build] Collecting build info...
+14:27:48 [build] ✓ Completed in 170ms.
+14:27:48 [build] Building static entrypoints...
+14:27:49 [vite] ✓ built in 409ms
+14:27:49 [vite] ✓ built in 164ms
+14:27:49 [build] Rearranging server assets...
+
+ generating static routes 
+14:27:49   ├─ /about/index.html (+25ms) 
+14:27:49   ├─ /admin/index.html (+5ms) 
+14:27:49   ├─ /courses/示例课程/index.html (+7ms) 
+14:27:49   ├─ /courses/index.html (+6ms) 
+14:27:49   ├─ /donate/index.html (+11ms) 
+14:27:49   ├─ /feedback/index.html (+5ms) 
+14:27:49   ├─ /friends/index.html (+5ms) 
+14:27:49   ├─ /me/index.html (+5ms) 
+14:27:49   ├─ /participate/index.html (+8ms) 
+14:27:49   ├─ /privacy/index.html (+6ms) 
+14:27:49   ├─ /reviews/detail/index.html (+4ms) 
+14:27:49   ├─ /reviews/index.html (+4ms) 
+14:27:49   ├─ /index.html (+3ms) 
+14:27:49 ✓ Completed in 142ms.
+
+14:27:49 [build] ✓ Completed in 762ms.
+14:27:49 [build] 13 page(s) built in 934ms
+14:27:49 [build] Complete!

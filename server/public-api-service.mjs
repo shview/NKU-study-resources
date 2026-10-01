@@ -576,6 +576,8 @@ export class PublicApiService {
     if (typeof context?.notify === "function" && result.pending && result.notify) {
       Promise.resolve(context.notify({ type: "review.pending", ...result.notify })).catch(() => {});
     }
+    // Keep the public response stable while giving the audit layer the stored ID.
+    context?.onSubmitted?.({ reviewId: result.reviewId || "", pending: result.pending });
     return { submitted: true, pending: result.pending };
   }
 }

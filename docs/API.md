@@ -81,7 +81,7 @@
 | `POST` | `/admin-api/delete-r2-course` | Cookie；已禁用 | 旧课程 R2 删除接口，固定 410 |
 | `POST` | `/admin-api/move-r2-prefix` | Cookie；已禁用 | 旧 R2 移动接口，固定 410 |
 | `POST` | `/admin-api/r2-publish` | Cookie（需相应权限） | 通过 CAS 安全发布 manifest 与 R2 变更 |
-| `GET` | `/admin-api/backup` | Cookie（需相应权限） | 下载 JSON 备份 |
+| `GET` | `/admin-api/backup` | Cookie（backup.manage） | 下载加密完整运行备份或明确标注的局部JSON |
 | `GET` | `/admin-api/backup-settings` | Cookie（需相应权限） | 读取备份设置（不返回密码） |
 | `POST` | `/admin-api/backup-settings` | Cookie（需相应权限） | 更新备份设置和独立保存的密码 |
 | `GET` | `/admin-api/editor-settings` | Cookie（需相应权限） | 读取编辑器设置 |
@@ -100,8 +100,8 @@
 | `GET` | `/admin-api/donate-stats` | Cookie（content.read） | 捐赠统计（总额/来源分布/最近订单） |
 | `GET` | `/admin-api/privacy` | Cookie（content.read） | 读取隐私政策 |
 | `POST` | `/admin-api/privacy` | Cookie（content.edit） | 发布隐私政策 |
-| `GET` | `/admin-api/law-query` | Cookie（law.manage） | 依法调取：按账号/内容聚合证据（每次留痕） |
-| `GET` | `/admin-api/law-export` | Cookie（law.manage） | 依法调取：导出 JSON（每次留痕） |
+| `GET` | `/admin-api/law-query` | Cookie（所有有效管理员） | 依法调取：按账号/内容聚合证据（每次留痕） |
+| `GET` | `/admin-api/law-export` | Cookie（所有有效管理员） | 依法调取：导出 JSON（每次留痕） |
 | `POST` | `/admin-api/donate-pay` | Cookie（services.manage） | 保存微信支付商户配置 |
 | `POST` | `/admin-api/about` | Cookie（需相应权限） | 发布关于页内容 |
 | `GET` | `/admin-api/participate` | Cookie（需相应权限） | 读取参与贡献页和 revision |
@@ -129,7 +129,7 @@
 | `POST` | `/admin-api/accounts/:param/password` | Cookie（需相应权限） | 重置账号密码（body: password, mustChangePassword） |
 | `DELETE` | `/admin-api/accounts/:param` | Cookie（需相应权限） | 删除管理员账号 |
 | `POST` | `/admin-api/me/password` | Cookie | 修改自己的密码 |
-| `GET` | `/admin-api/audit` | Cookie（需相应权限） | 分页查询管理操作审计日志 |
+| `GET` | `/admin-api/audit` | Cookie（所有有效管理员） | 分页查询用户/管理员日志，包含已归档记录 |
 | `GET` | `/admin-api/mp-users` | Cookie（需相应权限） | 小程序用户列表与登录统计 |
 | `POST` | `/admin-api/notify-settings` | `backup.manage` | 设置指南反馈接收开关 |
 | `GET` | `/admin-api/notify-settings` | Cookie（需相应权限） | 飞书通知机器人列表（不返回密钥明文） |
@@ -182,7 +182,7 @@
 - JSON 正文上限为 **2,000,000 字节**。无效 JSON、无效 UTF-8、请求中止返回 `400`；超限在旧接口和管理接口通常返回 `413`。公共 v1 路由会把正文读取失败统一映射为 `400 INVALID_JSON`，超限时底层还会关闭请求连接。
 - `/admin-api/upload` 使用 `multipart/form-data`，限制每次最多 20 个文件、20 个 multipart part、每个文件最多 100 MiB。
 - `/admin-api/content-images` 使用 `multipart/form-data`，单文件 ≤8MB，仅 png/jpeg/webp/gif，存入 R2 `content/<owner>/` 前缀；内容保存时自动删除不再引用的同归属图片。
-- 所有服务端 JSON 响应均为 `application/json; charset=utf-8`。`GET /admin-api/backup` 额外返回 `Content-Disposition: attachment`。
+- 所有服务端 JSON 响应均为 `application/json; charset=utf-8`。`GET /admin-api/backup` 额外返回 `Content-Disposition: attachment`，其中 `scope=all` 使用 `application/octet-stream` 返回加密包。
 
 ### 缓存、ETag、CORS
 
@@ -844,7 +844,11 @@ GET 返回 `{ok:true,data}`，POST 接收 `{data}` 并返回 `{ok:true,data}`；
 
 ### `GET /admin-api/backup`
 
-查询参数 `scope` 默认 `all`，允许 `all`、`manifest`、`reviews`、`feedback`、`pages`、`stats`、`config`。未知值返回 `400`。成功下载文件 `nkustudy-<scope>-backup-YYYY-MM-DD.json`，顶层含 `ok`、`scope`、`createdAt`、无敏感值的 `config`，并按 scope 包含相应数据。管理员密码和 R2 secret 不会进入此下载。
+查询参数 `scope` 默认 `all`，允许 `all`、`manifest`、`reviews`、`feedback`、`pages`、`stats`、`config`。未知值返回 `400`。
+
+`all` 必须先设置至少16位备份加密口令；缺口令返回503。成功返回 `runtime-*.json.enc`，含SQLite全部表及已提交WAL内容、所有现有运行JSON、补写队列、本地日志归档和必要秘密配置的加密快照。加密包包括恢复需要的账户密码哈希及服务配置秘密，应按私密数据保管；口令不能与文件一起公开。文件哈希、SQLite完整性和表数量已经读回校验。课程资源/头像等R2对象字节不在此运行包中。缺必要文件、存储或校验失败不会给出成功下载。
+
+其余scope仍是 `nkustudy-<scope>-backup-YYYY-MM-DD.json`，顶层明确 `complete:false`；局部配置摘要不含账户凭据。局部导出不能用于声称完整恢复。
 
 ```bash
 curl -sS -b admin.cookies -OJ 'https://nkustudy.top/admin-api/backup?scope=manifest'
@@ -873,18 +877,23 @@ GET 返回 `{ok:true,data}`。公开设置字段：
 }
 ```
 
-POST 接收 `{data}`。destination 可附带只写字段 `password`、`clearPassword`；顶层可附带 `encryptionPassword`、`clearEncryptionPassword`。密码存入独立的服务器 secret 文件，响应只返回 `*Configured` 布尔值。不要记录或回显密码。成功 `{ok:true,data}`；此接口当前没有 revision/CAS，但服务器串行保存设置。
+POST 接收 `{data}`。新设置的非空加密口令少于16位返回400；完整备份总含站点数据与必要配置，原`includeSiteData/includeServerConfig/r2BackupPrefix`兼容保留但不再允许拆分完整包或指定公开桶前缀。destination 可附带只写字段 `password`、`clearPassword`；顶层可附带 `encryptionPassword`、`clearEncryptionPassword`。密码存入独立的服务器 secret 文件，响应只返回 `*Configured` 布尔值。不要记录或回显密码。成功 `{ok:true,data}`；此接口当前没有 revision/CAS，但服务器串行保存设置。
 
 ### `POST /admin-api/backup-test-webdav`
 
-请求 `{destination:{id?,url,username?,password?}}`。服务器对目标根目录执行 15 秒超时的 `PROPFIND`，若返回 405 则改用 `HEAD`；200/207/301/302 视为成功。响应 `{ok,status,statusText,message}`，当 `ok:false` 时 HTTP 为 `400`。缺 URL 或网络异常由统一错误处理返回 `500`。
+请求 `{destination:{id?,url,username?,password?}}`。服务器对目标根目录执行 15 秒超时的 `PROPFIND`，若返回 405 则改用 `HEAD`；200/207视为成功，跳转拒绝跟随以避免把凭据转送至其他地址。响应 `{ok,status,statusText,message}`，当 `ok:false` 时 HTTP 为 `400`。缺 URL 或网络异常由统一错误处理返回 `500`。
 
 ### `POST /admin-api/backup-run`
 
-正文可为 `{}`。成功返回备份报告：`{ok:true,manual:true,startedAt,finishedAt,r2:[],webdav:[],warnings:[]}`；每个 WebDAV 报告含 `id,name,uploaded,skipped,errors`。已有任务运行时返回 `409 {ok:false,error:"Backup is already running."}`；R2/WebDAV 异常可能返回 `500`。
+正文可为 `{}`。成功返回 `{ok:true,complete:true,manual:true,startedAt,finishedAt,local:{filename,sha256,verified:true},r2:[],webdav:[],errors:[]}`。启用的远端每个必须上传后GET读回并匹配SHA256；WebDAV报告含`id,verified`，可选课程文件另列`courseFiles.verified`计数。任一目标失败返回409和`ok:false,complete:false,error,errors`，已验证的本地副本保留。已有任务运行时409。
+
+R2只允许显式配置的独立私密 `BACKUP_R2_BUCKET`，不得与公开资源桶相同，且维护者须核验后设置 `BACKUP_R2_PRIVATE_CONFIRMED=1`。自动任务失败一小时后重试。恢复/维护说明见 `docs/compliance/S2_SERVER_ACCEPTANCE.md`。
+
+取运行快照期间拒绝新请求503并等待在途请求结束，短暂暂停是为了取得一致时间点；在途超时或文件故障使备份失败，不用半成品冒充完整。
 
 ```bash
 curl -sS -b admin.cookies -X POST https://nkustudy.top/admin-api/backup-run \
+  -H 'Origin: https://nkustudy.top' -H 'X-NKUStudy-Admin-Request: 1' \
   -H 'Content-Type: application/json' --data '{}'
 ```
 
@@ -920,3 +929,12 @@ npm run check:api-docs
 ```
 
 脚本会按测试覆盖的路由写法，从当前公共和管理 router 提取直接路径比较、路径数组及受支持的动态正则路由，并与本页“接口总表”双向比较。它能发现这些受支持写法中的接口增删漂移，但不是通用 JavaScript 路由分析器；采用新的注册写法时必须先扩展提取器测试。字段、权限、状态码和业务语义仍应同步检查服务层、DTO、集成测试与前端调用。
+
+
+## S2 日志查询增补（2026-10-01）
+
+`GET /admin-api/audit` 对全部有效管理员可用；未登录或停用账号401。默认管理员事件：`username`、`action`、精确`target`（如`review:ID`、`feedback:ID`、`user:ID`）、`from/to`（毫秒时间戳）、`page/page_size`。`kind=user`选用户事件，支持`user_id`、`target_type/target_id`、`action`、`from/to`及分页。最大每页1000，响应`data:{items,total,page,page_size}`；新查询将SQLite和归档合并去重，损坏归档导致请求失败而不是静默返回空结果。
+
+响应含`logHealth`：user/admin/law各自的`ok,pending,inFlight,error,maintenanceError`。失败持久队列不可删除；自动30秒尝试补写。用户结果`interrupted`和管理员`status:0`表示中断后实际结果需核对；结果不是正常业务失败或成功的断言。
+
+`law-query/law-export`按C-08接受所有有效管理员，结果中的`log_pagination`、`audit_pagination`明确总数，`log_page/log_page_size/audit_page/from/to/action`控制日志范围。一次导出仅包含所选日志页，不能把它当作所有页的完整交付；完整交付界面及流程仍留S4。查询条件中的手机号/openid不在审计里重复存原值，失败条件记服务端HMAC摘要，成功归于已解析的对象ID；失败及拒绝也留痕。

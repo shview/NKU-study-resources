@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "version": "v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=",
+  "syntheticOnly": true,
+  "results": [
+    {
+      "topology": "direct peer, forged forwarding ignored",
+      "fields": [
+        "timestamp",
+        "direct peer IP/port",
+        "trusted client IP",
+        "method",
+        "host",
+        "path without query",
+        "status",
+        "UA"
+      ],
+      "redaction": "PASS",
+      "permissions": "0600",
+      "countRetentionDisabled": true,
+      "retentionDays": 400
+    },
+    {
+      "topology": "explicit synthetic trusted proxy",
+      "fields": [
+        "timestamp",
+        "direct peer IP/port",
+        "trusted client IP",
+        "method",
+        "host",
+        "path without query",
+        "status",
+        "UA"
+      ],
+      "redaction": "PASS",
+      "permissions": "0600",
+      "countRetentionDisabled": true,
+      "retentionDays": 400
+    }
+  ]
+}

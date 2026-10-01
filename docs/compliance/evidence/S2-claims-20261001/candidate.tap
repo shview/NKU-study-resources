@@ -1,0 +1,144 @@
+TAP version 13
+# Subtest: S2 administrator HTTP audit, local I/O recovery, consistent private backup and restart
+not ok 1 - S2 administrator HTTP audit, local I/O recovery, consistent private backup and restart
+  ---
+  duration_ms: 224.224292
+  type: 'test'
+  location: '/private/tmp/s2-claim-check-bIkpXJ/candidate/test/s2-admin-runtime.integration.test.mjs:14:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Seeded initial admin account Shview from ADMIN_INITIAL_PASSWORD.
+    node:fs:440
+        return binding.readFileUtf8(path, stringToFlags(options.flag));
+                       ^
+    
+    Error: ENOENT: no such file or directory, open '/private/tmp/s2-claim-check-bIkpXJ/nku-s2-admin-nR61AI/app/server/data/learning-compass-snapshot.json'
+        at readFileSync (node:fs:440:20)
+        at loadLearningCompassSnapshot (file:///private/tmp/s2-claim-check-bIkpXJ/nku-s2-admin-nR61AI/app/server/learning-compass-service.mjs:192:21)
+        at createDefaultLearningCompassService (file:///private/tmp/s2-claim-check-bIkpXJ/nku-s2-admin-nR61AI/app/server/learning-compass-service.mjs:196:39)
+        at file:///private/tmp/s2-claim-check-bIkpXJ/nku-s2-admin-nR61AI/app/server/admin-server.mjs:261:32
+        at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+        at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+        at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+      errno: -2,
+      code: 'ENOENT',
+      syscall: 'open',
+      path: '/private/tmp/s2-claim-check-bIkpXJ/nku-s2-admin-nR61AI/app/server/data/learning-compass-snapshot.json'
+    }
+    
+    Node.js v22.23.2
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    readFileSync (node:fs:440:20)
+    loadLearningCompassSnapshot (file:///private/tmp/s2-claim-check-bIkpXJ/nku-s2-admin-nR61AI/app/server/learning-compass-service.mjs:192:21)
+    createDefaultLearningCompassService (file:///private/tmp/s2-claim-check-bIkpXJ/nku-s2-admin-nR61AI/app/server/learning-compass-service.mjs:196:39)
+    file:///private/tmp/s2-claim-check-bIkpXJ/nku-s2-admin-nR61AI/app/server/admin-server.mjs:261:32
+    ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+    async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+    ChildProcess.<anonymous> (file:///private/tmp/s2-claim-check-bIkpXJ/candidate/test/s2-admin-runtime.integration.test.mjs:39:130)
+    Object.onceWrapper (node:events:634:26)
+    ChildProcess.emit (node:events:519:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: S2 log recovery: failed SQLite commits queue durably, survive restart and replay exactly once
+ok 2 - S2 log recovery: failed SQLite commits queue durably, survive restart and replay exactly once
+  ---
+  duration_ms: 32.2415
+  type: 'test'
+  ...
+# Subtest: S2 crash after SQLite commit does not duplicate an event, and hard process death keeps an interrupted intent
+ok 3 - S2 crash after SQLite commit does not duplicate an event, and hard process death keeps an interrupted intent
+  ---
+  duration_ms: 55.9935
+  type: 'test'
+  ...
+# Subtest: S2 unwritable journal refuses admission and corrupted queue remains visible rather than disappearing
+ok 4 - S2 unwritable journal refuses admission and corrupted queue remains visible rather than disappearing
+  ---
+  duration_ms: 2.465666
+  type: 'test'
+  ...
+# Subtest: S2 archive requires durable readback before deletion; interruption and disk failure retain source
+ok 5 - S2 archive requires durable readback before deletion; interruption and disk failure retain source
+  ---
+  duration_ms: 97.614958
+  type: 'test'
+  ...
+# Subtest: S2 20,010 user records survive quantity threshold; 400-day boundary and archived pagination are exact
+ok 6 - S2 20,010 user records survive quantity threshold; 400-day boundary and archived pagination are exact
+  ---
+  duration_ms: 620.16625
+  type: 'test'
+  ...
+# Subtest: S2 complete encrypted snapshot includes WAL, runtime JSON, logs and secrets; restore is isolated and sessions revoked
+ok 7 - S2 complete encrypted snapshot includes WAL, runtime JSON, logs and secrets; restore is isolated and sessions revoked
+  ---
+  duration_ms: 354.005708
+  type: 'test'
+  ...
+# Subtest: S2 snapshot gate waits for in-flight mutation and rejects overlap; failed snapshot reopens traffic
+ok 8 - S2 snapshot gate waits for in-flight mutation and rejects overlap; failed snapshot reopens traffic
+  ---
+  duration_ms: 0.305792
+  type: 'test'
+  ...
+# Subtest: S2 entry log archive readback, interruption, disk failure, corrupt input and time-only expiry
+ok 9 - S2 entry log archive readback, interruption, disk failure, corrupt input and time-only expiry
+  ---
+  duration_ms: 56.733666
+  type: 'test'
+  ...
+# Subtest: S2 user events: real HTTP outcomes, exact actors/targets, one event and no copied content
+not ok 10 - S2 user events: real HTTP outcomes, exact actors/targets, one event and no copied content
+  ---
+  duration_ms: 222.933875
+  type: 'test'
+  location: '/private/tmp/s2-claim-check-bIkpXJ/candidate/test/s2-user-events.integration.test.mjs:14:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Seeded initial admin account Shview from ADMIN_INITIAL_PASSWORD.
+    node:fs:440
+        return binding.readFileUtf8(path, stringToFlags(options.flag));
+                       ^
+    
+    Error: ENOENT: no such file or directory, open '/private/tmp/s2-claim-check-bIkpXJ/candidate/server/data/learning-compass-snapshot.json'
+        at readFileSync (node:fs:440:20)
+        at loadLearningCompassSnapshot (file:///private/tmp/s2-claim-check-bIkpXJ/candidate/server/learning-compass-service.mjs:192:21)
+        at createDefaultLearningCompassService (file:///private/tmp/s2-claim-check-bIkpXJ/candidate/server/learning-compass-service.mjs:196:39)
+        at file:///private/tmp/s2-claim-check-bIkpXJ/candidate/server/admin-server.mjs:261:32
+        at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+        at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+        at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+      errno: -2,
+      code: 'ENOENT',
+      syscall: 'open',
+      path: '/private/tmp/s2-claim-check-bIkpXJ/candidate/server/data/learning-compass-snapshot.json'
+    }
+    
+    Node.js v22.23.2
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    readFileSync (node:fs:440:20)
+    loadLearningCompassSnapshot (file:///private/tmp/s2-claim-check-bIkpXJ/candidate/server/learning-compass-service.mjs:192:21)
+    createDefaultLearningCompassService (file:///private/tmp/s2-claim-check-bIkpXJ/candidate/server/learning-compass-service.mjs:196:39)
+    file:///private/tmp/s2-claim-check-bIkpXJ/candidate/server/admin-server.mjs:261:32
+    ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+    async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+    ChildProcess.<anonymous> (file:///private/tmp/s2-claim-check-bIkpXJ/candidate/test/s2-user-events.integration.test.mjs:52:62)
+    Object.onceWrapper (node:events:634:26)
+    ChildProcess.emit (node:events:519:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 8
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1273.394208

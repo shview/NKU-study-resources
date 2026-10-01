@@ -1,0 +1,28 @@
+TAP version 13
+# Subtest: S2 complete encrypted snapshot includes WAL, runtime JSON, logs and secrets; restore is isolated and sessions revoked
+not ok 1 - S2 complete encrypted snapshot includes WAL, runtime JSON, logs and secrets; restore is isolated and sessions revoked
+  ---
+  duration_ms: 15.303958
+  type: 'test'
+  location: '/private/tmp/s2-claim-check-WUqnzy/missing-backup-wal/test/s2-durability.test.mjs:88:1'
+  failureType: 'testCodeFailure'
+  error: 'SQLite table counts differ'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    validateDatabase (file:///private/tmp/s2-claim-check-WUqnzy/missing-backup-wal/server/runtime-backup.mjs:49:81)
+    captureRuntime (file:///private/tmp/s2-claim-check-WUqnzy/missing-backup-wal/server/runtime-backup.mjs:78:3)
+    TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-backup-wal/test/s2-durability.test.mjs:97:20)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 55.173125

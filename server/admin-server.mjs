@@ -1,5 +1,7 @@
-﻿import { authorizationOf, requirePhoneVerifiedUser } from "./user-identity.mjs";
-import { createCipheriv, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
+import { SnapshotGate, captureRuntime, saveEncryptedBackup, verifiedUpload } from "./runtime-backup.mjs";
+import { queryAuditMetadata, contentChanges, stampContentActor } from "./admin-audit.mjs";
+import { authorizationOf, requirePhoneVerifiedUser } from "./user-identity.mjs";
+import { createHmac, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { PassThrough } from "node:stream";
@@ -7,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Busboy from "busboy";
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { AtomicJsonStore } from "./atomic-json-store.mjs";
+import { AtomicJsonStore, drainJsonWrites } from "./atomic-json-store.mjs";
 import { syncCourseResponse } from "./admin-response.mjs";
 import { AdminAccountsStore, ADMIN_PERMISSION_POINTS, ADMIN_ROLE_PRESETS, hasAdminPermission } from "./admin-accounts-store.mjs";
 import { AdminSessionStore } from "./admin-session-store.mjs";
@@ -16,7 +18,7 @@ import { ContentPublishJournal, ContentPublishService } from "./content-publish-
 import { manifestRevision, ManifestConflictError, ManifestService } from "./manifest-service.mjs";
 import { validateManifest } from "./manifest-schema.mjs";
 import { PersistentRateLimiter } from "./persistent-rate-limiter.mjs";
-import { createPublicApiHandler, decodePathPart } from "./public-api-router.mjs";
+import { createPublicApiHandler, decodePathPart, USER_EVENT_ACTIONS } from "./public-api-router.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
@@ -116,8 +118,10 @@ const r2Client = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && pr
 const visitDedupMs = 30 * 60 * 1000;
 const visitVisitorCap = 5_000;
 const visitHistoryDays = 400;
+const snapshotGate = new SnapshotGate();
 let backupRunning = false;
 let lastAutoBackupDate = "";
+let nextBackupRetryAt = 0;
 let backupSettingsQueue = Promise.resolve();
 let manifestService;
 let contentPublishService;
@@ -151,6 +155,7 @@ let auditArchiveUploadStarted = false;
 const accountsStore = new AdminAccountsStore({
   dbPath: runtime.stateDbPath,
   archiveDir: auditArchiveDir,
+  journalDir: path.join(dataDir, "log-queue", "admin"),
   onArchive: () => {
     if (auditArchiveUploadStarted) return;
     auditArchiveUploadStarted = true;
@@ -227,10 +232,17 @@ const reviewSubmissionService = new ReviewSubmissionService({
   },
 });
 const donatePayStore = new DonatePayStore({ dataDir });
-const securityLogStore = new UserSecurityLogStore({ dbPath: runtime.stateDbPath });
-const lawLogStore = new LawEnforcementLogStore({ dbPath: runtime.stateDbPath });
+const securityLogStore = new UserSecurityLogStore({ dbPath: runtime.stateDbPath, journalDir: path.join(dataDir, "log-queue", "user"), archiveDir: path.join(dataDir, "security-archive") });
+const lawLogStore = new LawEnforcementLogStore({ dbPath: runtime.stateDbPath, archiveDir: path.join(dataDir, "law-archive"), journalDir: path.join(dataDir, "log-queue", "law") });
 const wechatPhoneVerifier = createWechatPhoneVerifier({ appid: process.env.WECHAT_APPID, secret: process.env.WECHAT_APPSECRET });
-setInterval(() => { try { securityLogStore.prune(); } catch {} }, 24 * 3600 * 1000).unref();
+setInterval(() => {
+  for (const store of [securityLogStore, accountsStore, lawLogStore]) store.writer.replay();
+}, 30000).unref();
+setInterval(() => {
+  for (const store of [securityLogStore, accountsStore, lawLogStore]) {
+    try { store.maintain(); } catch (error) { store.writer.fail(error, "maintenance"); }
+  }
+}, 24 * 3600 * 1000).unref();
 const donateOrderStore = new DonateOrderStore({ dbPath: runtime.stateDbPath });
 const catalogPath2 = path.join(dataDir, "catalog.json");
 const courseCatalog = new CourseCatalogService({
@@ -432,6 +444,7 @@ const handlePublicApi = createPublicApiHandler({
   avatarService, avatarStore, readAvatarUpload: readAvatarUpload });
 
 function json(res, status, data) {
+  res.__recordSubmissionAudit?.(status);
   if (res.writableEnded || res.destroyed) return;
   const body = JSON.stringify(data);
   res.writeHead(status, {
@@ -544,6 +557,7 @@ async function writeBackupSettingsUnlocked(input) {
     };
   }).filter((dest) => dest.url);
   if (typeof input.encryptionPassword === "string" && input.encryptionPassword) {
+    if (input.encryptionPassword.length < 16) throw Object.assign(new Error("备份加密口令至少需要16个字符。"), { statusCode: 400 });
     secrets.encryptionPassword = input.encryptionPassword;
   }
   if (input.clearEncryptionPassword) secrets.encryptionPassword = "";
@@ -626,28 +640,6 @@ async function writeEditorSettings(data) {
   return next;
 }
 
-function encryptText(plainText, passphrase) {
-  const salt = randomBytes(16);
-  const iv = randomBytes(12);
-  const key = pbkdf2Sync(passphrase, salt, 310000, 32, "sha256");
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([cipher.update(String(plainText), "utf8"), cipher.final()]);
-  return {
-    algorithm: "AES-256-GCM",
-    kdf: "PBKDF2-SHA256",
-    iterations: 310000,
-    salt: salt.toString("base64"),
-    iv: iv.toString("base64"),
-    tag: cipher.getAuthTag().toString("base64"),
-    data: encrypted.toString("base64"),
-  };
-}
-
-function readFileIfExists(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath, "utf8");
-}
-
 function backupData(scope = "all") {
   const createdAt = nowIso();
   const safeConfig = {
@@ -657,11 +649,13 @@ function backupData(scope = "all") {
     r2Bucket: r2Bucket || "",
     r2Prefix,
     r2Configured: Boolean(r2Client && r2Bucket),
-    note: "Admin password hashes are included for account recovery; plaintext passwords and R2 secret keys are never included.",
+    note: "Partial exports exclude account credentials. Recoverable account data is included only in the encrypted complete backup.",
   };
   const data = {
     ok: true,
     scope,
+    complete: false,
+    note: "Partial content export only; use scope=all for a recoverable encrypted runtime backup.",
     createdAt,
     config: safeConfig,
   };
@@ -680,52 +674,10 @@ function backupData(scope = "all") {
   if (scope === "all" || scope === "pages") data.pages = pages();
   if (scope === "all" || scope === "stats") data.visitStats = readVisitStats();
   if (scope === "all" || scope === "config") data.editorSettings = readEditorSettings();
-  if (scope === "all" || scope === "config") data.adminAccounts = accountsStore.exportForBackup();
   if (!["all", "manifest", "reviews", "feedback", "pages", "stats", "config"].includes(scope)) {
     return null;
   }
   return data;
-}
-
-function serverConfigBackup() {
-  const secrets = readBackupSecrets();
-  const envText = readFileIfExists("/etc/nkustudy/admin.env");
-  const config = {
-    createdAt: nowIso(),
-    files: [
-      { path: "/etc/caddy/Caddyfile", content: readFileIfExists("/etc/caddy/Caddyfile") },
-      { path: "/etc/systemd/system/nkustudy-admin.service", content: readFileIfExists("/etc/systemd/system/nkustudy-admin.service") },
-    ].filter((file) => file.content !== null),
-    encryptedSecrets: null,
-    note: "The environment file is encrypted when a backup encryption password is configured.",
-  };
-  if (envText && secrets.encryptionPassword) {
-    config.encryptedSecrets = {
-      path: "/etc/nkustudy/admin.env",
-      payload: encryptText(envText, secrets.encryptionPassword),
-    };
-  } else if (envText) {
-    config.encryptedSecrets = {
-      path: "/etc/nkustudy/admin.env",
-      missing: true,
-      note: "Encryption password is not configured, so sensitive env content was not included.",
-    };
-  }
-  return config;
-}
-
-async function putR2Json(key, data) {
-  if (!r2Client || !r2Bucket) throw new Error("R2 upload is not configured on the server.");
-  await r2Client.send(new PutObjectCommand({
-    Bucket: r2Bucket,
-    Key: objectKey(key),
-    Body: JSON.stringify(data, null, 2),
-    ContentType: "application/json; charset=utf-8",
-  }));
-}
-
-function backupDateKey() {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function webdavHeaders(dest, extra = {}) {
@@ -745,12 +697,15 @@ function webdavUrl(dest, relativePath = "") {
 }
 
 async function webdavRequest(dest, method, relativePath, options = {}) {
+  if (process.env.NODE_ENV === "production" && new URL(dest.url).protocol !== "https:") throw new Error("生产WebDAV备份必须使用HTTPS。");
   const response = await fetch(webdavUrl(dest, relativePath), {
+    redirect: "error",
+    signal: options.signal || AbortSignal.timeout(30000),
     method,
     headers: webdavHeaders(dest, options.headers || {}),
     body: options.body,
     duplex: options.body ? "half" : undefined,
-    signal: options.signal,
+
   });
   return response;
 }
@@ -791,114 +746,87 @@ async function ensureWebdavDirs(dest, relativePath) {
   }
 }
 
-async function remoteWebdavStat(dest, relativePath) {
-  const response = await webdavRequest(dest, "HEAD", relativePath);
-  if (response.status === 404) return null;
-  if (!response.ok) return null;
-  return {
-    size: Number(response.headers.get("content-length") || 0),
-    modified: response.headers.get("last-modified") ? new Date(response.headers.get("last-modified")).getTime() : 0,
-  };
-}
-
-function shouldUpload(remote, size, modified) {
-  if (!remote) return true;
-  if (Number(remote.size || 0) !== Number(size || 0)) return true;
-  if (modified && remote.modified && modified > remote.modified + 1000) return true;
-  return false;
-}
-
-async function uploadWebdavBuffer(dest, relativePath, buffer, modified = 0) {
-  const remote = await remoteWebdavStat(dest, relativePath);
-  if (!shouldUpload(remote, buffer.length, modified)) return "skipped";
-  await ensureWebdavDirs(dest, relativePath);
-  const response = await webdavRequest(dest, "PUT", relativePath, {
-    headers: {
-      "content-length": String(buffer.length),
-      "content-type": "application/octet-stream",
-    },
-    body: buffer,
+async function createCompleteBackup() {
+  const password = readBackupSecrets().encryptionPassword;
+  if (!password || password.length < 16) throw Object.assign(new Error("请先设置至少16位备份加密口令。"), { statusCode: 503 });
+  return snapshotGate.capture(async () => {
+    await r2MutationQueue.queue.catch(() => {});
+    await drainJsonWrites();
+    const extraFiles = { "admin-secret": secretPath };
+    if (fs.existsSync(backupSecretPath)) extraFiles["backup-secrets.json"] = backupSecretPath;
+    if (process.env.NODE_ENV === "production") {
+      extraFiles["admin.env"] = process.env.BACKUP_ENV_FILE || "/etc/nkustudy/admin.env";
+      extraFiles["Caddyfile"] = process.env.BACKUP_CADDY_FILE || "/etc/caddy/Caddyfile";
+      extraFiles["nkustudy-admin.service"] = process.env.BACKUP_SERVICE_FILE || "/etc/systemd/system/nkustudy-admin.service";
+    }
+    const snapshot = captureRuntime({ db: accountsStore.db, dataDir, extraFiles,
+      requiredFiles: ["manifest.json", "about.json", "home.json", "participate.json", "links.json", "footer.json", "reviews.json", "feedback.json", "visit-stats.json", "editor-settings.json", "backup-settings.json"] });
+    return saveEncryptedBackup({ snapshot, password, directory: path.join(dataDir, "private-backups") });
   });
-  if (!response.ok) throw new Error(`WebDAV PUT failed for ${relativePath}: ${response.status}`);
-  return "uploaded";
-}
-
-async function uploadWebdavR2Object(dest, object, relativePath) {
-  const size = Number(object.Size || 0);
-  const modified = object.LastModified ? new Date(object.LastModified).getTime() : 0;
-  const remote = await remoteWebdavStat(dest, relativePath);
-  if (!shouldUpload(remote, size, modified)) return "skipped";
-  await ensureWebdavDirs(dest, relativePath);
-  const result = await r2Client.send(new GetObjectCommand({ Bucket: r2Bucket, Key: object.Key }));
-  const response = await webdavRequest(dest, "PUT", relativePath, {
-    headers: {
-      "content-length": String(size),
-      "content-type": result.ContentType || "application/octet-stream",
-    },
-    body: result.Body,
-  });
-  if (!response.ok) throw new Error(`WebDAV PUT failed for ${relativePath}: ${response.status}`);
-  return "uploaded";
 }
 
 async function runBackupJob({ manual = false } = {}) {
-  if (backupRunning) return { ok: false, error: "Backup is already running." };
+  if (backupRunning) return { ok: false, complete: false, error: "Backup is already running." };
   backupRunning = true;
+  const summary = { ok: false, complete: false, manual, startedAt: nowIso(), r2: [], webdav: [], errors: [], error: "" };
   try {
-  const settings = readBackupSettings();
-  const date = backupDateKey();
-  const summary = {
-    ok: true,
-    manual,
-    startedAt: nowIso(),
-    r2: [],
-    webdav: [],
-    warnings: [],
-  };
-  const siteData = backupData("all");
-  const configData = serverConfigBackup();
-
-  if (settings.r2DataBackup) {
-    await putR2Json(objectKey(settings.r2BackupPrefix, date, "site-data.json"), siteData);
-    await putR2Json(objectKey(settings.r2BackupPrefix, date, "server-config.json"), configData);
-    summary.r2.push("site-data", "server-config");
-  }
-
-  if (settings.webdavEnabled) {
-    const destinations = (settings.destinations || []).filter((dest) => dest.enabled !== false && dest.url);
-    const siteBuffer = Buffer.from(JSON.stringify(siteData, null, 2));
-    const configBuffer = Buffer.from(JSON.stringify(configData, null, 2));
-    const courseObjects = settings.includeCourseFiles && r2Client && r2Bucket
-      ? (await listR2Objects(`${r2Prefix}/`)).filter((item) => item.Key && !isOpenListPlaceholder(item.Key))
-      : [];
-
-    for (const dest of destinations) {
-      const record = { id: dest.id, name: dest.name, uploaded: 0, skipped: 0, errors: [] };
-      try {
-        if (settings.includeSiteData) {
-          const status = await uploadWebdavBuffer(dest, `site-data/${date}/site-data.json`, siteBuffer);
-          record[status] += 1;
-        }
-        if (settings.includeServerConfig) {
-          const status = await uploadWebdavBuffer(dest, `server-config/${date}/server-config.json`, configBuffer);
-          record[status] += 1;
-        }
-        for (const object of courseObjects) {
-          const status = await uploadWebdavR2Object(dest, object, `course-files/${object.Key}`);
-          record[status] += 1;
-        }
-      } catch (error) {
-        record.errors.push(error.message);
-      }
-      summary.webdav.push(record);
+    const settings = readBackupSettings();
+    const backup = await createCompleteBackup();
+    summary.local = { filename: path.basename(backup.file), sha256: backup.sha256, verified: true };
+    const name = path.basename(backup.file);
+    if (settings.r2DataBackup) {
+      // Never use the public course resource bucket for private data, even encrypted.
+      const bucket = process.env.BACKUP_R2_BUCKET;
+      if (!bucket || bucket === r2Bucket || process.env.BACKUP_R2_PRIVATE_CONFIRMED !== "1") throw new Error("独立私密备份桶尚未配置并核验；本地备份已保留。" );
+      if (!r2Client) throw new Error("Private backup R2 client unavailable");
+      const key = `runtime-backups/${name}`;
+      await verifiedUpload(backup.bytes, {
+        put: bytes => r2Client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: "application/octet-stream" })),
+        get: async () => Buffer.from(await (await r2Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))).Body.transformToByteArray()),
+      });
+      summary.r2.push({ key, verified: true });
     }
-  }
-
-  summary.finishedAt = nowIso();
-  return summary;
-  } finally {
-    backupRunning = false;
-  }
+    if (settings.webdavEnabled) {
+      const destinations = (settings.destinations || []).filter(dest => dest.enabled !== false && dest.url);
+      if (!destinations.length) summary.errors.push("WebDAV enabled without a destination");
+      for (const dest of destinations) {
+        const entry = { id: dest.id, verified: false };
+        try {
+          const relative = `runtime-backups/${name}`;
+          await verifiedUpload(backup.bytes, {
+            put: async bytes => { await ensureWebdavDirs(dest, relative); const result = await webdavRequest(dest, "PUT", relative, { body: bytes, signal: AbortSignal.timeout(30000) }); if (!result.ok) throw new Error(`WebDAV PUT ${result.status}`); },
+            get: async () => { const result = await webdavRequest(dest, "GET", relative, { signal: AbortSignal.timeout(30000) }); if (!result.ok) throw new Error(`WebDAV GET ${result.status}`); return Buffer.from(await result.arrayBuffer()); },
+          });
+          entry.verified = true;
+          if (settings.includeCourseFiles) {
+            if (!r2Client || !r2Bucket) throw new Error("Course object backup requested without source configuration");
+            const objects = (await listR2Objects(`${r2Prefix}/`)).filter(item => item.Key && !isOpenListPlaceholder(item.Key));
+            entry.courseFiles = { verified: 0 };
+            for (const object of objects) {
+              const remote = await r2Client.send(new GetObjectCommand({ Bucket: r2Bucket, Key: object.Key }));
+              const bytes = Buffer.from(await remote.Body.transformToByteArray());
+              const relative = `course-files/${object.Key}`;
+              await verifiedUpload(bytes, {
+                put: async value => { await ensureWebdavDirs(dest, relative); const result = await webdavRequest(dest, "PUT", relative, { body: value }); if (!result.ok) throw new Error("Course upload failed"); },
+                get: async () => { const result = await webdavRequest(dest, "GET", relative); if (!result.ok) throw new Error("Course readback failed"); return Buffer.from(await result.arrayBuffer()); },
+              });
+              entry.courseFiles.verified++;
+            }
+          }
+        } catch { summary.errors.push(`WebDAV destination ${dest.id}: upload/readback failed`); }
+        summary.webdav.push(entry);
+      }
+    }
+    summary.ok = summary.errors.length === 0;
+    summary.complete = summary.ok;
+    if (!summary.ok) summary.error = "备份未完整完成；本地文件已保留，请核对远端上传和读回。";
+    summary.externalAssetsIncluded = false;
+    return summary;
+  } catch (error) {
+    summary.errors.push(error.message);
+    summary.error = error.message;
+    return summary;
+  } finally { summary.finishedAt = nowIso(); backupRunning = false; }
 }
 
 function currentShanghaiTime() {
@@ -910,24 +838,9 @@ function currentShanghaiTime() {
 }
 
 async function uploadPendingAuditArchive() {
-  if (!r2Client || !r2Bucket) return;
-  let files;
-  try {
-    files = (await fs.promises.readdir(auditArchiveDir)).filter((name) => name.endsWith(".json")).sort();
-  } catch {
-    return;
-  }
-  for (const name of files.slice(0, 50)) {
-    try {
-      const filePath = path.join(auditArchiveDir, name);
-      const payload = JSON.parse(await fs.promises.readFile(filePath, "utf8"));
-      await putR2Json(objectKey("backups/audit", name), payload);
-      await fs.promises.unlink(filePath);
-    } catch (error) {
-      console.warn(`Audit archive upload failed for ${name}: ${error.message}`);
-      break;
-    }
-  }
+  // Local verified archives are authoritative throughout retention. Off-site
+  // copies are included in the encrypted complete backup, never the public bucket.
+  return { localRetained: true };
 }
 
 let lastDigestDate = "";
@@ -972,14 +885,17 @@ function startBackupScheduler() {
   setInterval(async () => {
     try {
       const settings = readBackupSettings();
-      if (!settings.autoEnabled) return;
+      if (!settings.autoEnabled || Date.now() < nextBackupRetryAt) return;
       const now = currentShanghaiTime();
       if (now.date === lastAutoBackupDate) return;
       if (now.time < settings.dailyTime) return;
+      const result = await runBackupJob({ manual: false });
+      if (!result.ok) throw new Error("Backup incomplete; inspect local backup and destination status");
       lastAutoBackupDate = now.date;
-      await runBackupJob({ manual: false });
+      nextBackupRetryAt = 0;
     } catch (error) {
-      console.error(`Scheduled backup failed: ${error.message}`);
+      nextBackupRetryAt = Date.now() + 60 * 60 * 1000;
+      console.error(`Scheduled backup failed; retry in one hour: ${error.message}`);
     }
   }, 60 * 1000);
 }
@@ -1000,6 +916,44 @@ function cookie(req, name) {
     }
   }
   return "";
+}
+
+function prepareChangeAudit(req) {
+  for (const change of req.__audit.changes || []) {
+    change.eventId = accountsStore.begin({ username: req.__adminAccount.username, action: `content.${change.operation}`,
+      target: `${req.__audit.objectType}:${change.id}`, method: req.method, path: new URL(req.url, adminOrigin).pathname,
+      detail: JSON.stringify({ request: req.__audit.eventId, fields: change.fields, states: change.states }),
+      ip: clientIp(req), userAgent: req.headers["user-agent"] || "" });
+  }
+}
+
+function attachAdminAudit(req, res, url) {
+  const identity = sessionStore.lookup(cookie(req, adminCookieName));
+  const account = identity?.username ? accountsStore.getByUsername(identity.username) : null;
+  const event = req.__audit = { action: `${req.method} ${url.pathname}`, target: "", summary: {} };
+  const base = { username: account?.username || "unknown", action: event.action, method: req.method,
+    path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "" };
+  if (url.pathname.startsWith("/admin-api/law-")) event.summary = queryAuditMetadata(url, secret);
+  if (url.pathname === "/admin-api/backup") event.summary.scope = ["all", "manifest", "reviews", "feedback", "pages", "stats", "config"].includes(url.searchParams.get("scope") || "all") ? url.searchParams.get("scope") || "all" : "invalid";
+  event.eventId = accountsStore.begin({ ...base, detail: JSON.stringify(event.summary) });
+  const writeHead = res.writeHead.bind(res);
+  let recorded = false;
+  res.writeHead = (status, ...args) => {
+    if (!recorded) {
+      recorded = true;
+      const actor = req.__adminAccount?.username || base.username;
+      const detail = JSON.stringify({ outcome: status >= 500 ? "error" : status >= 400 ? "rejected" : "ok", ...event.summary });
+      accountsStore.audit({ ...base, username: actor, action: event.action, status, target: event.target, detail, eventId: event.eventId });
+      for (const change of event.changes || []) accountsStore.audit({ ...base, eventId: change.eventId, username: actor, action: `content.${change.operation}`, status,
+        target: `${event.objectType}:${change.id}`, detail: JSON.stringify({ request: event.eventId, applied: status < 400, fields: change.fields, states: change.states }) });
+      if (["/admin-api/law-query", "/admin-api/law-export"].includes(url.pathname)) {
+        const metadata = queryAuditMetadata(url, secret);
+        lawLogStore.record({ queriedBy: actor, queryType: metadata.scope, queryValue: event.target || `hash:${metadata.criteriaHash}`,
+          exported: url.pathname.endsWith("export"), resultSummary: `status=${status} ${detail}` });
+      }
+    }
+    return writeHead(status, ...args);
+  };
 }
 
 function requireAuth(req, res) {
@@ -1031,11 +985,42 @@ function requirePhoneVerifiedUgcUser(req, res, ip) {
   try { return requirePhoneVerifiedUser(mpAuthService, req); }
   catch (error) {
     if (!(error instanceof PublicApiError)) throw error;
-    securityLogStore.record({ userId: error.userId, action: error.code === "PHONE_VERIFY_REQUIRED" ? "ugc.blocked_no_phone" : "ugc.rejected", path: new URL(req.url, adminOrigin).pathname, ip, userAgent: req.headers["user-agent"] || "", result: "rejected", detail: error.code });
+    if (req.__userEvent) {
+      req.__userEvent.userId = error.userId || req.__userEvent.userId;
+      req.__userEvent.code = error.code;
+    }
     json(res, error.statusCode, { ok: false, error: error.message, code: error.code });
     req.resume();
     return null;
   }
+}
+
+// One outcome per legacy submission, including returns before content is stored.
+// Only server-selected metadata belongs here; never copy complaint text/URLs.
+function attachSubmissionAudit(req, res, url) {
+  const method = req.method;
+  const pathname = url.pathname;
+  if (method !== "POST" || !["/review-api/submit", "/feedback-api/submit"].includes(pathname)) return;
+  const review = url.pathname === "/review-api/submit";
+  const event = req.__userEvent = {
+    action: review ? "review.submit" : "feedback.submit",
+    userId: mpAuthService.auditUserId(authorizationOf(req)),
+    targetType: review ? "review" : "feedback", targetId: "", result: "ok", code: "",
+  };
+  event.eventId = securityLogStore.begin({ ...event, path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "" });
+  let recorded = false;
+  res.__recordSubmissionAudit = (status) => {
+    if (recorded) return;
+    recorded = true;
+    const code = /^[A-Z0-9_]{1,80}$/.test(event.code) ? event.code : `HTTP_${status}`;
+    securityLogStore.record({
+      eventId: event.eventId, userId: event.userId, action: event.action,
+      targetType: event.targetType, targetId: event.targetId,
+      path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "",
+      result: status >= 500 ? "error" : status >= 400 ? "rejected" : event.result,
+      detail: `status=${status} code=${code}`,
+    });
+  };
 }
 
 function requireAdminMutationProvenance(req, res, url) {
@@ -1560,12 +1545,14 @@ async function handleFeedbackSubmit(req, res) {
   const rules = data.rules || {};
   const body = await readPublicBody(req);
   if (body.website) {
+    Object.assign(req.__userEvent, { result: "ignored", code: "HONEYPOT" });
     json(res, 200, { ok: true });
     return;
   }
 
   const type = cleanText(body.type, 40) || "bug";
   const isReport = type === "report" || type === "complaint";
+  req.__userEvent.action = isReport ? "report.submit" : "feedback.submit";
   if (!isReport && !rules.submissionOpen) {
     json(res, 403, { ok: false, error: "反馈提交暂未开放。" });
     return;
@@ -1601,7 +1588,7 @@ async function handleFeedbackSubmit(req, res) {
       guideFeedbackEnabled = (await readJsonFile(notifySettingsPath)).guide_feedback_enabled !== false;
     } catch {}
     if (!guideFeedbackEnabled) {
-      console.log(JSON.stringify({ event: "guide_feedback_dropped", title_head: title.slice(0, 40) }));
+      Object.assign(req.__userEvent, { result: "ignored", code: "GUIDE_FEEDBACK_DISABLED" });
       json(res, 200, { ok: true });
       return;
     }
@@ -1631,7 +1618,7 @@ async function handleFeedbackSubmit(req, res) {
     current.updated = today();
     return current;
   });
-  securityLogStore.record({ userId: ugcUser?.id || null, action: isReport ? "report.submit" : "feedback.submit", targetType: "feedback", targetId: itemId, path: "/feedback-api/submit", ip, userAgent: req.headers["user-agent"] || "", result: "pending", detail: isReport ? `type=${type} target=${reportTarget || reportUrl || "-"}` : "" });
+  Object.assign(req.__userEvent, { userId: ugcUser?.id || null, targetId: itemId, result: "pending", code: "OK" });
   Promise.resolve(notifyModerators({ type: isReport ? "report.pending" : "feedback.pending", title, feedbackType: type, content, resourceRef })).catch(() => {});
   json(res, 200, { ok: true });
 }
@@ -1738,7 +1725,9 @@ async function handleReviewSubmit(req, res) {
   const ugcUser = requirePhoneVerifiedUgcUser(req, res, ip);
   if (!ugcUser) return;
   const result = await reviewSubmissionService.submit(await readPublicBody(req), { clientIp: ip, userAgent: req.headers["user-agent"], userId: ugcUser.id });
-  securityLogStore.record({ userId: ugcUser.id, action: "review.submit", targetType: "review", targetId: (result && result.reviewId) || "", path: "/review-api/submit", ip, userAgent: req.headers["user-agent"] || "", result: result?.pending ? "pending" : "ok" });
+  Object.assign(req.__userEvent, { userId: ugcUser.id, targetId: result?.reviewId || "",
+    result: result?.reviewId ? (result.pending ? "pending" : "ok") : "ignored",
+    code: result?.reviewId ? "OK" : "SUBMISSION_NOT_STORED" });
   if (result.notify) {
     Promise.resolve(notifyModerators({
       type: "review.pending",
@@ -2485,8 +2474,14 @@ migrateFeedbackForModeration();
 
 const server = createServer(async (req, res) => {
   let url;
+  let leaveRequest;
+  const rawWriteHead = res.writeHead.bind(res);
   try {
     url = new URL(req.url || "/", `http://${req.headers.host}`);
+    if (url.pathname.startsWith("/admin-api/")) attachAdminAudit(req, res, url);
+    attachSubmissionAudit(req, res, url);
+    if (!["/admin-api/backup", "/admin-api/backup-run"].includes(url.pathname)) leaveRequest = snapshotGate.enter();
+    else if (snapshotGate.locked) throw Object.assign(new Error("Backup busy"), { statusCode: 503 });
     if (req.method === "POST" && url.pathname === "/api/v1/donate/notify") {
       await handleDonateNotify(req, res);
       return;
@@ -2551,23 +2546,6 @@ const server = createServer(async (req, res) => {
 
     if (!["GET", "HEAD"].includes(req.method || "GET") && !requireAdminMutationProvenance(req, res, url)) return;
 
-    res.on("finish", () => {
-      try {
-        if (!req.__adminAccount || ["GET", "HEAD"].includes(req.method)) return;
-        accountsStore.audit({
-          username: req.__adminAccount.username,
-          action: `${req.method} ${url.pathname}`,
-          method: req.method,
-          path: url.pathname,
-          status: res.statusCode,
-          ip: clientIp(req),
-          userAgent: req.headers["user-agent"] || "",
-        });
-      } catch {
-        // 审计失败不影响已完成的响应。
-      }
-    });
-
     if (req.method === "POST" && url.pathname === "/admin-api/login") {
       const ip = clientIp(req);
       if (!consumeLayeredAttempt("admin-login-attempt", ip, { perIp: 5, global: 60, windowMs: 5 * 60 * 1000 })) {
@@ -2578,29 +2556,14 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const account = accountsStore.verify(body.username, body.password);
       if (!account) {
-        accountsStore.audit({
-          username: cleanText(body.username, 64) || "unknown",
-          action: "login.failed",
-          method: "POST",
-          path: "/admin-api/login",
-          status: 403,
-          ip,
-          userAgent: req.headers["user-agent"] || "",
-        });
+        req.__audit.action = "login.failed";
         json(res, 403, { ok: false, error: "账号或密码不正确。" });
         return;
       }
       const token = sessionStore.create({ username: account.username });
       res.setHeader("set-cookie", `${adminCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800`);
-      accountsStore.audit({
-        username: account.username,
-        action: "login.success",
-        method: "POST",
-        path: "/admin-api/login",
-        status: 200,
-        ip,
-        userAgent: req.headers["user-agent"] || "",
-      });
+      req.__adminAccount = account;
+      req.__audit.action = "login.success";
       json(res, 200, { ok: true, data: { username: account.username, permissions: account.permissions, mustChangePassword: account.mustChangePassword } });
       return;
     }
@@ -2695,6 +2658,13 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/admin-api/backup") {
       if (!requirePermission(req, account, "backup.manage", res)) return;
       const scope = cleanText(url.searchParams.get("scope") || "all", 40);
+      if (scope === "all") {
+        const backup = await createCompleteBackup();
+        req.__audit.summary = { scope: "all", complete: true, sha256: backup.sha256 };
+        res.writeHead(200, { "content-type": "application/octet-stream", "content-disposition": `attachment; filename="${path.basename(backup.file)}"`, "cache-control": "no-store" });
+        res.end(backup.bytes);
+        return;
+      }
       const data = backupData(scope);
       if (!data) {
         json(res, 400, { ok: false, error: "Unknown backup scope." });
@@ -2836,7 +2806,7 @@ const server = createServer(async (req, res) => {
         result.reviews = (reviewsData.reviews || []).filter((review) => Number(review.user_id) === user.id);
         result.feedback = (feedbackData.items || []).filter((item) => Number(item.user_id) === user.id);
         result.security_logs = securityLogStore.byUser(user.id, { limit: 300 });
-        result.admin_audit = accountsStore.searchAudit ? accountsStore.searchAudit({ keyword: String(user.id), limit: 100 }) : [];
+
       } else if (type === "review") {
         const id = String(params.get("id") || "").trim();
         const review = (reviewsData.reviews || []).find((item) => item.id === id);
@@ -2862,14 +2832,24 @@ const server = createServer(async (req, res) => {
       } else {
         throw Object.assign(new Error("查询类型无效。"), { statusCode: 400 });
       }
+      const selection = type === "account" ? { userId: user.id } : { targetType: type, targetId: String(params.get("id") || "").trim() };
+      const logs = securityLogStore.query({ ...selection, page: params.get("log_page"), pageSize: params.get("log_page_size"),
+        from: params.get("from") || 0, to: params.get("to") || Date.now(), action: params.get("action") });
+      result.security_logs = logs.items;
+      result.log_pagination = { total: logs.total, page: logs.page, page_size: logs.page_size };
+      const audit = accountsStore.queryAudit({ includeArchived: true, target: type === "account" ? `user:${user.id}` : `${type}:${selection.targetId}`,
+        page: params.get("audit_page"), pageSize: params.get("log_page_size"), from: params.get("from") || 0, to: params.get("to") || Date.now() });
+      result.admin_audit = audit.items;
+      result.audit_pagination = { total: audit.total, page: audit.page, page_size: audit.page_size };
       return result;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/law-query") {
-      if (!requirePermission(req, account, "law.manage", res)) return;
+      // C-08: requireAuth above accepts every enabled administrator.
       try {
         const result = await buildLawQueryResult(url.searchParams);
-        lawLogStore.record({ queriedBy: account.username, queryType: url.searchParams.get("type") || "", queryValue: url.searchParams.get("value") || url.searchParams.get("id") || "", exported: false, resultSummary: `reviews=${result.reviews.length} feedback=${result.feedback.length} logs=${result.security_logs.length}` });
+        req.__audit.target = result.account ? `user:${result.account.id}` : `${result.query.type}:${url.searchParams.get("id") || ""}`;
+        Object.assign(req.__audit.summary, { reviews: result.reviews.length, feedback: result.feedback.length, logs: result.security_logs.length, logPage: result.log_pagination, auditPage: result.audit_pagination });
         json(res, 200, { ok: true, data: result, law_logs: lawLogStore.listRecent(20) });
       } catch (error) {
         json(res, Number(error.statusCode) || 500, { ok: false, error: String(error.message || "查询失败。") });
@@ -2878,10 +2858,11 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/law-export") {
-      if (!requirePermission(req, account, "law.manage", res)) return;
+      // C-08: requireAuth above accepts every enabled administrator.
       try {
         const result = await buildLawQueryResult(url.searchParams);
-        lawLogStore.record({ queriedBy: account.username, queryType: url.searchParams.get("type") || "", queryValue: url.searchParams.get("value") || url.searchParams.get("id") || "", exported: true, resultSummary: `export reviews=${result.reviews.length} feedback=${result.feedback.length} logs=${result.security_logs.length}` });
+        req.__audit.target = result.account ? `user:${result.account.id}` : `${result.query.type}:${url.searchParams.get("id") || ""}`;
+        Object.assign(req.__audit.summary, { reviews: result.reviews.length, feedback: result.feedback.length, logs: result.security_logs.length, logPage: result.log_pagination, auditPage: result.audit_pagination });
         const body = JSON.stringify({ exported_at: new Date().toISOString(), exported_by: account.username, ...result }, null, 2);
         res.writeHead(200, { "content-type": "application/json; charset=utf-8", "content-disposition": `attachment; filename="law-export-${Date.now()}.json"`, "cache-control": "no-store" });
         res.end(body);
@@ -2966,7 +2947,14 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/admin-api/feedback") {
       if (!requirePermission(req, account, "content.moderate", res)) return;
       const body = await readBody(req);
-      const result = await publishContent(feedbackPath, body.data || {}, body.expectedRevision, normalizeFeedbackData);
+      const before = readFeedback();
+      const incoming = stampContentActor(body.data || {}, before, "items", account.username);
+      const privateIds = new Set(before.items.filter(item => item.private === true).map(item => item.id));
+      for (const item of incoming.items) if (privateIds.has(item.id)) item.private = true;
+      req.__audit.changes = contentChanges(before, normalizeFeedbackData(incoming), "items");
+      req.__audit.objectType = "feedback";
+      prepareChangeAudit(req);
+      const result = await publishContent(feedbackPath, incoming, body.expectedRevision, normalizeFeedbackData);
       json(res, result.ok ? 200 : result.statusCode || 400, result);
       return;
     }
@@ -3029,7 +3017,12 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/admin-api/reviews") {
       if (!requirePermission(req, account, "content.edit", res)) return;
       const body = await readBody(req);
-      json(res, 200, { ok: true, ...await updateReviewStore(body.data || {}, body.expectedRevision) });
+      const before = readReviews();
+      const incoming = stampContentActor(body.data || {}, before, "reviews", account.username);
+      req.__audit.changes = contentChanges(before, incoming, "reviews");
+      req.__audit.objectType = "review";
+      prepareChangeAudit(req);
+      json(res, 200, { ok: true, ...await updateReviewStore(incoming, body.expectedRevision) });
       return;
     }
 
@@ -3041,6 +3034,7 @@ const server = createServer(async (req, res) => {
         permissions: account.permissions,
         mustChangePassword: account.mustChangePassword,
         pendingReviews: (reviewData.reviews || []).filter((review) => String(review.status || "pending") === "pending" && !review.hidden).length,
+        logHealth: { user: securityLogStore.writer.health(), admin: accountsStore.writer.health(), law: lawLogStore.writer.health() },
         openFeedback: (feedbackData.items || []).filter((item) => !item.hidden && String(item.status || "open") === "open").length,
       } });
       return;
@@ -3126,7 +3120,11 @@ const server = createServer(async (req, res) => {
       if (!requirePermission(req, account, "content.moderate", res)) return;
       const body = await readBody(req);
       try {
-        const data = mpAuthService.setUserBlocked(decodePathPart(mpUserBlockMatch[1]), body.blocked === true);
+        const id = decodePathPart(mpUserBlockMatch[1]);
+        const before = mpAuthService.db.prepare("SELECT blocked FROM mp_users WHERE id=?").get(id);
+        req.__audit.target = `user:${id}`;
+        req.__audit.summary = { blocked: { before: before?.blocked === 1, after: body.blocked === true } };
+        const data = mpAuthService.setUserBlocked(id, body.blocked === true);
         json(res, 200, { ok: true, data: { id: data.id, blocked: data.blocked === 1 } });
       } catch (error) {
         json(res, Number(error.statusCode) || 400, { ok: false, error: error.message });
@@ -3347,28 +3345,55 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/audit") {
-      if (!requirePermission(req, account, "audit.read", res)) return;
-      const data = accountsStore.queryAudit({
+      // C-08: all enabled administrators may query logs.
+      const data = url.searchParams.get("kind") === "user" ? securityLogStore.query({
+        userId: url.searchParams.has("user_id") ? url.searchParams.get("user_id") : undefined,
+        targetType: url.searchParams.get("target_type"), targetId: url.searchParams.get("target_id"),
+        action: url.searchParams.get("action"), from: url.searchParams.get("from") || 0, to: url.searchParams.get("to") || Date.now(),
+        page: url.searchParams.get("page"), pageSize: url.searchParams.get("page_size"),
+      }) : accountsStore.queryAudit({
+        includeArchived: true, target: url.searchParams.get("target") || "",
+        from: url.searchParams.get("from") || 0, to: url.searchParams.get("to") || Date.now(),
         page: url.searchParams.get("page") || 1,
         pageSize: url.searchParams.get("page_size") || 50,
         username: cleanText(url.searchParams.get("username") || "", 64),
         action: cleanText(url.searchParams.get("action") || "", 64),
       });
-      json(res, 200, { ok: true, data });
+      req.__audit.summary = { kind: url.searchParams.get("kind") === "user" ? "user" : "admin", page: data.page, pageSize: data.page_size, total: data.total, returned: data.items.length };
+      json(res, 200, { ok: true, data, logHealth: { user: securityLogStore.writer.health(), admin: accountsStore.writer.health(), law: lawLogStore.writer.health() } });
       return;
     }
 
     json(res, 404, { ok: false, error: "Not found" });
   } catch (error) {
     const statusCode = Number(error.statusCode) || 500;
+    const blockedAction = error.code === "BACKUP_BUSY" && USER_EVENT_ACTIONS[`${req.method} ${url.pathname}`];
+    if (blockedAction) {
+      try { securityLogStore.record({ action: blockedAction, userId: mpAuthService.auditUserId(authorizationOf(req)), path: url.pathname,
+        ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "error", detail: "status=503 code=BACKUP_BUSY" }); }
+      catch (logError) { console.error(JSON.stringify({ component: "durable-log", code: logError.code || "LOG_UNAVAILABLE" })); }
+    }
+    if (req.__userEvent) {
+      req.__userEvent.userId = error.userId || req.__userEvent.userId;
+      req.__userEvent.code = error.code || `HTTP_${statusCode}`;
+    }
     const authenticatedAdmin = Boolean(url?.pathname.startsWith("/admin-api/") && sessionStore.validate(cookie(req, adminCookieName)));
-    if (statusCode >= 500) console.error(`Request failed (${req.method} ${url?.pathname || "unknown"}): ${error.message}`);
-    json(res, statusCode, {
-      ok: false,
-      error: statusCode < 500 || authenticatedAdmin ? error.message : "Internal server error.",
-      currentRevision: error.currentRevision,
-    });
-  }
+    if (statusCode >= 500) console.error(`Request failed (${req.method} ${url?.pathname || "unknown"}): ${error.code || "INTERNAL_ERROR"}`);
+    try {
+      json(res, statusCode, {
+        ok: false,
+        error: statusCode < 500 || authenticatedAdmin ? error.message : "Internal server error.",
+        currentRevision: error.currentRevision,
+      });
+    } catch (logError) {
+      // The failure response must not recurse through an unavailable audit sink.
+      console.error(JSON.stringify({ component: "durable-log", phase: "response", code: logError.code || "LOG_UNAVAILABLE" }));
+      if (!res.headersSent && !res.destroyed) {
+        rawWriteHead(503, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        res.end(JSON.stringify({ ok: false, code: "LOG_OUTCOME_UNKNOWN", error: "日志存储故障，操作状态需核对，请勿重复提交。" }));
+      } else res.destroy();
+    }
+  } finally { leaveRequest?.(); }
 });
 
 server.listen(port, host, () => {
@@ -3385,6 +3410,8 @@ function shutdown(signal) {
   for (const child of activeChildren) terminateChildTree(child);
   server.close(() => {
     try {
+      securityLogStore.close();
+      lawLogStore.close();
       sessionStore.close();
       accountsStore.close();
       mpAuthService.close();

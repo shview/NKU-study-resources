@@ -838,7 +838,7 @@ import "vditor/dist/index.css";
               <div class="backup-grid" style="margin-top: 14px;">
                 <article class="card">
                   <h3>整体站点数据</h3>
-                  <p class="muted">包含课程树、评价、反馈、首页、关于页、参与页、友链页和安全配置摘要。</p>
+                  <p class="muted">加密保存账号、内容、日志和必要配置。请先设置至少16位备份口令并妥善保管；课程资源文件需另行备份。</p>
                   <button class="button" type="button" data-backup-scope="all">下载整体备份</button>
                 </article>
                 <article class="card">
@@ -1039,6 +1039,7 @@ import "vditor/dist/index.css";
     let sessionState = { username: "", permissions: [], mustChangePassword: false };
     let accountsState = null;
     let auditState = null;
+    let auditLogHealthy = true;
     let auditPage = 1;
     const permissionLabels = {
       "content.read": "内容查看",
@@ -2285,6 +2286,7 @@ async function loadMpUsersAdmin() {
       });
       const data = await api(`/audit?${params.toString()}`);
       auditState = data.data;
+      auditLogHealthy = !Object.values(data.logHealth || {}).some((health) => health && typeof health === "object" && "ok" in health && health.ok === false);
       renderAuditAdmin();
     }
 
@@ -2344,6 +2346,11 @@ async function loadMpUsersAdmin() {
 
     function renderAuditAdmin() {
       auditAdminList.innerHTML = "";
+      if (!auditLogHealthy) {
+        const warning = document.createElement("p");
+        warning.textContent = "日志存储有待恢复记录或归档故障，请联系维护者检查；不要删除待恢复文件。";
+        auditAdminList?.append(warning);
+      }
       const table = document.createElement("table");
       table.className = "admin-table";
       table.innerHTML = `
@@ -2356,7 +2363,7 @@ async function loadMpUsersAdmin() {
         row.innerHTML = `
           <td style="width: 20%;">${escapeHtml(beijingDateTime(new Date(item.at)))}</td>
           <td style="width: 14%;">${escapeHtml(item.username)}</td>
-          <td style="width: 40%;"><strong>${escapeHtml(auditActionLabel(item.action))}</strong><br /><span class="muted" style="font-size: 0.8em;">${escapeHtml(item.action)}</span></td>
+          <td style="width: 40%;"><strong>${escapeHtml(auditActionLabel(item.action))}</strong><br /><span class="muted" style="font-size: 0.8em;">${escapeHtml(item.action)}</span><details><summary>对象与变化</summary><p style="overflow-wrap:anywhere;">${escapeHtml(item.target || "无单一对象")}<br />${escapeHtml(item.detail || "无附加信息")}</p></details></td>
           <td style="width: 10%;">${escapeHtml(String(item.status))}</td>
           <td style="width: 16%;">${escapeHtml(item.ip || "-")}</td>
         `;
@@ -2374,6 +2381,7 @@ async function loadMpUsersAdmin() {
     }
 
     function hasPerm(permission) {
+      if (permission === "audit.read") return Boolean(sessionState.username);
       return sessionState.permissions.includes(permission);
     }
 
@@ -3788,13 +3796,10 @@ async function loadMpUsersAdmin() {
       backupSettingsEditor.append(
         checkboxField("启用每日自动备份", backupState.autoEnabled !== false, (value) => { backupState.autoEnabled = value; }),
         field("每日执行时间（北京时间 HH:mm）", backupState.dailyTime ?? "03:20", (value) => { backupState.dailyTime = value; }),
-        checkboxField("每天将站点数据与配置备份到 R2", backupState.r2DataBackup !== false, (value) => { backupState.r2DataBackup = value; }),
-        field("R2 备份目录前缀", backupState.r2BackupPrefix ?? "backups/site-data", (value) => { backupState.r2BackupPrefix = value; }),
+        checkboxField("备份到独立私密 R2 存储（需维护者配置）", backupState.r2DataBackup !== false, (value) => { backupState.r2DataBackup = value; }),
         checkboxField("启用 WebDAV 备份", backupState.webdavEnabled === true, (value) => { backupState.webdavEnabled = value; }),
-        checkboxField("WebDAV 同步站点数据", backupState.includeSiteData !== false, (value) => { backupState.includeSiteData = value; }),
-        checkboxField("WebDAV 同步服务器配置", backupState.includeServerConfig !== false, (value) => { backupState.includeServerConfig = value; }),
         checkboxField("WebDAV 同步课程文件", backupState.includeCourseFiles !== false, (value) => { backupState.includeCourseFiles = value; }),
-        passwordField("备份加密密码", backupState.encryptionPasswordConfigured, (value) => { backupState.encryptionPassword = value; })
+        passwordField("备份加密口令（至少16位）", backupState.encryptionPasswordConfigured, (value) => { backupState.encryptionPassword = value; })
       );
 
       webdavSettingsEditor.innerHTML = "";
@@ -4530,13 +4535,12 @@ async function loadMpUsersAdmin() {
     });
 
     document.querySelector("#run-backup-now").addEventListener("click", async () => {
-      if (!confirm("立即执行 R2/WebDAV 备份？课程文件较多时可能需要等待一段时间。")) return;
+      if (!confirm("立即制作加密完整备份并验证已启用的远端目标？备份开始时会短暂暂停新请求，课程文件较多时可能需要等待。")) return;
       backupAdminStatus.textContent = "备份执行中...";
       try {
         const result = await api("/backup-run", { method: "POST", body: "{}" });
-        const uploaded = (result.webdav || []).reduce((sum, item) => sum + (item.uploaded || 0), 0);
-        const skipped = (result.webdav || []).reduce((sum, item) => sum + (item.skipped || 0), 0);
-        backupAdminStatus.textContent = "备份完成。WebDAV 上传 " + uploaded + " 项，跳过 " + skipped + " 项。";
+        const verified = (result.webdav || []).filter((item) => item.verified).length + (result.r2 || []).filter((item) => item.verified).length;
+        backupAdminStatus.textContent = result.complete ? "本地加密备份已校验，另有 " + verified + " 个远端副本通过读回校验。" : "备份未完整完成，请联系维护者核对失败项。";
       } catch (error) {
         backupAdminStatus.textContent = error.message;
       }

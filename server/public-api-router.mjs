@@ -2,6 +2,23 @@ import { createHash } from "node:crypto";
 import { authorizationOf, WEB_SESSION_COOKIE, accountUserDto, requirePhoneVerifiedUser } from "./user-identity.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 
+export const USER_EVENT_ACTIONS = Object.freeze({
+      "POST /api/v1/auth/web-register": "auth.register",
+      "POST /api/v1/auth/web-login": "auth.web_login",
+      "POST /api/v1/auth/wechat": "auth.wechat_login",
+      "POST /api/v1/auth/phone-verify": "phone.verify",
+      "POST /api/v1/auth/web-login/start": "weblogin.start",
+      "POST /api/v1/auth/web-login/confirm": "weblogin.confirm",
+      "GET /api/v1/auth/web-login/status": "weblogin.status",
+      "POST /api/v1/auth/logout": "auth.logout",
+      "POST /api/v1/me/delete-account": "account.delete",
+      "POST /api/v1/me/profile": "profile.update",
+      "POST /api/v1/me/avatar": "avatar.upload",
+      "POST /api/v1/me/web-password": "password.set",
+      "POST /api/v1/me/web-password/change": "password.change",
+      "POST /api/v1/reviews": "review.submit",
+});
+
 function responseBody(data) {
   return JSON.stringify({ code: 0, data });
 }
@@ -62,23 +79,28 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
   }
   return async function handlePublicApi(req, res, url) {
     if (url.pathname !== "/api/v1" && !url.pathname.startsWith("/api/v1/")) return false;
-    const identityActions = {
-      "POST /api/v1/auth/web-register": "auth.register",
-      "POST /api/v1/auth/web-login": "auth.web_login",
-      "POST /api/v1/auth/wechat": "auth.wechat_login",
-      "POST /api/v1/auth/phone-verify": "phone.verify",
-      "POST /api/v1/auth/web-login/start": "weblogin.start",
-      "POST /api/v1/auth/web-login/confirm": "weblogin.confirm",
-      "GET /api/v1/auth/web-login/status": "weblogin.status",
-    };
-    let identityAction = identityActions[`${req.method} ${url.pathname}`];
+
+    let identityAction = USER_EVENT_ACTIONS[`${req.method} ${url.pathname}`];
     let identityUserId = null;
     let identityStatus = 200;
     let identityCode = "OK";
+    let eventResult = "ok";
+    let eventTargetId = "";
+    let response;
+    // Persist an intent before identity or content can change. On a hard stop it
+    // becomes an interrupted event on restart, not a fabricated successful result.
+    const eventId = identityAction ? securityLog?.begin?.({ action: identityAction, path: url.pathname,
+      userId: !["auth.register", "auth.web_login", "auth.wechat_login", "weblogin.start", "weblogin.status"].includes(identityAction) ? mpAuthService?.auditUserId?.(authorizationOf(req)) : null,
+      ip: clientIp(req), userAgent: req.headers["user-agent"] || "" }) : undefined;
     try {
       let data;
       const setCookies = [];
       const authUser = mpAuthService ? mpAuthService.verifyToken(authorizationOf(req)) : null;
+      // Capture the authenticated actor before logout/deletion can revoke it.
+      // Login/register events must identify their resulting account, not an old cookie.
+      if (identityAction && !["auth.register", "auth.web_login", "auth.wechat_login", "weblogin.start", "weblogin.status"].includes(identityAction)) {
+        identityUserId = authUser?.id || mpAuthService?.auditUserId?.(authorizationOf(req)) || mpAuthService?.introspectToken?.(authorizationOf(req))?.user_id || null;
+      }
       if (req.method === "GET" && url.pathname === "/api/v1/health") data = service.health();
       else if (req.method === "GET" && url.pathname === "/api/v1/home") data = service.home();
       else if (req.method === "POST" && url.pathname === "/api/v1/auth/verify") {
@@ -174,11 +196,9 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         const buffer = await readAvatarUpload(req);
         try {
           const result = await avatarService.upload({ userId: user.id, buffer });
-          securityLog?.record({ userId: user.id, action: "avatar.upload", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok" });
           data = { avatar_url: result.avatar_url };
         } catch (error) {
           if (error?.code) {
-            securityLog?.record({ userId: user.id, action: "avatar.upload", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "rejected", detail: error.code });
             throw new PublicApiError(Number(error.statusCode) || 400, error.message, error.code);
           }
           throw error;
@@ -199,7 +219,6 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
           if (String(nextAvatar).trim() !== "") {
             const avatarId = avatarService?.idFromUrl ? avatarService.idFromUrl(nextAvatar) : null;
             if (!avatarService || !avatarStore || !avatarId || !avatarStore.bindable({ userId: user.id, id: avatarId })) {
-              securityLog?.record({ userId: user.id, action: "avatar.bind", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "rejected" });
               throw new PublicApiError(403, "只能使用本人上传且已通过审核的头像。", "AVATAR_NOT_OWNED");
             }
             boundAvatarId = avatarId;
@@ -207,10 +226,10 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
         }
         data = { user: mpAuthService.updateProfile(user, { nickname: body.nickname, avatarUrl: body.avatar_url }) };
         if (boundAvatarId) avatarStore.markBound(boundAvatarId);
-        securityLog?.record({ userId: user.id, action: "profile.update", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "ok", detail: `nickname=${String(body?.nickname || "").slice(0, 40)}` });
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/logout") {
         if (!mpAuthService) throw new PublicApiError(503, "小程序登录暂未开放。", "MP_AUTH_NOT_CONFIGURED");
         const revoked = mpAuthService.revoke(authorizationOf(req));
+        if (!revoked) { eventResult = "ignored"; identityCode = "SESSION_NOT_REVOKED"; }
         setCookies.push(clearWebSessionCookie());
         data = { revoked };
       } else if (req.method === "POST" && url.pathname === "/api/v1/auth/web-register") {
@@ -385,8 +404,13 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
                 } catch {
                   throw new PublicApiError(400, "请求正文必须是有效的 JSON。", "INVALID_JSON");
                 }
-                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: ugcUser.id, notify });
-                securityLog?.record({ userId: ugcUser.id, action: "review.submit", targetType: "review", targetId: data?.reviewId || "", path: url.pathname, ip, userAgent: req.headers["user-agent"] || "", result: data?.pending ? "pending" : "ok" });
+                data = await service.submitReview(body, { clientIp: ip, userAgent: req.headers["user-agent"], userId: ugcUser.id, notify,
+                  onSubmitted(result) {
+                    eventTargetId = result.reviewId || "";
+                    eventResult = eventTargetId ? (result.pending ? "pending" : "ok") : "ignored";
+                    if (!eventTargetId) identityCode = "SUBMISSION_NOT_STORED";
+                  },
+                });
               } else {
                 throw new PublicApiError(404, "接口不存在。", "NOT_FOUND");
               }
@@ -397,29 +421,29 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       }
       }
       }
-      writeJson(req, res, 200, responseBody(data), { cache: req.method === "GET" && !authorizationOf(req) && !url.pathname.startsWith("/api/v1/me") && !url.pathname.startsWith("/api/v1/auth/") && !url.pathname.startsWith("/api/v1/donate/order-status") && url.pathname !== "/api/v1/health", setCookies });
+      response = { status: 200, body: responseBody(data), options: { cache: req.method === "GET" && !authorizationOf(req) && !url.pathname.startsWith("/api/v1/me") && !url.pathname.startsWith("/api/v1/auth/") && !url.pathname.startsWith("/api/v1/donate/order-status") && url.pathname !== "/api/v1/health", setCookies } };
     } catch (error) {
       const statusCode = error instanceof PublicApiError ? error.statusCode : 500;
       const code = error instanceof PublicApiError ? error.code : "INTERNAL_ERROR";
       const message = error instanceof PublicApiError ? error.message : "服务器暂时无法处理请求。";
-      if (req.method === "POST" && url.pathname === "/api/v1/reviews" && code === "PHONE_VERIFY_REQUIRED") {
-        securityLog?.record({ userId: error.userId, action: "ugc.blocked_no_phone", path: url.pathname, ip: clientIp(req), userAgent: req.headers["user-agent"] || "", result: "rejected" });
-      }
       identityStatus = statusCode;
       identityCode = code;
       identityUserId = error.userId || identityUserId;
-      writeJson(req, res, statusCode, JSON.stringify({ code, message }));
+      response = { status: statusCode, body: JSON.stringify({ code, message }) };
     } finally {
       if (identityAction) {
         if (!identityUserId && ["phone.verify", "weblogin.confirm", "auth.session_restore"].includes(identityAction)) {
           identityUserId = mpAuthService?.introspectToken?.(authorizationOf(req))?.user_id || null;
         }
-        securityLog?.record({ userId: identityUserId, action: identityAction, path: url.pathname,
+        securityLog?.record({ eventId, userId: identityUserId, action: identityAction, path: url.pathname,
+          targetType: identityAction === "review.submit" ? "review" : "", targetId: eventTargetId,
           ip: clientIp(req), userAgent: req.headers["user-agent"] || "",
-          result: identityStatus < 400 ? "ok" : identityStatus >= 500 ? "error" : "rejected",
+          result: identityStatus < 400 ? eventResult : identityStatus >= 500 ? "error" : "rejected",
           detail: `status=${identityStatus} code=${identityCode}` });
       }
     }
+    // The client must not receive an outcome before its audit insert is attempted.
+    writeJson(req, res, response.status, response.body, response.options);
     return true;
   };
 }

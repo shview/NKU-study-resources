@@ -437,6 +437,15 @@ export class MpAuthService {
     return user;
   }
 
+  /** Internal audit attribution only: an expired stored token can identify an actor,
+   * but must never grant access or be returned as an active session. */
+  auditUserId(authorizationHeader) {
+    const match = String(authorizationHeader || "").match(/^Bearer ([A-Za-z0-9_-]{32,128})$/);
+    if (!match) return null;
+    const row = this.selectToken.get(tokenHash(match[1]));
+    return row && this.selectUserById.get(row.user_id) ? row.user_id : null;
+  }
+
   updateProfile(user, { nickname, avatarUrl } = {}) {
     const nextNickname = nickname === undefined ? user.nickname : cleanNickname(nickname);
     const nextAvatar = avatarUrl === undefined ? user.avatar_url : cleanAvatar(avatarUrl);

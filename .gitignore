@@ -80,3 +80,14 @@ img-e2e-local.mjs
 img-e2e-raw.mjs
 patch-*.py
 fix-*.py
+
+# Explicit synthetic S2 acceptance evidence, never production logs.
+!docs/compliance/evidence/S2-runtime/npm-test.log
+!docs/compliance/evidence/S2-runtime/api-docs.log
+!docs/compliance/evidence/S2-runtime/build-fixtures.log
+!docs/compliance/evidence/S2-runtime/fixtures.log
+!docs/compliance/evidence/S2-runtime/encoding.log
+!docs/compliance/evidence/S2-runtime/check.log
+!docs/compliance/evidence/S2-user-events/npm-test.log
+!docs/compliance/evidence/S2-user-events/baseline.log
+!docs/compliance/evidence/S2-runtime/durability-final.log

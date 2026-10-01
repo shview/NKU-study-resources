@@ -1,3 +1,4 @@
+import { DurableLog, ensureEventId, archiveRows, archivedRows, pruneArchives } from "./durable-log.mjs";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -103,7 +104,7 @@ function rowToAccount(row) {
 }
 
 export class AdminAccountsStore {
-  constructor({ dbPath, keepAuditRows = 10_000, archiveThreshold = 20_000, archiveDir = null, onArchive = null } = {}) {
+  constructor({ dbPath, keepAuditRows = 10_000, archiveThreshold = 20_000, archiveDir = null, onArchive = null, journalDir = path.join(path.dirname(dbPath), "log-queue", "admin"), fault, alert } = {}) {
     if (!dbPath) throw new Error("AdminAccountsStore requires dbPath.");
     this.dbPath = path.resolve(dbPath);
     this.keepAuditRows = positiveSafeInteger(keepAuditRows, "keepAuditRows");
@@ -176,6 +177,10 @@ export class AdminAccountsStore {
         SELECT id FROM admin_audit_log ORDER BY id DESC LIMIT -1 OFFSET ?
       )
     `);
+    ensureEventId(this.db, "admin_audit_log");
+    this.durableInsertAudit = this.db.prepare("INSERT OR IGNORE INTO admin_audit_log(at, username, action, method, path, status, target, detail, ip, user_agent, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    this.writer = new DurableLog({ directory: journalDir, kind: "admin", fault, alert,
+      insert: (row, id, pending) => this.durableInsertAudit.run(...(pending ? row.map((value, index) => index === 5 ? 0 : index === 7 ? `outcome=interrupted; inspect persisted state; ${value}` : value) : row), id) });
     this.#secureDatabaseFiles();
   }
 
@@ -285,44 +290,34 @@ export class AdminAccountsStore {
     return count;
   }
 
-  audit({ username, action, method = "", path = "", status = 0, target = "", detail = "", ip = "", userAgent = "", now = Date.now() } = {}) {
-    this.insertAudit.run(
-      positiveSafeInteger(now, "now"),
-      String(username || "unknown"),
-      String(action || "").slice(0, 128),
-      String(method || "").slice(0, 8),
-      String(path || "").slice(0, 256),
-      Number(status) || 0,
-      String(target || "").slice(0, 128),
-      String(detail || "").slice(0, 512),
-      String(ip || "").slice(0, 64),
-      String(userAgent || "").slice(0, 256),
-    );
-    const count = Number(this.countAudit.get().count);
-    if (count < this.archiveThreshold) return;
-    // 达到阈值后按批归档：只保留最新 keepAuditRows 条，更早的一批落盘等待上传 R2。
-    const overflow = count - this.keepAuditRows;
-    const spilled = this.db.prepare("SELECT * FROM admin_audit_log ORDER BY id ASC LIMIT ?").all(overflow);
-    if (!spilled.length) return;
-    if (this.archiveDir) {
-      const first = spilled[0].id;
-      const last = spilled[spilled.length - 1].id;
-      const filePath = `${this.archiveDir}/audit-${first}-${last}-${positiveSafeInteger(now, "now")}.json`;
-      fs.writeFileSync(filePath, JSON.stringify({ archived_at: positiveSafeInteger(now, "now"), rows: spilled }, null, 2), { mode: 0o600 });
-      fs.chmodSync(filePath, 0o600);
-    }
-    this.db.prepare("DELETE FROM admin_audit_log WHERE id <= ?").run(spilled[spilled.length - 1].id);
-    if (this.onArchive) {
-      try {
-        this.onArchive();
-      } catch {
-        // 归档回调失败不影响审计写入；待传文件会在下次归档或重启时重试。
-      }
-    }
+  normalizeAudit({ username, action, method = "", path: route = "", status = 0, target = "", detail = "", ip = "", userAgent = "", now = Date.now() } = {}) {
+    return [positiveSafeInteger(now, "now"), String(username || "unknown").slice(0, 64), String(action || "").slice(0, 128), String(method).slice(0, 8), String(route).split("?")[0].slice(0, 256), Number(status) || 0, String(target).slice(0, 128), String(detail).slice(0, 16000), String(ip).slice(0, 64), String(userAgent).slice(0, 256)];
+  }
+  begin(event) { return this.writer.begin(this.normalizeAudit(event)); }
+  audit(event = {}) {
+    this.writer.write(this.normalizeAudit(event), event.eventId);
+    try {
+      const archived = archiveRows({ db: this.db, table: "admin_audit_log", directory: this.archiveDir, keepRows: this.keepAuditRows, threshold: this.archiveThreshold });
+      if (archived) this.onArchive?.();
+    } catch (error) { this.writer.fail(error, "archive"); }
+  }
+  maintain(now = Date.now()) {
+    this.writer.replay();
+    archiveRows({ db: this.db, table: "admin_audit_log", directory: this.archiveDir, keepRows: this.keepAuditRows, threshold: this.archiveThreshold });
+    const cutoff = now - 400 * 86400000;
+    pruneArchives(this.archiveDir, "admin_audit_log", cutoff);
+    this.db.prepare("DELETE FROM admin_audit_log WHERE at < ?").run(cutoff);
+    this.writer.maintenanceError = null;
   }
 
-  queryAudit({ page = 1, pageSize = 50, username = "", action = "" } = {}) {
-    const safePage = Math.max(1, Number(page) || 1);
+  queryAudit({ page = 1, pageSize = 50, username = "", action = "", target = "", from = 0, to = Date.now(), includeArchived = false } = {}) {
+    if (includeArchived) {
+      const unique = new Map([...archivedRows(this.archiveDir, "admin_audit_log"), ...this.db.prepare("SELECT * FROM admin_audit_log").all()].map(row => [row.event_id || `legacy-${row.id}`, row]));
+      const rows = [...unique.values()].filter(row => (!username || row.username === username) && (!action || row.action.includes(action)) && (!target || row.target === target) && row.at >= Number(from) && row.at <= Number(to)).sort((a, b) => b.id - a.id);
+      page = Math.max(1, Math.floor(Number(page) || 1)); pageSize = Math.min(1000, Math.max(1, Math.floor(Number(pageSize) || 50)));
+      return { items: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, page, page_size: pageSize };
+    }
+    const safePage = Math.max(1, Math.floor(Number(page) || 1));
     const safePageSize = Math.min(200, Math.max(1, Number(pageSize) || 50));
     const conditions = [];
     const params = [];
