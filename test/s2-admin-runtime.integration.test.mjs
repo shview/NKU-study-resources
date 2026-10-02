@@ -148,6 +148,42 @@ test('S2 administrator HTTP audit, local I/O recovery, consistent private backup
     const allLogs = JSON.stringify(db.prepare('SELECT * FROM admin_audit_log').all()); assert.equal(allLogs.includes(encryptionPassword), false);
     for (const suffix of ['', '-wal', '-shm']) assert.equal((await fs.stat(dbPath + suffix)).mode & 0o077, 0);
   });
+  await t.test('backup settings keep passwords write-only and remove legacy secret copies on save', async () => {
+    const encryptionPassword = 'synthetic-backup-password-123';
+    const privatePassword = 'synthetic-webdav-password';
+    const saved = await request('/admin-api/backup-settings', { method: 'POST', cookie, body: { data: {
+      encryptionPassword, unexpectedSecret: 'synthetic-unknown-secret', r2DataBackup: false,
+      destinations: [{ id: 'disabled-dav', url: 'https://example.invalid/private/', enabled: false, password: privatePassword }],
+    } } });
+    for (const value of [encryptionPassword, privatePassword, 'synthetic-unknown-secret']) {
+      assert.equal(JSON.stringify(saved.value).includes(value), false, 'backup settings response must not echo secrets');
+      assert.equal((await fs.readFile(path.join(dataDir, 'backup-settings.json'), 'utf8')).includes(value), false, 'ordinary settings must not store secrets');
+    }
+    assert.equal(saved.value.data.encryptionPasswordConfigured, true);
+    assert.equal(saved.value.data.destinations[0].passwordConfigured, true);
+    let secrets = JSON.parse(await fs.readFile(path.join(dataDir, 'backup-secrets.json')));
+    assert.equal(secrets.encryptionPassword, encryptionPassword);
+    assert.equal(secrets.webdav['disabled-dav'].password, privatePassword);
+
+    // Old versions spread input into the ordinary settings. Reads must hide
+    // those copies, and a normal save must scrub them without rotating keys.
+    const file = path.join(dataDir, 'backup-settings.json');
+    const legacy = JSON.parse(await fs.readFile(file));
+    Object.assign(legacy, { encryptionPassword: 'synthetic-legacy-copy', unexpectedSecret: 'synthetic-unknown-secret', encryptionPasswordConfigured: false, clearEncryptionPassword: true });
+    legacy.destinations[0].password = 'synthetic-legacy-dav-copy';
+    await fs.writeFile(file, JSON.stringify(legacy));
+    const read = await request('/admin-api/backup-settings', { cookie });
+    assert.equal(read.value.data.encryptionPasswordConfigured, true);
+    for (const value of ['synthetic-legacy-copy', 'synthetic-unknown-secret', 'synthetic-legacy-dav-copy']) assert.equal(JSON.stringify(read.value).includes(value), false);
+    await request('/admin-api/backup-settings', { method: 'POST', cookie, body: { data: { dailyTime: '04:00', encryptionPassword: '' } } });
+    const clean = JSON.parse(await fs.readFile(file));
+    for (const field of ['encryptionPassword', 'unexpectedSecret', 'clearEncryptionPassword', 'encryptionPasswordConfigured']) assert.equal(Object.hasOwn(clean, field), false);
+    assert.equal(Object.hasOwn(clean.destinations[0], 'password'), false);
+    secrets = JSON.parse(await fs.readFile(path.join(dataDir, 'backup-secrets.json')));
+    assert.equal(secrets.encryptionPassword, encryptionPassword);
+    assert.equal(secrets.webdav['disabled-dav'].password, privatePassword);
+    assert.equal((await fs.stat(path.join(dataDir, 'backup-secrets.json'))).mode & 0o077, 0);
+  });
   await t.test('WebDAV upload is verified through actual HTTP; corrupt readback fails and retry recovers', async () => {
     let corrupt = true; const objects = new Map();
     const remote = http.createServer((req, res) => {
@@ -166,5 +202,61 @@ test('S2 administrator HTTP audit, local I/O recovery, consistent private backup
       const retried = await request('/admin-api/backup-run', { method: 'POST', cookie, body: {} }); assert.equal(retried.value.complete, true); assert.equal(retried.value.webdav[0].verified, true);
       for (const bytes of objects.values()) assert.ok(decryptSnapshot(bytes, encryptionPassword).complete);
     } finally { await new Promise(resolve => remote.close(resolve)); }
+  });
+  await t.test('R2 backup HTTP jobs use dedicated credentials, retain local copies on failure and leave resource access working', async () => {
+    const probe = path.join(dir, 'r2-requests.jsonl');
+    const remoteObject = path.join(dir, 'synthetic-r2-object.bin');
+    const preload = path.join(app, 'synthetic-r2-transport.mjs');
+    // The HTTP server and its backup job are real. Only the external S3
+    // transport is replaced in this temporary process; no Cloudflare request.
+    await fs.writeFile(preload, `import fs from 'node:fs';
+import { S3Client } from '@aws-sdk/client-s3';
+S3Client.prototype.send = async function(command) {
+  const credentials = await this.config.credentials();
+  const endpoint = await this.config.endpoint();
+  fs.appendFileSync(process.env.S2_R2_PROBE, JSON.stringify({ command: command.constructor.name, bucket: command.input.Bucket, key: command.input.Key, accessKeyId: credentials.accessKeyId, hostname: endpoint.hostname }) + '\\n');
+  if (command.constructor.name === 'ListObjectsV2Command') return { Contents: [], IsTruncated: false };
+  if (command.constructor.name === 'PutObjectCommand') { fs.writeFileSync(process.env.S2_R2_OBJECT, command.input.Body); return {}; }
+  if (command.constructor.name === 'GetObjectCommand') return { Body: { transformToByteArray: async () => process.env.S2_R2_CORRUPT === '1' ? Buffer.from('corrupt') : fs.readFileSync(process.env.S2_R2_OBJECT) } };
+  throw new Error('Unexpected synthetic S3 command');
+};\n`);
+    Object.assign(env, {
+      NODE_OPTIONS: `--import=${preload}`, S2_R2_PROBE: probe, S2_R2_OBJECT: remoteObject,
+      R2_ACCOUNT_ID: 'b'.repeat(32), R2_BUCKET: 'synthetic-public-resources', R2_ACCESS_KEY_ID: 'synthetic-resource-key', R2_SECRET_ACCESS_KEY: 'synthetic-resource-secret',
+      BACKUP_R2_ACCOUNT_ID: 'a'.repeat(32), BACKUP_R2_BUCKET: 'synthetic-private-backups', BACKUP_R2_PRIVATE_CONFIRMED: '1',
+      BACKUP_R2_ACCESS_KEY_ID: 'synthetic-backup-key', BACKUP_R2_SECRET_ACCESS_KEY: 'synthetic-backup-secret',
+    });
+    await stop(); await start();
+    await request('/admin-api/backup-settings', { method: 'POST', cookie, body: { data: { r2DataBackup: true, webdavEnabled: false } } });
+    const uploaded = await request('/admin-api/backup-run', { method: 'POST', cookie, body: {} });
+    assert.equal(uploaded.value.complete, true); assert.equal(uploaded.value.r2[0].verified, true);
+    assert.equal(uploaded.value.r2[0].sha256, uploaded.value.local.sha256);
+    assert.ok(decryptSnapshot(await fs.readFile(remoteObject), 'synthetic-backup-password-123').tables.mp_users > 0);
+    await request('/admin-api/manifest-verify', { cookie });
+    let calls = (await fs.readFile(probe, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    assert.deepEqual(calls.map(call => call.command), ['PutObjectCommand', 'GetObjectCommand', 'ListObjectsV2Command']);
+    for (const call of calls.slice(0, 2)) {
+      assert.equal(call.bucket, env.BACKUP_R2_BUCKET); assert.equal(call.accessKeyId, env.BACKUP_R2_ACCESS_KEY_ID);
+      assert.equal(call.hostname, `${env.BACKUP_R2_ACCOUNT_ID}.r2.cloudflarestorage.com`);
+    }
+    assert.equal(calls[2].bucket, env.R2_BUCKET); assert.equal(calls[2].accessKeyId, env.R2_ACCESS_KEY_ID);
+    assert.equal(calls[2].hostname, `${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`);
+
+    env.S2_R2_CORRUPT = '1'; await stop(); await start();
+    const corrupt = await request('/admin-api/backup-run', { method: 'POST', cookie, body: {}, status: 409 });
+    assert.equal(corrupt.value.complete, false); assert.equal(corrupt.value.local.verified, true);
+    assert.ok((await fs.stat(path.join(dataDir, 'private-backups', corrupt.value.local.filename))).size > 0);
+    assert.match(corrupt.value.error, /读回校验失败/);
+    for (const secret of [env.BACKUP_R2_SECRET_ACCESS_KEY, env.R2_SECRET_ACCESS_KEY]) assert.equal(JSON.stringify(corrupt.value).includes(secret), false);
+
+    delete env.BACKUP_R2_SECRET_ACCESS_KEY; await stop(); await start();
+    const countBefore = (await fs.readFile(probe, 'utf8')).trim().split('\n').length;
+    const incomplete = await request('/admin-api/backup-run', { method: 'POST', cookie, body: {}, status: 409 });
+    assert.equal(incomplete.value.complete, false); assert.equal(incomplete.value.local.verified, true);
+    assert.match(incomplete.value.error, /独立配置/);
+    assert.equal((await fs.readFile(probe, 'utf8')).trim().split('\n').length, countBefore, 'missing backup credentials must not use the resource client');
+    await request('/admin-api/manifest-verify', { cookie });
+    calls = (await fs.readFile(probe, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    assert.equal(calls.at(-1).accessKeyId, env.R2_ACCESS_KEY_ID);
   });
 });

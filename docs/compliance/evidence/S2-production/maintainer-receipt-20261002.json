@@ -91,5 +91,14 @@
   },
   "overallAcceptance": "PENDING",
   "productionDataReadByAssistant": false,
-  "remoteBranchIndependentlyVerifiedByAssistant": false
+  "remoteBranchIndependentlyVerifiedByAssistant": false,
+  "localSourceCorrectionsSuperseded": {
+    "date": "2026-10-02",
+    "supersedesIndex": 0,
+    "originalTextPreserved": true,
+    "correction": "The blank UI field did not establish a write-only API. At 477b191 the settings writer spreads top-level input into ordinary JSON; the authenticated settings API can return encryptionPassword. A synthetic HTTP regression test reproduced this before the local allowlist fix.",
+    "followup": "Local tested changes restrict ordinary settings reads/writes and preserve private passwords during legacy cleanup. Normal save after deployment scrubs ordinary copies. A dedicated R2 client is also locally implemented and tested. Neither fix is deployed or committed yet.",
+    "evidence": "../S2-backup-followup/summary.json",
+    "productionExposureAssessment": "Not performed. No claim of public anonymous exposure, exfiltration, or completed production cleanup."
+  }
 }

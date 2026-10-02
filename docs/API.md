@@ -879,6 +879,8 @@ GET 返回 `{ok:true,data}`。公开设置字段：
 
 POST 接收 `{data}`。新设置的非空加密口令少于16位返回400；完整备份总含站点数据与必要配置，原`includeSiteData/includeServerConfig/r2BackupPrefix`兼容保留但不再允许拆分完整包或指定公开桶前缀。destination 可附带只写字段 `password`、`clearPassword`；顶层可附带 `encryptionPassword`、`clearEncryptionPassword`。密码存入独立的服务器 secret 文件，响应只返回 `*Configured` 布尔值。不要记录或回显密码。成功 `{ok:true,data}`；此接口当前没有 revision/CAS，但服务器串行保存设置。
 
+2026-10-02后续修复：普通设置按允许字段读写；旧文件里的顶层口令、客户端状态标志及destination密码/清除指令不会被读回或作为新输入复用。正常保存会清除普通设置中的旧副本，留空口令保留私密文件里的现有值。此约束在477b191中实现不完整：顶层输入整体写入普通JSON并可能由接口回传，不能以页面密码框为空推断接口不含口令。新修复需部署后生效，不会轮换现有口令或重写历史备份。
+
 ### `POST /admin-api/backup-test-webdav`
 
 请求 `{destination:{id?,url,username?,password?}}`。服务器对目标根目录执行 15 秒超时的 `PROPFIND`，若返回 405 则改用 `HEAD`；200/207视为成功，跳转拒绝跟随以避免把凭据转送至其他地址。响应 `{ok,status,statusText,message}`，当 `ok:false` 时 HTTP 为 `400`。缺 URL 或网络异常由统一错误处理返回 `500`。
@@ -887,7 +889,7 @@ POST 接收 `{data}`。新设置的非空加密口令少于16位返回400；完�
 
 正文可为 `{}`。成功返回 `{ok:true,complete:true,manual:true,startedAt,finishedAt,local:{filename,sha256,verified:true},r2:[],webdav:[],errors:[]}`。启用的远端每个必须上传后GET读回并匹配SHA256；WebDAV报告含`id,verified`，可选课程文件另列`courseFiles.verified`计数。任一目标失败返回409和`ok:false,complete:false,error,errors`，已验证的本地副本保留。已有任务运行时409。
 
-R2只允许显式配置的独立私密 `BACKUP_R2_BUCKET`，不得与公开资源桶相同，且维护者须核验后设置 `BACKUP_R2_PRIVATE_CONFIRMED=1`。自动任务失败一小时后重试。恢复/维护说明见 `docs/compliance/S2_SERVER_ACCEPTANCE.md`。
+R2只允许显式配置的独立私密 `BACKUP_R2_BUCKET`，不得与公开资源桶相同，且维护者须核验后设置 `BACKUP_R2_PRIVATE_CONFIRMED=1`。2026-10-02后续修复使用独立的 `BACKUP_R2_ACCOUNT_ID`、`BACKUP_R2_ACCESS_KEY_ID`、`BACKUP_R2_SECRET_ACCESS_KEY`，不回退到资源客户端或其凭据；Account ID为32位十六进制，对应标准R2端点。缺少配置或上传/读回失败返回`complete:false`，已验证的本地副本保留。自动任务失败一小时后重试。恢复/维护说明见 `docs/compliance/S2_SERVER_ACCEPTANCE.md`。
 
 取运行快照期间拒绝新请求503并等待在途请求结束，短暂暂停是为了取得一致时间点；在途超时或文件故障使备份失败，不用半成品冒充完整。
 

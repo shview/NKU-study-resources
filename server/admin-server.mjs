@@ -1,4 +1,5 @@
 import { SnapshotGate, captureRuntime, saveEncryptedBackup, verifiedUpload } from "./runtime-backup.mjs";
+import { uploadPrivateR2Backup } from "./backup-r2.mjs";
 import { queryAuditMetadata, contentChanges, stampContentActor } from "./admin-audit.mjs";
 import { authorizationOf, requirePhoneVerifiedUser } from "./user-identity.mjs";
 import { createHmac, randomBytes } from "node:crypto";
@@ -505,13 +506,23 @@ async function writeBackupSecrets(data) {
   await backupSecretStore.write(backupSecretPath, data, { mode: 0o600 });
 }
 
+function backupSettingsFields(input) {
+  // Passwords and client-supplied status flags are never ordinary settings.
+  return Object.fromEntries(Object.keys(defaultBackupSettings())
+    .filter(key => Object.hasOwn(input || {}, key)).map(key => [key, input[key]]));
+}
+
 function readBackupSettings() {
   const defaults = defaultBackupSettings();
   const data = readJsonFile(backupSettingsPath);
   return {
     ...defaults,
-    ...data,
-    destinations: Array.isArray(data.destinations) ? data.destinations : [],
+    ...backupSettingsFields(data),
+    // Legacy ordinary files must not supply password/clearPassword inputs when
+    // a later partial save reuses their destinations.
+    destinations: Array.isArray(data.destinations) ? data.destinations.map(dest =>
+      Object.fromEntries(['id', 'name', 'url', 'username', 'enabled']
+        .filter(key => Object.hasOwn(dest, key)).map(key => [key, dest[key]]))) : [],
   };
 }
 
@@ -537,7 +548,7 @@ async function writeBackupSettingsUnlocked(input) {
   const secrets = readBackupSecrets();
   const next = {
     ...current,
-    ...input,
+    ...backupSettingsFields(input),
     updated: today(),
   };
   next.dailyTime = /^\d{2}:\d{2}$/.test(String(next.dailyTime || "")) ? next.dailyTime : "03:20";
@@ -775,16 +786,7 @@ async function runBackupJob({ manual = false } = {}) {
     summary.local = { filename: path.basename(backup.file), sha256: backup.sha256, verified: true };
     const name = path.basename(backup.file);
     if (settings.r2DataBackup) {
-      // Never use the public course resource bucket for private data, even encrypted.
-      const bucket = process.env.BACKUP_R2_BUCKET;
-      if (!bucket || bucket === r2Bucket || process.env.BACKUP_R2_PRIVATE_CONFIRMED !== "1") throw new Error("独立私密备份桶尚未配置并核验；本地备份已保留。" );
-      if (!r2Client) throw new Error("Private backup R2 client unavailable");
-      const key = `runtime-backups/${name}`;
-      await verifiedUpload(backup.bytes, {
-        put: bytes => r2Client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: "application/octet-stream" })),
-        get: async () => Buffer.from(await (await r2Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))).Body.transformToByteArray()),
-      });
-      summary.r2.push({ key, verified: true });
+      summary.r2.push(await uploadPrivateR2Backup({ bytes: backup.bytes, filename: name }));
     }
     if (settings.webdavEnabled) {
       const destinations = (settings.destinations || []).filter(dest => dest.enabled !== false && dest.url);
