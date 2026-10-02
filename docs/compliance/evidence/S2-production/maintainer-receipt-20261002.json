@@ -1,0 +1,95 @@
+{
+  "receivedDate": "2026-10-02",
+  "source": "User-relayed maintainer deployment and acceptance summary; no server login or independent production inspection by this assistant.",
+  "reportedDeployment": {
+    "commit": "477b191a58acdef0c0d2076727a8b2b8ef438b6c",
+    "import": "Unmodified Git bundle",
+    "release": "20261001-s2",
+    "node": "v22.23.1",
+    "caddy": "v2.11.4",
+    "branchPushed": "origin/codex/s2-logs-20261001",
+    "mergedToMain": false,
+    "healthyAfterDeployment": true,
+    "realRuntimeContentUsed": true,
+    "fixturePagesPublished": false
+  },
+  "reportedValidation": {
+    "platform": "Linux",
+    "testsPassed": 254,
+    "testsTotal": 254,
+    "apiRoutes": 123,
+    "fixtureCheck": "PASS",
+    "deliberateRegressionsDetected": 4,
+    "windowsNote": "Maintainer reports directory fsync EPERM as an environment issue; this is not a Windows compatibility acceptance."
+  },
+  "reportedRollback": {
+    "release": "20260930-s1",
+    "consistentBackup": "SQLite online backup API plus JSON; reported size 15M; retained"
+  },
+  "reportedUserEvents": ["registration", "session restore", "profile update", "logout"],
+  "reportedAdminAudit": ["actor", "target", "result", "event_id", "failed query retained"],
+  "reportedLogHealth": { "threeQueues": [0, 0, 0], "storage": "ok" },
+  "reportedEntryLogs": {
+    "syntheticProductionRequestReadBack": true,
+    "queryRemoved": true,
+    "requestAndResponseHeadersRemoved": true,
+    "userAgentRetained": true,
+    "source": "Direct connection; source address and port meaning clarified",
+    "archiveTimer": "Enabled, daily 04:30, hash readback, 400-day engineering retention",
+    "capacity": "Maintainer reports sufficient capacity; no measured budget supplied in summary",
+    "alertChannel": "PENDING"
+  },
+  "reportedBackup": {
+    "password": "16+ characters; private mode-0600 file; value not supplied",
+    "complete": true,
+    "sha256Reported": true,
+    "cliVerified": true,
+    "wrongPasswordExit": 1,
+    "scopeNote": "R2 and WebDAV are not enabled; complete:true does not establish a remote copy."
+  },
+  "reportedRestore": {
+    "newDirectory": true,
+    "restored": true,
+    "quarantined": true,
+    "sessionsRevoked": true,
+    "users": 392,
+    "adminAuditRecords": 489,
+    "userSecurityRecords": 253,
+    "courses": 459,
+    "oldSessions": 0,
+    "quarantineMarkerRetained": true
+  },
+  "reportedIncident": {
+    "caddyRestartFailures": 2,
+    "approximateDowntimeMinutes": 2.5,
+    "cause": "Validation run as root created root-owned log files; service user could not open them.",
+    "status": "Maintainer reports fixed and retested",
+    "runbookCorrection": "Validation provisions modules and can have filesystem effects. Validate under the actual service identity/environment and verify writable ownership; do not assume validation cannot create log files."
+  },
+  "pending": [
+    "User backup password retention and encrypted download acceptance",
+    "Private R2 bucket nkustudy-private-backups and credentials integration",
+    "Production remote upload, readback, anonymous access denial and retention evidence",
+    "Working alert delivery and test notification",
+    "D-01 and post-snapshot account/deletion reconciliation",
+    "QA-21",
+    "Optional WebDAV destination"
+  ],
+  "localSourceCorrections": [
+    "At commit 477b191, backup settings return encryptionPasswordConfigured and the password input is blank; the saved plaintext password is not normally retrievable from that page.",
+    "At commit 477b191, backup R2 uploads reuse the resource r2Client. A backup-only token requires a separate client/configuration; it must not replace resource credentials blindly."
+  ],
+  "userAcceptance": {
+    "date": "2026-10-02",
+    "source": "User responses to page loading and administrator audit readback acceptance questions",
+    "backupPageLoads": true,
+    "auditPageLoads": true,
+    "auditOperationReadback": true,
+    "backupPasswordRetainedByUser": "PENDING",
+    "encryptedDownloadByUser": "PENDING",
+    "scope": "User confirmed that both pages load and that querying their administrator account shows the recent operation records without a problem. Password retention and encrypted backup download remain unconfirmed; this does not certify all audit paths."
+  },
+  "overallAcceptance": "PENDING",
+  "productionDataReadByAssistant": false,
+  "remoteBranchIndependentlyVerifiedByAssistant": false
+}
