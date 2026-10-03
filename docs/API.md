@@ -5,7 +5,7 @@
 - 生产站点基址：`https://nkustudy.top`
 - 小程序公共 API 基址：`https://nkustudy.top/api/v1`
 - 资源下载域名：`https://resources.nkustudy.top`
-- 当前版本统计为 **53 个 HTTP method/path 组合**：公共 v1 11 个、网站旧公开接口 7 个、管理接口 35 个。其中 3 个旧 R2 管理接口已禁用并固定返回 `410 Gone`；该数量不是固定兼容契约。
+- 接口范围以以下路由总表为准；`npm run check:api-docs` 会核对总表与源码并输出当前 method/path 数量，避免维护第二份容易过期的统计。其中 3 个旧 R2 管理接口已禁用并固定返回 `410 Gone`。
 
 ## 接口总表
 
@@ -185,6 +185,8 @@
 - 所有服务端 JSON 响应均为 `application/json; charset=utf-8`。`GET /admin-api/backup` 额外返回 `Content-Disposition: attachment`，其中 `scope=all` 使用 `application/octet-stream` 返回加密包。
 
 ### 缓存、ETag、CORS
+
+公开服务在进程内复用 manifest/reviews 快照与匿名评价分组：每次访问检查文件指纹，原子替换或数据改变立即失效，最长 3 秒强制重读。读取失败不会返回旧成功快照；健康检查始终重读。登录用户的 `viewer_reaction` 单独生成，不能复用其他用户的值。此缓存不改变下述 HTTP 缓存约定，也不改变管理端写入、审核和发布回滚流程。
 
 - `/api/v1` 中除 health 外的 GET 成功响应带 `ETag`，并使用 `Cache-Control: public, max-age=60, stale-while-revalidate=300`。携带匹配的 `If-None-Match` 会返回 `304`、无正文。
 - `/api/v1/health`、所有 POST、所有旧公开/管理接口均为 `Cache-Control: no-store`。

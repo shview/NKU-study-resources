@@ -4,6 +4,14 @@ export const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MiB
 export const AVATAR_MAX_DIM = 4096;
 export const AVATAR_OUTPUT_SIZE = 256;
 export const AVATAR_EXTENSIONS = [".jpg", ".jpeg", ".png"];
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function inputFormat(buffer) {
+  if (!Buffer.isBuffer(buffer)) return null;
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "jpeg";
+  if (buffer.length >= PNG_SIGNATURE.length && buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return "png";
+  return null;
+}
 
 export class AvatarError extends Error {
   constructor(code, message, statusCode = 400) {
@@ -49,14 +57,21 @@ export function createAvatarService({
   }
 
   async function processImage(buffer) {
-    let image;
+    const format = inputFormat(buffer);
+    if (!format) throw new AvatarError("AVATAR_INVALID_IMAGE", "请上传有效的 JPEG 或 PNG 图片。", 400);
     try {
-      image = sharp(buffer, { failOn: "error", limitInputPixels: AVATAR_MAX_DIM * AVATAR_MAX_DIM });
+      const image = sharp(buffer, { failOn: "error", limitInputPixels: AVATAR_MAX_DIM * AVATAR_MAX_DIM });
       const meta = await image.metadata();
+      if (meta.format !== format) throw new Error("unexpected image format");
       if (!meta.width || !meta.height) throw new Error("no dimensions");
       if (meta.width > AVATAR_MAX_DIM || meta.height > AVATAR_MAX_DIM) {
         throw new AvatarError("AVATAR_TOO_LARGE", `图片尺寸不能超过 ${AVATAR_MAX_DIM}×${AVATAR_MAX_DIM} 像素。`, 413);
       }
+      // 重编码即剥离全部元信息（EXIF/GPS 等），并规范化为 256px 方形 JPEG
+      return await image
+        .resize(AVATAR_OUTPUT_SIZE, AVATAR_OUTPUT_SIZE, { fit: "cover", position: "centre" })
+        .jpeg({ quality: 82, progressive: false })
+        .toBuffer();
     } catch (error) {
       if (error instanceof AvatarError) throw error;
       if (/pixel limit|exceeds/i.test(String(error?.message || ""))) {
@@ -64,12 +79,6 @@ export function createAvatarService({
       }
       throw new AvatarError("AVATAR_INVALID_IMAGE", "请上传有效的 JPEG 或 PNG 图片。", 400);
     }
-    // 重编码即剥离全部元信息（EXIF/GPS 等），并规范化为 256px 方形 JPEG
-    const output = await image
-      .resize(AVATAR_OUTPUT_SIZE, AVATAR_OUTPUT_SIZE, { fit: "cover", position: "centre" })
-      .jpeg({ quality: 82, progressive: false })
-      .toBuffer();
-    return output;
   }
 
   async function moderate(buffer) {

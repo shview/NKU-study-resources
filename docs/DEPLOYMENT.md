@@ -25,30 +25,47 @@ Administrator sessions are opaque random tokens whose HMAC hashes, absolute expi
 
 ## Reverse-proxy and host baseline
 
-The public Node listener stays on `127.0.0.1:8787`. Caddy is the only public HTTP entry point. Apply response headers at the canonical site block and do not expose the static site on the raw server IP:
+The public Node listener stays on `127.0.0.1:8787`. Caddy is the only public HTTP entry point. Install `ops/Caddyfile.s2-security-headers` and `ops/Caddyfile.s2-log-snippet` as service-readable snippets at the paths below (or adjust the imports to their actual locations). Apply the baseline and redacted access logging to every public site block, including OpenList and redirects. Keep existing upstream, TLS, route and application-specific header settings; do not expose the static site on the raw server IP:
 
 ```caddyfile
+import /etc/caddy/snippets/nkustudy-s2-headers
+import /etc/caddy/snippets/nkustudy-s2-logs
+
 www.nkustudy.top {
+  import s2_security_headers
+  import s2_access_log
   redir https://nkustudy.top{uri} permanent
 }
 
 nkustudy.top {
+  import s2_security_headers
+  import s2_access_log
   header {
-    -Server
-    Strict-Transport-Security "max-age=31536000"
-    X-Content-Type-Options "nosniff"
     X-Frame-Options "DENY"
-    Referrer-Policy "strict-origin-when-cross-origin"
-    Permissions-Policy "camera=(), microphone=(), geolocation=()"
     Content-Security-Policy "base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
   }
   # Existing API handlers and static root follow here.
+}
+
+pan.nkustudy.top {
+  import s2_security_headers
+  import s2_access_log
+  # Retain the EXISTING OpenList reverse_proxy and all of its route settings here.
+  # This is an integration example, not a complete replacement site block.
 }
 
 http://8.217.248.245 {
   respond 404
 }
 ```
+
+The shared logger retains `request.host`, so main, www and pan requests can be distinguished in the same private archive. Each site's query string and request/response headers are removed; only User-Agent is explicitly retained. Use the existing S2 archive timer for this shared log. Do not blindly apply the main site's CSP or frame restrictions to OpenList: verify its document/media previews first. Caddy's `rate_limit` is a non-standard module, so adding that directive to a stock binary is not a safe configuration-only change; retain Node's existing limits and plan any edge module separately.
+
+Do not leave a second unfiltered `log { output stdout; format json }` access logger alongside `import s2_access_log`. Caddy sends each request to both loggers: the S2 file is redacted, but the other logger still includes query parameters, custom request headers and redirect response headers in journal output. Remove only that redundant site-level access-log block from main/www, keeping the S2 import and Caddy's normal process/runtime logging. If a separate access-log destination is required, apply the same filter to that destination as well. Do not delete historical logs as part of this configuration change.
+
+Maintainer update received 2026-10-03 (the supplied receipt is dated 2026-10-02): pan and www now have baseline headers and the S2 import; independent public GET checks returned 200/301 with those headers. The supplied main/www configuration also contained the extra stdout access logger described above. Its disclosure was reproduced locally with synthetic values; removal and production readback remain pending. The receipt's archive and service-health statements are operator evidence, not an independent server inspection. Keep existing `includeSubDomains`, CSP and frame policy unless a separate reviewed change is needed.
+
+Run `CADDY_BIN=/path/to/caddy node scripts/verify-s2-entry-log.mjs` locally before handing off. This exercises main, redirect and simulated OpenList responses, including downloads and errors; it does not attest to the production configuration. After the operator applies the imports, check real GET responses and read back one synthetic log entry per hostname, with a synthetic query/header secret, to confirm redaction and archive coverage. Follow the service-identity validation procedure in [S2 server acceptance](compliance/S2_SERVER_ACCEPTANCE.md); root validation can create root-owned log files and prevent startup.
 
 Validate the Caddy configuration before reloading it. The host firewall should expose only 22, 80 and 443; use a rate-limited SSH rule and remove unused public ports. Do not disable password authentication or root login until a tested non-root sudo account and at least two working administrator public keys exist.
 

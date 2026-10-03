@@ -1494,7 +1494,7 @@ import "vditor/dist/index.css";
         reportsList.innerHTML = '<p class="empty">暂无举报。</p>';
         return;
       }
-      const esc = (v) => String(v ?? "").replace(/[<>&"]/g, "");
+      const esc = escapeHtml;
       const typeLabels = { report: "违法举报", complaint: "内容投诉" };
       reportsList.innerHTML = items.map((item, index) => `
         <div class="review-admin-item" data-report-index="${index}">
@@ -1592,7 +1592,7 @@ import "vditor/dist/index.css";
       const box = document.querySelector("#law-result");
       if (!lawResultData) { box.innerHTML = ""; return; }
       const d = lawResultData;
-      const esc = (v) => String(v ?? "").replace(/[<>&]/g, "");
+      const esc = escapeHtml;
       const accountHtml = d.account ? `
         <div class="card" style="padding:14px 18px;margin-bottom:12px;">
           <b>账号 #${d.account.id}</b> · 昵称：${esc(d.account.nickname) || "-"} · 手机号：${esc(d.account.phone) || "未验证"}（验证时间：${d.account.phone_verified_at ? new Date(d.account.phone_verified_at).toISOString().slice(0, 19) : "-"}）
@@ -1602,9 +1602,9 @@ import "vditor/dist/index.css";
       box.innerHTML = `
         ${accountHtml}
         ${listHtml(d.reviews, "评价")}
-        ${d.reviews.map((r) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>${esc(r.courseTitle)} · ${esc(r.teacher)}</b> <span class="muted">(${esc(r.status)}${r.hidden ? "·hidden" : ""})</span><div style="font-size:0.9em;">${esc(r.content).slice(0, 200)}</div></div>`).join("")}
+        ${d.reviews.map((r) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>${esc(r.courseTitle)} · ${esc(r.teacher)}</b> <span class="muted">(${esc(r.status)}${r.hidden ? "·hidden" : ""})</span><div style="font-size:0.9em;">${esc(String(r.content ?? "").slice(0, 200))}</div></div>`).join("")}
         ${listHtml(d.feedback, "反馈/举报")}
-        ${d.feedback.map((f) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>[${esc(f.type)}] ${esc(f.title)}</b> <span class="muted">(${esc(f.status)})</span>${f.report_url ? `<div class="muted" style="font-size:0.85em;">关联：${esc(f.report_url)} ${esc(f.report_target || "")}</div>` : ""}<div style="font-size:0.9em;">${esc(f.content).slice(0, 200)}</div></div>`).join("")}
+        ${d.feedback.map((f) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>[${esc(f.type)}] ${esc(f.title)}</b> <span class="muted">(${esc(f.status)})</span>${f.report_url ? `<div class="muted" style="font-size:0.85em;">关联：${esc(f.report_url)} ${esc(f.report_target || "")}</div>` : ""}<div style="font-size:0.9em;">${esc(String(f.content ?? "").slice(0, 200))}</div></div>`).join("")}
         ${listHtml(d.security_logs, "安全日志（最近展示）")}
         ${(d.security_logs || []).slice(0, 30).map((l) => `<div class="muted" style="font-size:0.8em;">${new Date(l.at).toISOString().slice(0, 19)} · ${esc(l.action)} · ${esc(l.target_type)}:${esc(l.target_id)} · IP ${esc(l.ip)} · ${esc(l.result)}</div>`).join("")}
       `;
@@ -1612,7 +1612,7 @@ import "vditor/dist/index.css";
 
     function renderLawLogs(rows) {
       const box = document.querySelector("#law-logs");
-      box.innerHTML = rows.length ? `<table class="admin-table"><thead><tr><th>时间</th><th>操作人</th><th>类型</th><th>条件</th><th>导出</th><th>结果概要</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${new Date(row.at + 8 * 3600 * 1000).toISOString().slice(0, 19)}</td><td>${String(row.queried_by).replace(/[<>&]/g, "")}</td><td>${String(row.query_type).replace(/[<>&]/g, "")}</td><td>${String(row.query_value).replace(/[<>&]/g, "")}</td><td>${row.exported ? "是" : "否"}</td><td class="muted">${String(row.result_summary).replace(/[<>&]/g, "")}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">暂无调取记录</p>';
+      box.innerHTML = rows.length ? `<table class="admin-table"><thead><tr><th>时间</th><th>操作人</th><th>类型</th><th>条件</th><th>导出</th><th>结果概要</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${new Date(row.at + 8 * 3600 * 1000).toISOString().slice(0, 19)}</td><td>${escapeHtml(row.queried_by)}</td><td>${escapeHtml(row.query_type)}</td><td>${escapeHtml(row.query_value)}</td><td>${row.exported ? "是" : "否"}</td><td class="muted">${escapeHtml(row.result_summary)}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">暂无调取记录</p>';
     }
 
     async function loadLawLogs() {
@@ -1637,7 +1637,7 @@ import "vditor/dist/index.css";
         donatePayState = data.data;
         renderDonatePay();
       } catch (error) {
-        donatePayEditor.innerHTML = `<p class="muted">支付配置需「服务密钥」权限：${error.message}</p>`;
+        donatePayEditor.innerHTML = `<p class="muted">支付配置需「服务密钥」权限：${escapeHtml(error.message)}</p>`;
       }
     }
 

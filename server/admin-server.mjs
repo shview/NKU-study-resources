@@ -23,6 +23,7 @@ import { PersistentRateLimiter } from "./persistent-rate-limiter.mjs";
 import { createPublicApiHandler, decodePathPart, USER_EVENT_ACTIONS } from "./public-api-router.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 import { PublicApiService } from "./public-api-service.mjs";
+import { runtimeJsonFingerprint } from "./snapshot-cache.mjs";
 import { MpAuthService } from "./mp-auth-service.mjs";
 import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import { createGuideAssistantService } from "./guide-assistant-service.mjs";
@@ -308,6 +309,7 @@ const publicApiService = new PublicApiService({
   donatePayReady: () => donatePayStore.ready(),
   readManifest: () => cleanManifestResources(jsonStore.readSync(manifestPath)),
   readReviews,
+  readSnapshotVersion: () => runtimeJsonFingerprint(dataDir, [manifestPath, reviewsPath]),
   readHome,
   learningCompass: learningCompassService,
   guideAssistant: guideAssistantService,
