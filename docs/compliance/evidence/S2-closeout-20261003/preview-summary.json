@@ -1,0 +1,54 @@
+{
+  "candidateHead": "49507d99959231eea98b34242556b17f7c62c7b8",
+  "candidateBranch": "codex/s2-logs-20261001",
+  "sourceFilesChecked": 111,
+  "sourceHashesEqual": true,
+  "sourceAggregateSha256": "0dcd3f7a9d0a798d4bb6c2de13b14a52207aba9eeb60c3330f099afc34370428",
+  "guardSha256": "89689a078ffd8aedf52bf6f1d839ed5ecd74c937cf094e0dabb4dd5333298daf",
+  "buildExitCode": 0,
+  "siteOrigin": "http://127.0.0.1:50011",
+  "loopbackOnly": true,
+  "supervisorPid": 69291,
+  "apiPid": 69292,
+  "notifySettingsPath": "/private/tmp/nku-s2-closeout-preview-0j440si7/data/notify-settings.json",
+  "syntheticAdminCreated": true,
+  "productionSecretsRead": false,
+  "cloudEnvInherited": false,
+  "autoBackupEnabled": false,
+  "purpose": "Temporary browser verification of current candidate admin UI. No repository modification, commit, push or deployment.",
+  "guardSelftestPid": 70293,
+  "plannedGuardProbes": 6,
+  "plannedGuardProbesAllBlocked": true,
+  "actualRuntimeExternalRequestsAttempted": 0,
+  "finalCheckedAt": "2026-10-03T08:01:56.922831+00:00",
+  "browserVerifiedByRoot": true,
+  "uiFinalSettingsPurposesMatchInitial": true,
+  "uiFinalSettingsEvidence": "/private/tmp/nku-s2-closeout-preview-0j440si7/evidence/ui-final-settings.json",
+  "uiWorkflow": "Ops toggle saved, survived refresh and editor refill, unsaved cancel preserved state, saved removal restored moderation only; operations bot remained ops only. No test/delete actions.",
+  "browserScreenshots": [
+    "/private/tmp/s2-closeout-ui-saved.jpg",
+    "/private/tmp/s2-closeout-ui-final.jpg"
+  ],
+  "finalCandidateOrPreviewSourceMismatches": [],
+  "allNonProbeExternalAttempts": 0,
+  "totalGuardBlocked": 6,
+  "networkExternallySent": 0,
+  "shutdownPending": false,
+  "stoppedAt": "2026-10-03T08:02:37.548414+00:00",
+  "processesStopped": true,
+  "portsStopped": true,
+  "portChecks": {
+    "50011": {
+      "listening": false
+    },
+    "50012": {
+      "listening": false
+    }
+  },
+  "knownStoppedPids": [
+    69291,
+    69292
+  ],
+  "evidenceRetained": true,
+  "finalEgressCountersAfterShutdown": true
+}

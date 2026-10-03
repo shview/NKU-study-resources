@@ -769,6 +769,7 @@ import "vditor/dist/index.css";
                   <label class="perm-check perm-check-inline" style="padding-top: 18px;"><input id="notify-bot-enabled" type="checkbox" checked /> 启用</label>
                   <label class="perm-check perm-check-inline" style="padding-top: 18px;"><input id="notify-purpose-moderation" type="checkbox" checked /> 待审通知</label>
                   <label class="perm-check perm-check-inline" style="padding-top: 18px;"><input id="notify-purpose-digest" type="checkbox" /> 每日汇总</label>
+                  <label class="perm-check perm-check-inline" style="padding-top: 18px;"><input id="notify-purpose-ops" type="checkbox" /> 运行告警</label>
                 </div>
                 <label class="admin-field" style="max-width: 640px;">
                   <span>Webhook 地址</span>
@@ -787,6 +788,7 @@ import "vditor/dist/index.css";
               </div>
             </details>
             <p class="muted" style="margin-top: 14px;">触发时机：新评价进入待审、新反馈提交（含资源失效反馈）。只有用途含「待审通知」的启用机器人会收到；测试请用列表中的「测试」按钮（只发单个机器人，不打扰其他群）。</p>
+            <p class="muted">勾选「运行告警」后，该机器人接收日志存储和完整备份失败提醒。提醒只包含故障类别和时间，详细情况请到后台核对；服务器停机、入口日志和磁盘容量还需外部监控。</p>
           </div>
         </div>
       </div>
@@ -838,7 +840,7 @@ import "vditor/dist/index.css";
               <div class="backup-grid" style="margin-top: 14px;">
                 <article class="card">
                   <h3>整体站点数据</h3>
-                  <p class="muted">包含课程树、评价、反馈、首页、关于页、参与页、友链页和安全配置摘要。</p>
+                  <p class="muted">加密保存账号、内容、日志和必要配置。请先设置至少16位备份口令并妥善保管；课程资源文件需另行备份。</p>
                   <button class="button" type="button" data-backup-scope="all">下载整体备份</button>
                 </article>
                 <article class="card">
@@ -1017,6 +1019,7 @@ import "vditor/dist/index.css";
     const mpUsersList = document.querySelector("#mp-users-list");
     const notifyAdminPanel = document.querySelector("#notify-admin-panel");
     const notifyAdminStatus = document.querySelector("#notify-admin-status");
+    const notifyOpsPurpose = document.querySelector<HTMLInputElement>("#notify-purpose-ops")!;
     document.querySelector("#notify-guide-feedback-save").addEventListener("click", async () => {
       const status = document.querySelector("#notify-guide-feedback-status");
       status.textContent = "保存中...";
@@ -1031,7 +1034,8 @@ import "vditor/dist/index.css";
     let mpUsersSort = "recent";
     let mpUsersDays = 0;
     let mpUsersKeyword = "";
-    let notifyState = { bots: [], updated: "", loaded: false };
+    type NotifyBot = { id: string; name: string; webhookUrl: string; enabled: boolean; purposes?: string[]; signSecretConfigured: boolean };
+    let notifyState: { bots: NotifyBot[]; updated: string; loaded: boolean; guide_feedback_enabled?: boolean } = { bots: [], updated: "", loaded: false };
     const auditAdminPanel = document.querySelector("#audit-admin-panel");
     const auditAdminStatus = document.querySelector("#audit-admin-status");
     const auditAdminList = document.querySelector("#audit-admin-list");
@@ -1039,6 +1043,7 @@ import "vditor/dist/index.css";
     let sessionState = { username: "", permissions: [], mustChangePassword: false };
     let accountsState = null;
     let auditState = null;
+    let auditLogHealthy = true;
     let auditPage = 1;
     const permissionLabels = {
       "content.read": "内容查看",
@@ -1489,7 +1494,7 @@ import "vditor/dist/index.css";
         reportsList.innerHTML = '<p class="empty">暂无举报。</p>';
         return;
       }
-      const esc = (v) => String(v ?? "").replace(/[<>&"]/g, "");
+      const esc = escapeHtml;
       const typeLabels = { report: "违法举报", complaint: "内容投诉" };
       reportsList.innerHTML = items.map((item, index) => `
         <div class="review-admin-item" data-report-index="${index}">
@@ -1587,7 +1592,7 @@ import "vditor/dist/index.css";
       const box = document.querySelector("#law-result");
       if (!lawResultData) { box.innerHTML = ""; return; }
       const d = lawResultData;
-      const esc = (v) => String(v ?? "").replace(/[<>&]/g, "");
+      const esc = escapeHtml;
       const accountHtml = d.account ? `
         <div class="card" style="padding:14px 18px;margin-bottom:12px;">
           <b>账号 #${d.account.id}</b> · 昵称：${esc(d.account.nickname) || "-"} · 手机号：${esc(d.account.phone) || "未验证"}（验证时间：${d.account.phone_verified_at ? new Date(d.account.phone_verified_at).toISOString().slice(0, 19) : "-"}）
@@ -1597,9 +1602,9 @@ import "vditor/dist/index.css";
       box.innerHTML = `
         ${accountHtml}
         ${listHtml(d.reviews, "评价")}
-        ${d.reviews.map((r) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>${esc(r.courseTitle)} · ${esc(r.teacher)}</b> <span class="muted">(${esc(r.status)}${r.hidden ? "·hidden" : ""})</span><div style="font-size:0.9em;">${esc(r.content).slice(0, 200)}</div></div>`).join("")}
+        ${d.reviews.map((r) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>${esc(r.courseTitle)} · ${esc(r.teacher)}</b> <span class="muted">(${esc(r.status)}${r.hidden ? "·hidden" : ""})</span><div style="font-size:0.9em;">${esc(String(r.content ?? "").slice(0, 200))}</div></div>`).join("")}
         ${listHtml(d.feedback, "反馈/举报")}
-        ${d.feedback.map((f) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>[${esc(f.type)}] ${esc(f.title)}</b> <span class="muted">(${esc(f.status)})</span>${f.report_url ? `<div class="muted" style="font-size:0.85em;">关联：${esc(f.report_url)} ${esc(f.report_target || "")}</div>` : ""}<div style="font-size:0.9em;">${esc(f.content).slice(0, 200)}</div></div>`).join("")}
+        ${d.feedback.map((f) => `<div class="card" style="padding:10px 14px;margin-bottom:8px;"><b>[${esc(f.type)}] ${esc(f.title)}</b> <span class="muted">(${esc(f.status)})</span>${f.report_url ? `<div class="muted" style="font-size:0.85em;">关联：${esc(f.report_url)} ${esc(f.report_target || "")}</div>` : ""}<div style="font-size:0.9em;">${esc(String(f.content ?? "").slice(0, 200))}</div></div>`).join("")}
         ${listHtml(d.security_logs, "安全日志（最近展示）")}
         ${(d.security_logs || []).slice(0, 30).map((l) => `<div class="muted" style="font-size:0.8em;">${new Date(l.at).toISOString().slice(0, 19)} · ${esc(l.action)} · ${esc(l.target_type)}:${esc(l.target_id)} · IP ${esc(l.ip)} · ${esc(l.result)}</div>`).join("")}
       `;
@@ -1607,7 +1612,7 @@ import "vditor/dist/index.css";
 
     function renderLawLogs(rows) {
       const box = document.querySelector("#law-logs");
-      box.innerHTML = rows.length ? `<table class="admin-table"><thead><tr><th>时间</th><th>操作人</th><th>类型</th><th>条件</th><th>导出</th><th>结果概要</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${new Date(row.at + 8 * 3600 * 1000).toISOString().slice(0, 19)}</td><td>${String(row.queried_by).replace(/[<>&]/g, "")}</td><td>${String(row.query_type).replace(/[<>&]/g, "")}</td><td>${String(row.query_value).replace(/[<>&]/g, "")}</td><td>${row.exported ? "是" : "否"}</td><td class="muted">${String(row.result_summary).replace(/[<>&]/g, "")}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">暂无调取记录</p>';
+      box.innerHTML = rows.length ? `<table class="admin-table"><thead><tr><th>时间</th><th>操作人</th><th>类型</th><th>条件</th><th>导出</th><th>结果概要</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${new Date(row.at + 8 * 3600 * 1000).toISOString().slice(0, 19)}</td><td>${escapeHtml(row.queried_by)}</td><td>${escapeHtml(row.query_type)}</td><td>${escapeHtml(row.query_value)}</td><td>${row.exported ? "是" : "否"}</td><td class="muted">${escapeHtml(row.result_summary)}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">暂无调取记录</p>';
     }
 
     async function loadLawLogs() {
@@ -1632,7 +1637,7 @@ import "vditor/dist/index.css";
         donatePayState = data.data;
         renderDonatePay();
       } catch (error) {
-        donatePayEditor.innerHTML = `<p class="muted">支付配置需「服务密钥」权限：${error.message}</p>`;
+        donatePayEditor.innerHTML = `<p class="muted">支付配置需「服务密钥」权限：${escapeHtml(error.message)}</p>`;
       }
     }
 
@@ -2285,6 +2290,7 @@ async function loadMpUsersAdmin() {
       });
       const data = await api(`/audit?${params.toString()}`);
       auditState = data.data;
+      auditLogHealthy = !Object.values(data.logHealth || {}).some((health) => health && typeof health === "object" && "ok" in health && health.ok === false);
       renderAuditAdmin();
     }
 
@@ -2344,6 +2350,11 @@ async function loadMpUsersAdmin() {
 
     function renderAuditAdmin() {
       auditAdminList.innerHTML = "";
+      if (!auditLogHealthy) {
+        const warning = document.createElement("p");
+        warning.textContent = "日志存储有待恢复记录或归档故障，请联系维护者检查；不要删除待恢复文件。";
+        auditAdminList?.append(warning);
+      }
       const table = document.createElement("table");
       table.className = "admin-table";
       table.innerHTML = `
@@ -2356,7 +2367,7 @@ async function loadMpUsersAdmin() {
         row.innerHTML = `
           <td style="width: 20%;">${escapeHtml(beijingDateTime(new Date(item.at)))}</td>
           <td style="width: 14%;">${escapeHtml(item.username)}</td>
-          <td style="width: 40%;"><strong>${escapeHtml(auditActionLabel(item.action))}</strong><br /><span class="muted" style="font-size: 0.8em;">${escapeHtml(item.action)}</span></td>
+          <td style="width: 40%;"><strong>${escapeHtml(auditActionLabel(item.action))}</strong><br /><span class="muted" style="font-size: 0.8em;">${escapeHtml(item.action)}</span><details><summary>对象与变化</summary><p style="overflow-wrap:anywhere;">${escapeHtml(item.target || "无单一对象")}<br />${escapeHtml(item.detail || "无附加信息")}</p></details></td>
           <td style="width: 10%;">${escapeHtml(String(item.status))}</td>
           <td style="width: 16%;">${escapeHtml(item.ip || "-")}</td>
         `;
@@ -2374,6 +2385,7 @@ async function loadMpUsersAdmin() {
     }
 
     function hasPerm(permission) {
+      if (permission === "audit.read") return Boolean(sessionState.username);
       return sessionState.permissions.includes(permission);
     }
 
@@ -3788,13 +3800,10 @@ async function loadMpUsersAdmin() {
       backupSettingsEditor.append(
         checkboxField("启用每日自动备份", backupState.autoEnabled !== false, (value) => { backupState.autoEnabled = value; }),
         field("每日执行时间（北京时间 HH:mm）", backupState.dailyTime ?? "03:20", (value) => { backupState.dailyTime = value; }),
-        checkboxField("每天将站点数据与配置备份到 R2", backupState.r2DataBackup !== false, (value) => { backupState.r2DataBackup = value; }),
-        field("R2 备份目录前缀", backupState.r2BackupPrefix ?? "backups/site-data", (value) => { backupState.r2BackupPrefix = value; }),
+        checkboxField("备份到独立私密 R2 存储（需维护者配置）", backupState.r2DataBackup !== false, (value) => { backupState.r2DataBackup = value; }),
         checkboxField("启用 WebDAV 备份", backupState.webdavEnabled === true, (value) => { backupState.webdavEnabled = value; }),
-        checkboxField("WebDAV 同步站点数据", backupState.includeSiteData !== false, (value) => { backupState.includeSiteData = value; }),
-        checkboxField("WebDAV 同步服务器配置", backupState.includeServerConfig !== false, (value) => { backupState.includeServerConfig = value; }),
         checkboxField("WebDAV 同步课程文件", backupState.includeCourseFiles !== false, (value) => { backupState.includeCourseFiles = value; }),
-        passwordField("备份加密密码", backupState.encryptionPasswordConfigured, (value) => { backupState.encryptionPassword = value; })
+        passwordField("备份加密口令（至少16位）", backupState.encryptionPasswordConfigured, (value) => { backupState.encryptionPassword = value; })
       );
 
       webdavSettingsEditor.innerHTML = "";
@@ -4530,13 +4539,12 @@ async function loadMpUsersAdmin() {
     });
 
     document.querySelector("#run-backup-now").addEventListener("click", async () => {
-      if (!confirm("立即执行 R2/WebDAV 备份？课程文件较多时可能需要等待一段时间。")) return;
+      if (!confirm("立即制作加密完整备份并验证已启用的远端目标？备份开始时会短暂暂停新请求，课程文件较多时可能需要等待。")) return;
       backupAdminStatus.textContent = "备份执行中...";
       try {
         const result = await api("/backup-run", { method: "POST", body: "{}" });
-        const uploaded = (result.webdav || []).reduce((sum, item) => sum + (item.uploaded || 0), 0);
-        const skipped = (result.webdav || []).reduce((sum, item) => sum + (item.skipped || 0), 0);
-        backupAdminStatus.textContent = "备份完成。WebDAV 上传 " + uploaded + " 项，跳过 " + skipped + " 项。";
+        const verified = (result.webdav || []).filter((item) => item.verified).length + (result.r2 || []).filter((item) => item.verified).length;
+        backupAdminStatus.textContent = result.complete ? "本地加密备份已校验，另有 " + verified + " 个远端副本通过读回校验。" : "备份未完整完成，请联系维护者核对失败项。";
       } catch (error) {
         backupAdminStatus.textContent = error.message;
       }
@@ -4665,6 +4673,7 @@ async function loadMpUsersAdmin() {
       document.querySelector("#notify-bot-enabled").checked = true;
       document.querySelector("#notify-purpose-moderation").checked = true;
       document.querySelector("#notify-purpose-digest").checked = false;
+      notifyOpsPurpose.checked = false;
       document.querySelector("#notify-bot-cancel").hidden = true;
     }
 
@@ -4687,7 +4696,7 @@ async function loadMpUsersAdmin() {
         row.innerHTML = `
           <td style="width: 34%;">${escapeHtml(bot.name)}<br /><span class="muted" style="font-size:0.78em;">${escapeHtml(bot.webhookUrl.slice(0, 46))}…</span></td>
           <td style="width: 10%;">${bot.enabled ? "启用" : "停用"}</td>
-          <td style="width: 20%;">${(bot.purposes || ["moderation"]).map((purpose) => purpose === "moderation" ? "待审通知" : "每日汇总").join(" + ")}</td>
+          <td style="width: 20%;">${(bot.purposes || ["moderation"]).map((purpose) => purpose === "moderation" ? "待审通知" : purpose === "ops" ? "运行告警" : "每日汇总").join(" + ")}</td>
           <td style="width: 12%;">${bot.signSecretConfigured ? "已配置" : "未配置"}</td>
           <td style="width: 24%;" class="admin-table-ops"></td>
         `;
@@ -4706,6 +4715,7 @@ async function loadMpUsersAdmin() {
           document.querySelector("#notify-bot-enabled").checked = bot.enabled;
           document.querySelector("#notify-purpose-moderation").checked = (bot.purposes || ["moderation"]).includes("moderation");
           document.querySelector("#notify-purpose-digest").checked = (bot.purposes || []).includes("digest");
+          notifyOpsPurpose.checked = (bot.purposes || []).includes("ops");
           document.querySelector("#notify-bot-cancel").hidden = false;
           document.querySelector("#notify-bot-editor-card").open = true;
         });
@@ -4764,6 +4774,7 @@ async function loadMpUsersAdmin() {
             purposes: [
               ...(document.querySelector("#notify-purpose-moderation").checked ? ["moderation"] : []),
               ...(document.querySelector("#notify-purpose-digest").checked ? ["digest"] : []),
+              ...(notifyOpsPurpose.checked ? ["ops"] : []),
             ],
           }),
         });

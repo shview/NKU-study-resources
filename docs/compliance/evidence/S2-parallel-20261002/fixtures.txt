@@ -1,0 +1,5 @@
+
+> nkustudy@0.1.0 check:fixtures
+> node scripts/validate-manifest.mjs --fixtures
+
+Content OK: 1 courses, 0 files.

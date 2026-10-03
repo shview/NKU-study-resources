@@ -35,10 +35,14 @@ async function syncDirectory(directory) {
     handle = await fsp.open(directory, "r");
     await handle.sync();
   } catch (error) {
-    if (!new Set(["EACCES", "EBADF", "EINVAL", "ENOTSUP", "EPERM"]).has(error.code)) throw error;
+    if (!new Set(["EBADF", "EINVAL", "ENOTSUP"]).has(error.code)) throw error;
   } finally {
     await handle?.close().catch(() => {});
   }
+}
+
+export async function drainJsonWrites() {
+  while (queues.size) await Promise.all([...queues.values()]);
 }
 
 export class AtomicJsonStore {

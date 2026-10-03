@@ -1,0 +1,13 @@
+# Import at top level, then import s2_security_headers in each HTTPS site block.
+# These baseline headers also apply to redirects and reverse-proxy responses.
+# Keep application-specific CSP/frame policies in their existing site blocks;
+# OpenList previews must not inherit the main site's restrictive CSP blindly.
+(s2_security_headers) {
+  header {
+    -Server
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+}

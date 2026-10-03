@@ -1,0 +1,157 @@
+{
+  "date": "2026-10-02",
+  "checkpointCommit": "49507d99959231eea98b34242556b17f7c62c7b8",
+  "checkpoint": "49507d9 committed the previous uncommitted backup follow-up exactly before parallel work began; its source matched the earlier 260-test evidence.",
+  "candidate": "Uncommitted working tree based on the checkpoint, identified by hashes below.",
+  "userAuthorization": "User explicitly requested commit, parallel subagents, planning by independent task and final acceptance in the main window.",
+  "workstreams": {
+    "ops_alerts": "Bounded operational alert controller and explicit ops notification purpose, including redaction, retry and notification status handling.",
+    "backup_preflight": "Read-only static backup deployment checks with fixed result codes and explicit unverified remote/recovery state.",
+    "guide_smoke": "Public API smoke aligned with committed guide content, independent negative cases and isolated child environment.",
+    "main": "Checkpoint commit, scope/file ownership, actual server/UI integration, cross-review fix for concurrent backup false alarms, final complete regression and evidence review."
+  },
+  "checks": [
+    {
+      "name": "Full regression",
+      "command": "ASTRO_TELEMETRY_DISABLED=1 TMPDIR=/private/tmp npm test",
+      "artifact": "full-suite.tap",
+      "exitCode": 0,
+      "tests": 296,
+      "pass": 296,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Actual HTTP operational alerts and backup durability",
+      "artifact": "ops-http.tap",
+      "exitCode": 0,
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Read-only preflight",
+      "artifact": "backup-preflight.tap",
+      "exitCode": 0,
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Guide contract negative cases and actual HTTP",
+      "artifact": "guide-smoke-tests.tap",
+      "exitCode": 0,
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Original guide smoke defect",
+      "artifact": "guide-smoke-before.txt",
+      "exitCode": 1,
+      "expectedFailure": "Guide list response contract failed: stale fixture contract; before the fix, not the final candidate."
+    },
+    {
+      "name": "Standalone guide smoke",
+      "command": "TMPDIR=/private/tmp npm run smoke:public-api",
+      "artifact": "guide-smoke-after.txt",
+      "exitCode": 0,
+      "guides": 18,
+      "variants": 29,
+      "etag": 304,
+      "publicAdmin": 404,
+      "unconfiguredWechat": 503
+    },
+    {
+      "name": "API route documentation",
+      "command": "npm run check:api-docs",
+      "artifact": "api-docs.txt",
+      "exitCode": 0,
+      "routes": 123
+    },
+    {
+      "name": "Fixtures",
+      "command": "npm run check:fixtures",
+      "artifact": "fixtures.txt",
+      "exitCode": 0
+    },
+    {
+      "name": "UI fixture build",
+      "command": "ASTRO_TELEMETRY_DISABLED=1 TMPDIR=/private/tmp npm run build:fixtures",
+      "artifact": "build-fixtures.txt",
+      "exitCode": 0,
+      "pages": 13
+    },
+    {
+      "name": "Astro type check",
+      "command": "ASTRO_TELEMETRY_DISABLED=1 TMPDIR=/private/tmp NODE_OPTIONS=--max-old-space-size=8192 DATA_DIR=<isolated fixture directory> npm run check",
+      "baselineArtifact": "type-baseline.txt",
+      "candidateArtifact": "type-candidate.txt",
+      "comparisonArtifact": "type-comparison.json",
+      "exitCode": 1,
+      "baselineErrors": 1997,
+      "candidateErrors": 1973,
+      "warnings": 0,
+      "hints": 34,
+      "addedDiagnostics": 0,
+      "removedDiagnostics": 24,
+      "sourceFilesUnchanged": 161,
+      "verdict": "FAIL: remaining type diagnostics are not waived. The final frozen candidate adds none against the fresh checkpoint baseline."
+    }
+  ],
+  "environmentNotes": [
+    "Node v22.23.2 on macOS arm64; existing lockfile dependencies were reused.",
+    "Initial fixture build attempted to write Astro telemetry preferences outside the sandbox; rerun with telemetry disabled succeeded without changing user preferences.",
+    "First parallel type-baseline attempt collided in the shared Vite cache (retained failure output); the subsequent baseline and final candidate used isolated caches.",
+    "Local HTTP test approval initially timed out and guide-smoke approval had a network interruption; authorized retries succeeded, with no remaining verification block."
+  ],
+  "boundaries": [
+    "Notification delivery and WebDAV in operational integration tests are synthetic transports. No real Feishu message, Cloudflare call, production read or deployment occurred.",
+    "The preflight checks only current-process static paths/permissions/settings; it cannot prove SQLite integrity, remote access/privacy, retention, restore or notification delivery.",
+    "Operational alert state is process-local. Host downtime, Caddy errors and capacity alarms still need external monitoring and production delivery evidence.",
+    "The UI was built and source/type checked; this round did not manually accept the new checkbox in a browser.",
+    "QA-21 guide smoke is fixed; 1973 type errors and other future phase checks remain. No S3/S4/S5 rollout or D-01 decision is implied.",
+    "49507d9 and this follow-up are not deployed. Reported production 477b191 with 254/254 remains a separate historical receipt."
+  ],
+  "overallS2Acceptance": "PENDING",
+  "followupCommitted": false,
+  "pushed": false,
+  "deployed": false,
+  "sourceSha256": {
+    "scripts/smoke-public-api.mjs": "f7c3629cf85960143a8d481a8e24d300988ca349a3cfcbe2caa814a3eab5de4b",
+    "server/admin-server.mjs": "a0bc6f4db30917625319990007f271590764dfab47784c5ac8a71af20c2b7df2",
+    "server/feishu-notify-service.mjs": "106dbb26e8e0b3f913b715a9a8f088868e3596b7e7aa8befa53e75d1441c0191",
+    "server/runtime-backup.mjs": "d49275e4b0538fba96d608f722b6b4d7a6091800c91b14ccc976546e16acc966",
+    "src/pages/admin.astro": "fa0b68cae416b4775832a1a135560a784f8f1441d56f27e6a65f9bd7d07c2c77",
+    "test/mp-favorites-notify.test.mjs": "4319bc8f55605baf219859e2ea2ed29ecbad146e5781f40ea4ed0fc52e5d4c84",
+    "test/s2-durability.test.mjs": "f62082b46ea39b8873b28d041cddeb9d6fe8eeaacdb1d15ce2350bb347e5e6c7",
+    "scripts/lib/public-api-smoke-contract.mjs": "ff551b9595ecdb55123005e57dbd3378118f7cfb79b8cc23e9858c77db6b713f",
+    "scripts/s2-backup-preflight.mjs": "496d8bd99af8a55a196b42a5b6069cd58c72595cd434148989d888c6c2c0f764",
+    "server/backup-preflight.mjs": "e7e7ab7b1c45fc3eca547b49c82853cdd6616219401df24dbaca96771e31ff87",
+    "server/ops-alerts.mjs": "bea8263c1a5226e8922e2da99d11d963d16266bf83e98af037db3b78c5662e6e",
+    "test/backup-preflight.test.mjs": "7ddafa0d6e2646ce8fc4d79d91e5465aa66ee3290b52c0d437a365bdd015055d",
+    "test/feishu-ops-notify.test.mjs": "8db4cd2cef775b6ef9678fece5b39b3ae28a0c7f6d7810081a534ae0ac85588d",
+    "test/ops-alerts.test.mjs": "53fbc33d4b88d29ece5e441260ce47e76e1f44cb5ecde4e7650d5f06d53650a8",
+    "test/public-api-smoke.test.mjs": "6b4215e17c969469b08416c12cb42038071c9adf0c69669794d29518934246aa",
+    "test/s2-ops-alerts.integration.test.mjs": "d940f4c78a3c9d83acc0a4a956cabb52aa4ff710cc3e071aed015dbdaa107d5a"
+  },
+  "artifactSha256": {
+    "api-docs.txt": "322811cf756ae4772aac6b57e9fc89ce00222fb177007413946ce918b3973913",
+    "backup-preflight.tap": "1f880b647a7f561f21b92d503c8bff28d96dbf1831139dc3d9e2adcf030472a2",
+    "build-fixtures.txt": "7d3fd12275331c42abab425758c3a7ac2b1e6944cb4ff340c9c433995254bf46",
+    "fixtures.txt": "ef818d1c731feb9e27e888d0a82cd794023241974898ddf921bf0c38f6d872d0",
+    "full-suite.tap": "ca3fedea1da952664986bb18365de8fffd31596f1538497e0d905c6313dd3e87",
+    "guide-smoke-after.txt": "787cc1dfdea4d64a46061b6e76530b58c1c1af27612c337d29b8317629237f58",
+    "guide-smoke-before.txt": "4500ad0da884eaa4bb36228fc261977c8256dad83c683852b43fefef533facd7",
+    "guide-smoke-tests.tap": "e9190a680f003d9fac0bd67b1cca046afbb73de77bfb20f1327ae1a227a7172a",
+    "ops-http.tap": "d7e18a7439e19f99db003b89303c67eae9ac1c207675ea45358e84f11cb19dd6",
+    "type-baseline.txt": "63b9a78c9f1e8f24b35b691430de7ae1b8d937ebc3e9bbb239d50577b9412502",
+    "type-candidate.txt": "aaedc5ecb9983433b19eb833cbf61aba52e3fd43bdf26466b01d42cf1542eaaa",
+    "type-comparison.json": "6e3e126d20505c21a06c87e18c45c7afced8e2871e24985e7f691f2e7981cee0",
+    "type-initial-cache-failure.txt": "a487db797a8e317bc75a1650533ff5d35855edb031a956fb11067b3fd40bc513",
+    "type-source-manifest.json": "c75af429fe05ee080f14deb7d1b4250efe94bb0cecf2feef617dcf7eb99fc331"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-02",
+  "baseCommit": "2dc04de3ad07faa6d32bb30889968595d6ea73dc",
+  "revision": "Uncommitted local follow-up; source SHA256 values below identify the tested files.",
+  "runtime": {
+    "node": "v22.23.2",
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "productionChanged": false,
+  "realCloudflareRequests": false,
+  "credentials": "Only synthetic test credentials; no production backup password or cloud keys used.",
+  "checks": [
+    {
+      "name": "Settings defect reproduction before the allowlist fix",
+      "command": "TMPDIR=/private/tmp node --test test/s2-admin-runtime.integration.test.mjs",
+      "artifact": "settings-before-fix.tap",
+      "exitCode": 1,
+      "tests": 7,
+      "pass": 5,
+      "fail": 2,
+      "note": "Expected regression detection: one failing nested test plus its parent. Failure: backup settings response must not echo secrets. This is the earlier development log, before adding the R2 HTTP subtest; the later source hashes are not hashes of that intermediate source."
+    },
+    {
+      "name": "Final targeted backup checks",
+      "command": "TMPDIR=/private/tmp node --test test/s2-admin-runtime.integration.test.mjs test/backup-r2.test.mjs",
+      "artifact": "targeted.tap",
+      "exitCode": 0,
+      "tests": 12,
+      "pass": 12,
+      "fail": 0
+    },
+    {
+      "name": "Final complete regression suite",
+      "command": "TMPDIR=/private/tmp npm test",
+      "artifact": "full-suite.tap",
+      "exitCode": 0,
+      "tests": 260,
+      "pass": 260,
+      "fail": 0
+    },
+    {
+      "name": "API documentation parity",
+      "command": "npm run check:api-docs",
+      "artifact": "api-docs.txt",
+      "exitCode": 0,
+      "routes": 123
+    },
+    {
+      "name": "Syntax",
+      "commands": [
+        "node --check server/backup-r2.mjs",
+        "node --check server/admin-server.mjs"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "guaranteesTested": [
+    "Actual AWS SDK serializes and signs PUT/GET with dedicated synthetic account/key/bucket; in-memory request handler supplies responses.",
+    "Missing dedicated credentials never fall back to resource credentials; unconfirmed/public buckets and malformed account or filename fail before transport.",
+    "Corrupt readback and access denial return failure without provider-secret echo.",
+    "Actual local HTTP backup jobs use the separate R2 client; corrupted/missing configuration returns 409 and complete:false while the verified local encrypted file survives.",
+    "Actual local resource manifest verification still calls the resource client with its original configuration.",
+    "Settings responses and ordinary settings omit password and unknown fields; private mode-0600 secrets retain correct values.",
+    "A normal partial settings save removes legacy ordinary secret copies without rotating the private encryption or WebDAV passwords."
+  ],
+  "boundaries": [
+    "The integration server, SQLite, JSON, encryption and local filesystem are real temporary resources; external S3 send is synthetic. No real R2 bucket permission, lifecycle or network acceptance is claimed.",
+    "The SDK signing tests independently use the actual SDK middleware/signing with an in-memory HTTP handler. They do not contact Cloudflare.",
+    "Production 477b191 still needs the follow-up deployment and an ordinary settings save to scrub legacy copies; previous 254-test production receipt remains historical.",
+    "No front-end or dependency change. Astro type-check backlog QA-21 and D-01 remain unresolved; no new UI or production build acceptance claimed.",
+    "User password custody/decryption, production remote readback/privacy/retention and alert delivery remain pending."
+  ],
+  "sourceSha256": {
+    "server/admin-server.mjs": "11d598ef4b1cd669defd3841479bdfca7897861552ab7f52ad9d017e4813216f",
+    "server/backup-r2.mjs": "36a517ecf7af8a949f9c98936dc5efbe2f012c892bf0c1ecbcebe4cc2d841b8d",
+    "test/backup-r2.test.mjs": "5c6bd639423bb04877463915d874062da84e61a8815cbbe505b9e0014ce67949",
+    "test/s2-admin-runtime.integration.test.mjs": "7716187ce0b6c0e3c0a54f447014fa784349cc6589169334554bc47b966f5dff"
+  },
+  "artifactSha256": {
+    "settings-before-fix.tap": "aaef5ffa3fb0888280f8665fa9c5eeee683b527d6490ea8b97c4e36b9e1b3af4",
+    "targeted.tap": "86578e1b6a81822043b91b1860e7457b5939d417431811e0505ec04b3b756305",
+    "full-suite.tap": "f064ebdedd38ec2dc45809770473e5d4d665cab7973e1615cd617a995f91a14f",
+    "api-docs.txt": "322811cf756ae4772aac6b57e9fc89ce00222fb177007413946ce918b3973913"
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-03",
+  "baseCommit": "49507d99959231eea98b34242556b17f7c62c7b8",
+  "deliveredCommit": "See accompanying handoff RELEASE.json; this evidence is committed with the candidate.",
+  "decision": "C-11: finish this S2 delivery batch; no real notification setup/subscription/test. User reports historical connectivity, which does not verify the new production ops purpose.",
+  "agents": {
+    "preview": "GPT-6.1-sol / xhigh",
+    "deliveryDocs": "GPT-6.1-sol / xhigh",
+    "main": "Browser execution, evidence/patch review, commit and packaging"
+  },
+  "localAcceptance": "PASS for current batch scope",
+  "businessSourceChangedDuringCloseout": false,
+  "priorFrozenChecks": {
+    "fullRegression": {
+      "tests": 296,
+      "pass": 296,
+      "fail": 0,
+      "skipped": 0
+    },
+    "apiRoutes": 123,
+    "fixtureBuildPages": 13,
+    "guideSmoke": {
+      "guides": 18,
+      "variants": 29
+    },
+    "sourceHashesRechecked": 16,
+    "rawArtifactHashesRechecked": 14,
+    "reference": "../S2-parallel-20261002/summary.json",
+    "notRerunWithoutSourceChange": true
+  },
+  "newBrowserAcceptance": {
+    "status": "PASS",
+    "cases": 7,
+    "steps": "ui-steps.json",
+    "realAdminApi": true,
+    "syntheticDataOnly": true,
+    "freshFixtureBuildExitCode": 0,
+    "copiedSourceHashesEqual": 111,
+    "consoleErrors": 0,
+    "consoleWarnings": 0,
+    "screenshots": [
+      "ui-saved.jpg",
+      "ui-final.jpg"
+    ],
+    "persistentSettingsEvidence": [
+      "ui-after-enable.json",
+      "ui-final-settings.json"
+    ]
+  },
+  "isolation": {
+    "realNotificationTestClicked": false,
+    "actualNodeExternalRequestsAttempted": 0,
+    "plannedGuardProbesBlocked": 6,
+    "nodeExternalNetworkSent": 0,
+    "scope": "Counters cover temporary Node build/server/proxy processes; they are not browser third-party asset monitoring. No real notification request was invoked.",
+    "temporaryProcessesStopped": true,
+    "evidence": "shutdown-check.json"
+  },
+  "typeCheck": {
+    "status": "FAIL",
+    "errors": 1973,
+    "warnings": 0,
+    "hints": 34,
+    "addedDiagnostics": 0,
+    "removedDiagnostics": 24,
+    "source": "../S2-parallel-20261002/type-comparison.json"
+  },
+  "notClaimed": [
+    "Production deployment or new Linux rerun",
+    "Private R2 real upload/readback/privacy/retention",
+    "New ops purpose delivery to a real group (user deferred)",
+    "External host/Caddy/capacity monitoring",
+    "User password custody or independent decryption",
+    "D-01 or S3/S4/S5 completion"
+  ],
+  "productionS2Acceptance": "PENDING",
+  "packagingEvidence": "See accompanying handoff verification/package-integrity.json and RELEASE.json; packaging is verified after this evidence is committed.",
+  "sourceSha256": {
+    "scripts/smoke-public-api.mjs": "f7c3629cf85960143a8d481a8e24d300988ca349a3cfcbe2caa814a3eab5de4b",
+    "server/admin-server.mjs": "a0bc6f4db30917625319990007f271590764dfab47784c5ac8a71af20c2b7df2",
+    "server/feishu-notify-service.mjs": "106dbb26e8e0b3f913b715a9a8f088868e3596b7e7aa8befa53e75d1441c0191",
+    "server/runtime-backup.mjs": "d49275e4b0538fba96d608f722b6b4d7a6091800c91b14ccc976546e16acc966",
+    "src/pages/admin.astro": "fa0b68cae416b4775832a1a135560a784f8f1441d56f27e6a65f9bd7d07c2c77",
+    "test/mp-favorites-notify.test.mjs": "4319bc8f55605baf219859e2ea2ed29ecbad146e5781f40ea4ed0fc52e5d4c84",
+    "test/s2-durability.test.mjs": "f62082b46ea39b8873b28d041cddeb9d6fe8eeaacdb1d15ce2350bb347e5e6c7",
+    "scripts/lib/public-api-smoke-contract.mjs": "ff551b9595ecdb55123005e57dbd3378118f7cfb79b8cc23e9858c77db6b713f",
+    "scripts/s2-backup-preflight.mjs": "496d8bd99af8a55a196b42a5b6069cd58c72595cd434148989d888c6c2c0f764",
+    "server/backup-preflight.mjs": "e7e7ab7b1c45fc3eca547b49c82853cdd6616219401df24dbaca96771e31ff87",
+    "server/ops-alerts.mjs": "bea8263c1a5226e8922e2da99d11d963d16266bf83e98af037db3b78c5662e6e",
+    "test/backup-preflight.test.mjs": "7ddafa0d6e2646ce8fc4d79d91e5465aa66ee3290b52c0d437a365bdd015055d",
+    "test/feishu-ops-notify.test.mjs": "8db4cd2cef775b6ef9678fece5b39b3ae28a0c7f6d7810081a534ae0ac85588d",
+    "test/ops-alerts.test.mjs": "53fbc33d4b88d29ece5e441260ce47e76e1f44cb5ecde4e7650d5f06d53650a8",
+    "test/public-api-smoke.test.mjs": "6b4215e17c969469b08416c12cb42038071c9adf0c69669794d29518934246aa",
+    "test/s2-ops-alerts.integration.test.mjs": "d940f4c78a3c9d83acc0a4a956cabb52aa4ff710cc3e071aed015dbdaa107d5a"
+  },
+  "artifactSha256": {
+    "egress-final-after-shutdown.json": "94de9f0e92f1e29887f946dc01459cf861d1176707e6dc2ba2c170116953b300",
+    "guard-smoke.json": "d47e18f42683e37a80cd17fcdf1e1e09371bb40dda6da2ff913b2cf90291265d",
+    "http-smoke.json": "ebce1ea886c218fbd0a202ee75442b27f641b4ed7e97b94ab156adeb6e6c812d",
+    "preview-build.txt": "81c702b7cc73d9c03452bd92b5ae583cc6d4cf433bf8d84ea1fcab85c3059486",
+    "preview-summary.json": "1bcda35eaeab6e8c03a0c9c5e94984b304bcb07ab0153bfcd00a290e4b4aa778",
+    "prior-evidence-review.json": "f02ee9bc833441349af3210c545ad1329cd1713714a2d8d826974945f85013a7",
+    "shutdown-check.json": "b809957659d7e6bb00fa8b072f209ffc70d606ded340647277d9cc3ce5bad928",
+    "source-hashes.json": "9d190e63cace4814a52cfcd760fbbad8bf34cc799ca809ec4d2a7514a1b0c444",
+    "ui-after-enable.json": "1380e7e210e330e9a830e51b42a72055e953eda22a543d45469a8fe268eeb942",
+    "ui-final-dom.txt": "30cdb933b589ccf8ba6b85cfa9c158279e6bc71e36e6b3c5306366bd03398282",
+    "ui-final-settings-comparison.json": "80ce146786c5bd3291f2221b56942c3f7af8d1c16dcf3f2e6a4b79dc4469a7e3",
+    "ui-final-settings.json": "959601212227463c1713a2490d18c2e5b0d3e5424773dcdafa1707fda720cc37",
+    "ui-final.jpg": "563da6f72b63c7f2174880f7e834f36bee941d8fba9ba0e3dfc321e46436736e",
+    "ui-saved.jpg": "23f1a76a4a0a9412f532d8b7a426c796c9da497738833c3f5895be869b69b38b",
+    "ui-steps.json": "d7fdebc39adbc7382b934c0b98e8617a9b6d9b4d29573e2928364f70f0d3d4b3"
+  }
+}

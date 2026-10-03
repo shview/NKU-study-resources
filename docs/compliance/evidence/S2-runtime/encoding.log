@@ -1,0 +1,5 @@
+
+> nkustudy@0.1.0 audit:encoding
+> node scripts/audit-text-integrity.mjs
+
+Text integrity OK: 0 JSON file(s) are strict UTF-8 with no U+FFFD.

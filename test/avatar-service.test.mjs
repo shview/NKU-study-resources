@@ -42,8 +42,94 @@ async function withMockWechat(handler, fn) {
 
 async function testImage({ width = 60, height = 60, format = "jpeg" } = {}) {
   const pipeline = sharp({ create: { width, height, channels: 3, background: "#3366aa" } });
-  return format === "png" ? pipeline.png().toBuffer() : pipeline.jpeg().toBuffer();
+  return pipeline.toFormat(format).toBuffer();
 }
+
+function isolatedService({ sharpImpl = sharp, moderation = { check: async () => ({ approved: true }) }, putObject = async () => {} } = {}) {
+  return createAvatarService({
+    store: { register() {}, orphanIds: () => [] },
+    moderation,
+    putObject,
+    publicRoot: "https://resources.example.invalid/avatars/",
+    sharpImpl,
+  });
+}
+
+test("avatar accepts JPEG and PNG and moderates the normalized JPEG without metadata", async () => {
+  for (const format of ["jpeg", "png"]) {
+    const source = await sharp({ create: { width: 60, height: 40, channels: 3, background: "#3366aa" } })
+      .withExif({ IFD0: { Copyright: "avatar-test" } })
+      .toFormat(format)
+      .toBuffer();
+    let moderated;
+    let stored;
+    const service = isolatedService({
+      moderation: { async check(buffer) { moderated = buffer; return { approved: true }; } },
+      putObject: async (_key, buffer) => { stored = buffer; },
+    });
+    await service.upload({ userId: 7, buffer: source });
+    assert.equal(moderated, stored, "the exact normalized output is moderated before storage");
+    const meta = await sharp(stored).metadata();
+    assert.equal(meta.format, "jpeg");
+    assert.equal(meta.width, 256);
+    assert.equal(meta.height, 256);
+    assert.equal(meta.exif, undefined);
+  }
+});
+
+test("non-JPEG/PNG bytes are rejected before sharp even when named as an avatar", async () => {
+  const buffers = [
+    ["svg", Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8"/></svg>')],
+    ["garbage", Buffer.from("not an image")],
+    ["short JPEG marker", Buffer.from([0xff, 0xd8])],
+    ["short PNG signature", Buffer.from([0x89, 0x50, 0x4e, 0x47])],
+    ["VIPS", Buffer.from([0xb6, 0xa6, 0xf2, 0x08, 0, 0, 0, 0])],
+  ];
+  for (const format of ["tiff", "webp", "gif", "avif"]) {
+    buffers.push([format, await testImage({ width: 8, height: 8, format })]);
+  }
+  let sharpCalls = 0;
+  let moderationCalls = 0;
+  let puts = 0;
+  const service = isolatedService({
+    sharpImpl: () => { sharpCalls += 1; throw new Error("unexpected decoder call"); },
+    moderation: { async check() { moderationCalls += 1; return { approved: true }; } },
+    putObject: async () => { puts += 1; },
+  });
+  for (const [format, buffer] of buffers) {
+    await assert.rejects(
+      service.upload({ userId: 7, buffer, filename: "avatar.jpg", contentType: "image/jpeg" }),
+      (error) => error.code === "AVATAR_INVALID_IMAGE" && error.statusCode === 400,
+      format,
+    );
+  }
+  assert.equal(sharpCalls, 0);
+  assert.equal(moderationCalls, 0);
+  assert.equal(puts, 0);
+});
+
+test("recognized signatures still require matching decoder format and valid pixel data", async () => {
+  let resized = false;
+  const mismatched = isolatedService({ sharpImpl: () => ({
+    metadata: async () => ({ format: "tiff", width: 8, height: 8 }),
+    resize() { resized = true; throw new Error("unexpected resize"); },
+  }) });
+  await assert.rejects(mismatched.processImage(Buffer.from([0xff, 0xd8, 0xff])), (error) => error.code === "AVATAR_INVALID_IMAGE");
+  assert.equal(resized, false);
+
+  const brokenPixels = isolatedService({ sharpImpl: () => ({
+    metadata: async () => ({ format: "jpeg", width: 8, height: 8 }),
+    resize() { return this; },
+    jpeg() { return this; },
+    async toBuffer() { throw new Error("corrupt pixel data"); },
+  }) });
+  await assert.rejects(brokenPixels.processImage(Buffer.from([0xff, 0xd8, 0xff])), (error) => error.code === "AVATAR_INVALID_IMAGE" && error.statusCode === 400);
+
+  const service = isolatedService();
+  for (const buffer of [Buffer.from([0xff, 0xd8, 0xff]), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])]) {
+    await assert.rejects(service.processImage(buffer), (error) => error.code === "AVATAR_INVALID_IMAGE" && error.statusCode === 400);
+  }
+});
 
 function makeService({ moderationBase, putObject, deleteObject, rateLimiter = null, now } = {}) {
   const store = new AvatarStore({ dbPath: path.join(tempDir, `avatars-${Date.now()}-${Math.random().toString(36).slice(2)}.db`) });
