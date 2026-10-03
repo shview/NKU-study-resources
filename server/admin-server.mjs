@@ -1,5 +1,6 @@
 import { SnapshotGate, captureRuntime, saveEncryptedBackup, verifiedUpload } from "./runtime-backup.mjs";
 import { uploadPrivateR2Backup } from "./backup-r2.mjs";
+import { createOpsAlerts } from "./ops-alerts.mjs";
 import { queryAuditMetadata, contentChanges, stampContentActor } from "./admin-audit.mjs";
 import { authorizationOf, requirePhoneVerifiedUser } from "./user-identity.mjs";
 import { createHmac, randomBytes } from "node:crypto";
@@ -335,6 +336,32 @@ const feishuNotify = new FeishuNotifyService({
   readSecrets: async () => (fs.existsSync(notifySecretsPath) ? notifySecretStore.readSync(notifySecretsPath) : {}),
   writeSecrets: async (data) => notifySecretStore.write(notifySecretsPath, data, { mode: 0o600 }),
 });
+const opsAlerts = createOpsAlerts({
+  send: (message, options) => feishuNotify.broadcast(message, options),
+  log: (state) => console.error(JSON.stringify({ component: "ops-alerts", ...state })),
+});
+const logAlertWriters = [
+  ["log-user", securityLogStore.writer], ["log-admin", accountsStore.writer], ["log-law", lawLogStore.writer],
+];
+const backupFaults = { job: false, download: false };
+function reportBackupOutcome(source, failed) {
+  backupFaults[source] = failed;
+  // A successful complete job also proves the local download snapshot path.
+  // A local-only download cannot clear an outstanding remote job failure.
+  if (source === "job" && !failed) backupFaults.download = false;
+  opsAlerts.report("backup", backupFaults.job || backupFaults.download);
+}
+for (const [key, writer] of logAlertWriters) {
+  const localAlert = writer.alert;
+  writer.alert = (state) => {
+    localAlert(state);
+    opsAlerts.report(key, true);
+  };
+}
+function reportOpsHealth() {
+  for (const [key, writer] of logAlertWriters) opsAlerts.report(key, !writer.health().ok);
+  opsAlerts.report("backup", backupFaults.job || backupFaults.download);
+}
 function submissionHint(rules) {
   const options = (rules || {}).submissionOptions || {};
   if (options.allowCustomCourse === false) {
@@ -777,7 +804,7 @@ async function createCompleteBackup() {
 }
 
 async function runBackupJob({ manual = false } = {}) {
-  if (backupRunning) return { ok: false, complete: false, error: "Backup is already running." };
+  if (backupRunning) return { ok: false, complete: false, code: "BACKUP_BUSY", error: "Backup is already running." };
   backupRunning = true;
   const summary = { ok: false, complete: false, manual, startedAt: nowIso(), r2: [], webdav: [], errors: [], error: "" };
   try {
@@ -825,10 +852,14 @@ async function runBackupJob({ manual = false } = {}) {
     summary.externalAssetsIncluded = false;
     return summary;
   } catch (error) {
+    if (error.code === "BACKUP_BUSY") summary.code = "BACKUP_BUSY";
     summary.errors.push(error.message);
     summary.error = error.message;
     return summary;
-  } finally { summary.finishedAt = nowIso(); backupRunning = false; }
+  } finally {
+    summary.finishedAt = nowIso(); backupRunning = false;
+    if (summary.code !== "BACKUP_BUSY") reportBackupOutcome("job", !summary.complete);
+  }
 }
 
 function currentShanghaiTime() {
@@ -892,11 +923,13 @@ function startBackupScheduler() {
       if (now.date === lastAutoBackupDate) return;
       if (now.time < settings.dailyTime) return;
       const result = await runBackupJob({ manual: false });
+      if (result.code === "BACKUP_BUSY") return;
       if (!result.ok) throw new Error("Backup incomplete; inspect local backup and destination status");
       lastAutoBackupDate = now.date;
       nextBackupRetryAt = 0;
     } catch (error) {
       nextBackupRetryAt = Date.now() + 60 * 60 * 1000;
+      reportBackupOutcome("job", true);
       console.error(`Scheduled backup failed; retry in one hour: ${error.message}`);
     }
   }, 60 * 1000);
@@ -2483,7 +2516,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith("/admin-api/")) attachAdminAudit(req, res, url);
     attachSubmissionAudit(req, res, url);
     if (!["/admin-api/backup", "/admin-api/backup-run"].includes(url.pathname)) leaveRequest = snapshotGate.enter();
-    else if (snapshotGate.locked) throw Object.assign(new Error("Backup busy"), { statusCode: 503 });
+    else if (snapshotGate.locked) throw Object.assign(new Error("Backup busy"), { statusCode: 503, code: "BACKUP_BUSY" });
     if (req.method === "POST" && url.pathname === "/api/v1/donate/notify") {
       await handleDonateNotify(req, res);
       return;
@@ -2661,7 +2694,14 @@ const server = createServer(async (req, res) => {
       if (!requirePermission(req, account, "backup.manage", res)) return;
       const scope = cleanText(url.searchParams.get("scope") || "all", 40);
       if (scope === "all") {
-        const backup = await createCompleteBackup();
+        let backup;
+        try {
+          backup = await createCompleteBackup();
+          reportBackupOutcome("download", false);
+        } catch (error) {
+          if (error.code !== "BACKUP_BUSY") reportBackupOutcome("download", true);
+          throw error;
+        }
         req.__audit.summary = { scope: "all", complete: true, sha256: backup.sha256 };
         res.writeHead(200, { "content-type": "application/octet-stream", "content-disposition": `attachment; filename="${path.basename(backup.file)}"`, "cache-control": "no-store" });
         res.end(backup.bytes);
@@ -3402,6 +3442,8 @@ server.listen(port, host, () => {
   console.log(`NKUStudy admin API listening on http://${host}:${port}`);
   startBackupScheduler();
   startDigestScheduler();
+  reportOpsHealth();
+  setInterval(reportOpsHealth, 30_000).unref();
   uploadPendingAuditArchive().catch(() => {});
 });
 

@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-03",
+  "htmlStatus": 200,
+  "htmlAdminLoginPresent": true,
+  "htmlOpsPurposePresent": true,
+  "loginOk": true,
+  "notifySettingsStatus": 200,
+  "notifyBots": [
+    {
+      "id": "synthetic-moderation",
+      "name": "synthetic-moderation",
+      "purposes": [
+        "moderation"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "synthetic-ops",
+      "name": "synthetic-ops",
+      "purposes": [
+        "ops"
+      ],
+      "enabled": true
+    }
+  ],
+  "autoBackupDisabled": true,
+  "r2BackupDisabled": true,
+  "webdavBackupDisabled": true,
+  "copiedSourceCount": 111,
+  "candidateRecheckMismatches": [],
+  "externalBlockedCurrent": 0
+}

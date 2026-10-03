@@ -1,0 +1,58 @@
+{
+  "allNodeProcessStats": [
+    {
+      "pid": 69291,
+      "blockedExternal": 0,
+      "allowedLoopback": 39,
+      "blockedByMechanism": {},
+      "initializedAt": "2026-10-03T07:55:37.402Z"
+    },
+    {
+      "pid": 70293,
+      "blockedExternal": 6,
+      "allowedLoopback": 0,
+      "blockedByMechanism": {
+        "fetch": 1,
+        "http.request": 1,
+        "https.request": 1,
+        "socket.connect": 1,
+        "dns.lookup": 1,
+        "dgram.send": 1
+      },
+      "initializedAt": "2026-10-03T07:57:34.038Z"
+    },
+    {
+      "pid": 69292,
+      "blockedExternal": 0,
+      "allowedLoopback": 1,
+      "blockedByMechanism": {},
+      "initializedAt": "2026-10-03T07:55:37.451Z"
+    },
+    {
+      "pid": 69247,
+      "blockedExternal": 0,
+      "allowedLoopback": 1,
+      "blockedByMechanism": {},
+      "initializedAt": "2026-10-03T07:55:23.943Z"
+    },
+    {
+      "pid": 69174,
+      "blockedExternal": 0,
+      "allowedLoopback": 0,
+      "blockedByMechanism": {},
+      "initializedAt": "2026-10-03T07:54:06.067Z"
+    },
+    {
+      "pid": 69173,
+      "blockedExternal": 0,
+      "allowedLoopback": 0,
+      "blockedByMechanism": {},
+      "initializedAt": "2026-10-03T07:54:06.027Z"
+    }
+  ],
+  "plannedProbePid": 70293,
+  "plannedProbeBlocked": 6,
+  "actualRuntimeExternalRequestsAttempted": 0,
+  "allNonProbeExternalAttempts": 0,
+  "totalGuardBlocked": 6
+}

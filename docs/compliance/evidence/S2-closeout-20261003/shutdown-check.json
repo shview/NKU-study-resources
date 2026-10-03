@@ -1,0 +1,16 @@
+{
+  "stoppedPids": [
+    69291,
+    69292
+  ],
+  "processesStopped": true,
+  "ports": {
+    "50011": {
+      "listening": false
+    },
+    "50012": {
+      "listening": false
+    }
+  },
+  "stoppedAt": "2026-10-03T08:02:37.548414+00:00"
+}

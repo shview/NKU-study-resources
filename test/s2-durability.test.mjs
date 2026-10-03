@@ -129,7 +129,8 @@ test('S2 complete encrypted snapshot includes WAL, runtime JSON, logs and secret
 test('S2 snapshot gate waits for in-flight mutation and rejects overlap; failed snapshot reopens traffic', async () => {
   const gate = new SnapshotGate(); const leave = gate.enter(); let read = false;
   const capture = gate.capture(() => { read = true; return 42; });
-  assert.equal(read, false); assert.throws(() => gate.enter(), error => error.statusCode === 503);
+  assert.equal(read, false); assert.throws(() => gate.enter(), error => error.statusCode === 503 && error.code === 'BACKUP_BUSY');
+  await assert.rejects(gate.capture(() => { throw new Error('must not capture concurrently'); }), error => error.statusCode === 409 && error.code === 'BACKUP_BUSY');
   leave(); assert.equal(await capture, 42); assert.equal(gate.locked, false);
   await assert.rejects(gate.capture(() => { throw new Error('disk'); }), /disk/);
   gate.enter()(); assert.equal(gate.active, 0);

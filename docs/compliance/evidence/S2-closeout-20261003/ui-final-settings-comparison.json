@@ -1,0 +1,20 @@
+{
+  "synthetic-ops": {
+    "initialPurposes": [
+      "ops"
+    ],
+    "finalPurposes": [
+      "ops"
+    ],
+    "matchesInitial": true
+  },
+  "synthetic-moderation": {
+    "initialPurposes": [
+      "moderation"
+    ],
+    "finalPurposes": [
+      "moderation"
+    ],
+    "matchesInitial": true
+  }
+}

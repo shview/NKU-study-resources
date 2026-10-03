@@ -1,0 +1,12 @@
+
+> nkustudy@0.1.0 check
+> astro check
+
+23:00:27 [vite] Re-optimizing dependencies because vite config has changed
+ENOTEMPTY: directory not empty, rename '/private/tmp/nkustudy-s2-astro-aGPU8W/baseline/node_modules/.vite/deps_temp_aa10fc42' -> '/private/tmp/nkustudy-s2-astro-aGPU8W/baseline/node_modules/.vite/deps'
+  Stack trace:
+    at Object.renameSync (node:fs:1012:11)
+    at optimizeExplicitEnvironmentDeps (file:///Users/carlos/Documents/ChatGPT/New%20project%202/NKU-study-resources/node_modules/vite/dist/node/chunks/node.js:30928:15)
+    at async Promise.all (index 1)
+    at async Promise.all (index 0)
+    at async _createServer (file:///Users/carlos/Documents/ChatGPT/New%20project%202/NKU-study-resources/node_modules/vite/dist/node/chunks/node.js:25628:9)

@@ -1,0 +1,126 @@
+- complementary:
+  - link "NKUStudy Course Resources":
+    - /url: /
+    - strong: NKUStudy
+    - generic: Course Resources
+  - button "收拢侧边栏": ‹
+  - navigation "主导航":
+    - link "首页":
+      - /url: /
+      - generic: 首页
+    - link "课程":
+      - /url: /courses/
+      - generic: 课程
+    - link "评价":
+      - /url: /reviews/
+      - generic: 评价
+    - link "参与":
+      - /url: /participate/
+      - generic: 参与
+    - link "反馈":
+      - /url: /feedback/
+      - generic: 反馈
+    - link "友链":
+      - /url: /friends/
+      - generic: 友链
+    - link "关于":
+      - /url: /about/
+      - generic: 关于
+- main:
+  - paragraph: Admin
+  - heading "内容管理" [level=1]
+  - button "登录"
+  - button "切换为暗色":
+  - link "OpenList":
+    - /url: https://pan.nkustudy.top
+  - complementary "管理导航":
+    - button "« 收起菜单"
+    - button "内容管理 ▾"
+    - button "课程资源"
+    - button "评价审核"
+    - button "首页设置"
+    - button "关于页面"
+    - button "参与页面"
+    - button "友链页面"
+    - button "页脚设置"
+    - button "捐助页面"
+    - button "隐私与协议"
+    - button "用户与安全 ▾"
+    - button "小程序用户"
+    - button "账号与权限"
+    - button "反馈管理"
+    - button "举报处置"
+    - button "审计日志"
+    - button "依法调取"
+    - button "系统设置 ▾"
+    - button "服务密钥"
+    - button "AI 问答"
+    - button "通知设置"
+    - button "编辑器设置"
+    - button "访问统计"
+    - button "备份"
+    - button "切换为扁平"
+  - text: ▸ ▾ ▾ ▾ ▾ ▸ ▾ ▾ ▾ ▾ ▸ ▸ ▾ ▾ ▸
+  - heading "通知设置（飞书群机器人）" [level=2]
+  - table:
+    - rowgroup:
+      - row "名称 状态 用途 签名 操作":
+        - columnheader "名称"
+        - columnheader "状态"
+        - columnheader "用途"
+        - columnheader "签名"
+        - columnheader "操作"
+    - rowgroup:
+      - row "synthetic-ops https://open.feishu.cn/open-apis/bot/v2/hook/a… 启用 运行告警 未配置 编辑 停用 测试 删除":
+        - cell "synthetic-ops https://open.feishu.cn/open-apis/bot/v2/hook/a…":
+          - text: synthetic-ops
+          - text: https://open.feishu.cn/open-apis/bot/v2/hook/a…
+        - cell "启用"
+        - cell "运行告警"
+        - cell "未配置"
+        - cell "编辑 停用 测试 删除":
+          - button "编辑"
+          - button "停用"
+          - button "测试"
+          - button "删除"
+      - row "synthetic-moderation https://open.feishu.cn/open-apis/bot/v2/hook/b… 启用 待审通知 未配置 编辑 停用 测试 删除":
+        - cell "synthetic-moderation https://open.feishu.cn/open-apis/bot/v2/hook/b…":
+          - text: synthetic-moderation
+          - text: https://open.feishu.cn/open-apis/bot/v2/hook/b…
+        - cell "启用"
+        - cell "待审通知"
+        - cell "未配置"
+        - cell "编辑 停用 测试 删除":
+          - button "编辑" [active]
+          - button "停用"
+          - button "测试"
+          - button "删除"
+  - checkbox "接收指南反馈提交" [checked]
+  - text: 接收指南反馈提交
+  - button "保存"
+  - generic: 关闭后，小程序指南页/AI 页的“指南反馈”提交会被静默忽略（返回成功，但不记录、不通知）；普通反馈不受影响。
+  - generic "新增 / 编辑机器人 ▾"
+  - generic: 名称
+  - textbox "名称":
+    - /placeholder: 如：技术群机器人
+    - text: synthetic-moderation
+  - checkbox "启用" [checked]
+  - text: 启用
+  - checkbox "待审通知" [checked]
+  - text: 待审通知
+  - checkbox "每日汇总"
+  - text: 每日汇总
+  - checkbox "运行告警"
+  - text: 运行告警
+  - generic: Webhook 地址
+  - textbox "Webhook 地址":
+    - /placeholder: https://open.feishu.cn/open-apis/bot/v2/hook/...
+    - text: https://open.feishu.cn/open-apis/bot/v2/hook/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+  - generic: 签名密钥（编辑已配置的机器人时留空不变）
+  - textbox "签名密钥（编辑已配置的机器人时留空不变）":
+    - /placeholder: 仅填写时更新
+  - button "保存机器人"
+  - button "取消编辑"
+  - paragraph: 触发时机：新评价进入待审、新反馈提交（含资源失效反馈）。只有用途含「待审通知」的启用机器人会收到；测试请用列表中的「测试」按钮（只发单个机器人，不打扰其他群）。
+  - paragraph: 勾选「运行告警」后，该机器人接收日志存储和完整备份失败提醒。提醒只包含故障类别和时间，详细情况请到后台核对；服务器停机、入口日志和磁盘容量还需外部监控。
+  - text: ▸

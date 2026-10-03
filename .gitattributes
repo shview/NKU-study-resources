@@ -4,3 +4,6 @@ docs/compliance/evidence/S2-runtime/*.log -whitespace
 docs/compliance/evidence/S2-claims-20261001/*.tap -whitespace
 docs/compliance/evidence/S2-claims-20261001-r2/*.tap -whitespace
 docs/compliance/evidence/S2-backup-followup/*.tap -whitespace
+docs/compliance/evidence/S2-parallel-20261002/*.tap -whitespace
+docs/compliance/evidence/S2-parallel-20261002/*.txt -whitespace
+docs/compliance/evidence/S2-closeout-20261003/*.txt -whitespace

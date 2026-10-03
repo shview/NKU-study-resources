@@ -1,0 +1,64 @@
+TAP version 13
+# Subtest: local-only preflight is explicit about unverified remote storage, recovery and S2 acceptance
+ok 1 - local-only preflight is explicit about unverified remote storage, recovery and S2 acceptance
+  ---
+  duration_ms: 208.142917
+  type: 'test'
+  ...
+# Subtest: dedicated R2 configuration is checked without claiming remote access and every missing field fails
+ok 2 - dedicated R2 configuration is checked without claiming remote access and every missing field fails
+  ---
+  duration_ms: 278.350917
+  type: 'test'
+  ...
+# Subtest: missing, relative or unsafe paths and invalid JSON never leak original error text
+ok 3 - missing, relative or unsafe paths and invalid JSON never leak original error text
+  ---
+  duration_ms: 221.578625
+  type: 'test'
+  ...
+# Subtest: password length, unsafe POSIX permissions and Windows ACL uncertainty fail closed
+ok 4 - password length, unsafe POSIX permissions and Windows ACL uncertainty fail closed
+  ---
+  duration_ms: 46.610958
+  type: 'test'
+  ...
+# Subtest: legacy secret fields and copied values in ordinary settings are rejected without revealing them
+ok 5 - legacy secret fields and copied values in ordinary settings are rejected without revealing them
+  ---
+  duration_ms: 48.643083
+  type: 'test'
+  ...
+# Subtest: explicit external secret paths work only as private regular files with safe parent paths
+ok 6 - explicit external secret paths work only as private regular files with safe parent paths
+  ---
+  duration_ms: 45.819583
+  type: 'test'
+  ...
+# Subtest: snapshot sources, quarantine markers and destination selection are checked before readiness
+ok 7 - snapshot sources, quarantine markers and destination selection are checked before readiness
+  ---
+  duration_ms: 41.683
+  type: 'test'
+  ...
+# Subtest: preflight performs only read filesystem operations and does not request any network transport
+ok 8 - preflight performs only read filesystem operations and does not request any network transport
+  ---
+  duration_ms: 25.250458
+  type: 'test'
+  ...
+# Subtest: CLI has stable help and failure exits, and never echoes unsupported arguments
+ok 9 - CLI has stable help and failure exits, and never echoes unsupported arguments
+  ---
+  duration_ms: 452.218625
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1674.582458

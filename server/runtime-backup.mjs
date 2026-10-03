@@ -14,7 +14,7 @@ export class SnapshotGate {
     return () => { if (done) return; done = true; this.active--; for (const wake of this.waiters) wake(); };
   }
   async capture(operation, timeoutMs = 30000) {
-    if (this.locked) throw Object.assign(new Error('Backup is already running'), { statusCode: 409 });
+    if (this.locked) throw Object.assign(new Error('Backup is already running'), { statusCode: 409, code: 'BACKUP_BUSY' });
     this.locked = true;
     try {
       if (this.active) await new Promise((resolve, reject) => {

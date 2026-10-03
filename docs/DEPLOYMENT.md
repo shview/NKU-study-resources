@@ -304,13 +304,15 @@ Before every manifest draft or publish, the server writes and fsyncs a mode-0600
 All administrator full-manifest, R2 synchronization and static-content writes use revision CAS. HTTP 409 means nothing was overwritten: reload, inspect the other edit, then retry. Legacy R2 delete/move endpoints intentionally return 410. A dedicated in-process R2 queue serializes revision read, planning, collision checks, copy/verification, manifest CAS publish, and exact cleanup recording. Raw object keys remain opaque during deletion; no normalizer is allowed in cleanup. The safe route copies and verifies exact destination keys, publishes the CAS-protected manifest, and only then deletes the exact authorized old keys. Cleanup prefixes/keys that equal, contain, or sit beneath a copy target are rejected before copying. Cleanup failures leave harmless unreferenced objects for later removal.
 
 
-## S2 日志与完整备份（2026-10-02更新）
+## S2 日志与完整备份（2026-10-03收尾更新）
 
 本地修复、真实Caddy隔离验证、WAL/JSON恢复结果见 [S2验收报告](compliance/S2_ACCEPTANCE.md)。发布前及生产回执按 [S2服务器操作单](compliance/S2_SERVER_ACCEPTANCE.md) 逐项执行，不能用旧的“JSON备份已上传”代替完整恢复验证。
 
 S2完整备份必须加密，包含账号、运行JSON、日志和必要配置；公开资源桶不再接收私密备份或审计。新增配置路径`BACKUP_ENV_FILE/BACKUP_CADDY_FILE/BACKUP_SERVICE_FILE`须对应实际systemd/Caddy文件，独立私密桶使用`BACKUP_R2_BUCKET`并由维护者完成权限核验。恢复工具只创建隔离目录，D-01与恢复后删除状态核对完成前不能直接切换为生产。
 
-维护者回执中的477b191已上线；2026-10-02新增的备份凭据隔离与设置口令修复目前仅在本地验证，未部署。新备份客户端要求以下独立配置（值由维护者通过受控环境文件提供）：
+维护者回执中的477b191已上线，这是20261001-s2的历史回执；2026-10-02新增的备份凭据隔离与设置口令修复已提交为49507d9，未部署。当前收尾的新包还包含其后的运行告警、只读备份预检及指南冒烟修复，**部署候选必须以新包`RELEASE.json`中的完整提交编号为准**。477b191旧包和49507d9前置提交不代表这份新包；先核对包内`SHA256SUMS`，Git检出时核对候选目录的`git rev-parse HEAD`，其他接收方式按新包README核对版本，再按操作单复跑。原254/254、后续260/260及296/296分别对应不同历史采样；本轮后台选项的保存、刷新回填及取消编辑已通过主窗口合成浏览器验收，证据见S2验收报告。代码固定版本以本次随附`RELEASE.json`为准，包校验以随附`verification/package-integrity.json`为准。
+
+新备份客户端要求以下独立配置（值由维护者通过受控环境文件提供）：
 
 ```ini
 BACKUP_R2_BUCKET=nkustudy-private-backups
@@ -322,4 +324,8 @@ BACKUP_R2_PRIVATE_CONFIRMED=1
 
 最后一项只能在核验私密权限后设置，具体检查见服务器操作单。客户端使用标准`https://<Account ID>.r2.cloudflarestorage.com`端点；缺少专用凭据时拒绝远端备份并保留已完成的本地副本，不使用资源凭据兜底。现有`R2_*`资源配置继续供课程及头像访问，不能替换成仅限备份桶的令牌。
 
-477b191曾把输入口令重复保存到普通备份设置中，认证后的设置接口可能回传明文。部署后续修复后，接口读取即隐藏旧副本；再正常保存一次备份设置（密码留空、开关保持原值）清理普通设置中的重复字段，并确认私密文件中的现有口令未变。已有加密备份和旧口令继续保留；不要为了此次清理直接轮换。私密桶、真实PUT/GET校验、匿名拒绝和告警投递仍须生产回执，本地合成测试不代替这些检查。
+477b191曾把输入口令重复保存到普通备份设置中，认证后的设置接口可能回传明文。部署新包修复后，接口读取即隐藏旧副本；再正常保存一次备份设置（密码留空、开关保持原值）清理普通设置中的重复字段，并确认私密文件中的现有口令未变。已有加密备份和旧口令继续保留；不要为了此次清理直接轮换。私密桶、真实PUT/GET校验、匿名拒绝及保留设置仍待后续生产回执，本地合成测试不代替这些检查。
+
+基于49507d9的后续并行工作增加只读`node scripts/s2-backup-preflight.mjs`和通知机器人`ops`用途。预检由服务账号使用服务环境运行，静态检查不通过时非零退出；退出0也不证明远端权限、恢复或通知送达。现有待审/日报配置不会自动订阅运行告警；后续获授权启用时，须在后台明确勾选“运行告警”。告警去重/重试在进程内维护，停机、Caddy和容量故障仍靠外部监控。
+
+按2026-10-03用户决定C-11，当前仅收尾S2这一批，真实通知本轮暂缓：不重新接通、不新增真实运行告警订阅、不发送测试，也不把它列为本批提交/打包的阻塞项。用户表示通知服务以前接通过，这一历史反馈不能证明新`ops`用途已经生产投递验收。私密R2、外部监控、用户口令保管/独立解密、仍有1973条错误的类型检查、D-01及新包生产部署继续如实留待后续；S3/S4/S5未启动。当前阶段的实测和交付状态以S2验收报告的最新记录为准。

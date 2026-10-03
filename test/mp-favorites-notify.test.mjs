@@ -79,7 +79,7 @@ test("feishu card builds interactive message with action button", () => {
   assert.equal(body.card.elements.at(-1).actions[0].url, "https://nkustudy.top/admin/");
 });
 
-function tempNotify(sendResult = { json: async () => ({ code: 0 }) }) {
+function tempNotify(sendResult = { ok: true, status: 200, json: async () => ({ code: 0 }) }) {
   const state = { settings: {}, secrets: {}, sent: [] };
   const service = new FeishuNotifyService({
     readSettings: async () => state.settings,
@@ -134,7 +134,7 @@ test("legacy single-bot config migrates to the bot list", async () => {
 test("notify skips disabled bots and reports upstream failures", async () => {
   const { service } = tempNotify();
   assert.deepEqual(await service.broadcast({ title: "x", lines: [] }), { sent: false, results: [], reason: "no-enabled-bots" });
-  const failing = tempNotify({ json: async () => ({ code: 19021, msg: "sign match fail" }) });
+  const failing = tempNotify({ ok: true, status: 200, json: async () => ({ code: 19021, msg: "sign match fail" }) });
   await failing.service.upsertBot({ webhookUrl: HOOK, enabled: true });
   const failed = await failing.service.broadcast({ title: "x", lines: [] });
   assert.equal(failed.sent, false);

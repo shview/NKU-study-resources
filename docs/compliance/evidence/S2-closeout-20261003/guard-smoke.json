@@ -1,0 +1,37 @@
+{
+  "pid": 70293,
+  "plannedSelftestBlocked": 6,
+  "allBlocked": true,
+  "checks": [
+    {
+      "name": "fetch",
+      "blocked": true,
+      "code": "PREVIEW_EGRESS_BLOCKED"
+    },
+    {
+      "name": "http",
+      "blocked": true,
+      "code": "PREVIEW_EGRESS_BLOCKED"
+    },
+    {
+      "name": "https",
+      "blocked": true,
+      "code": "PREVIEW_EGRESS_BLOCKED"
+    },
+    {
+      "name": "net",
+      "blocked": true,
+      "code": "PREVIEW_EGRESS_BLOCKED"
+    },
+    {
+      "name": "dns",
+      "blocked": true,
+      "code": "PREVIEW_EGRESS_BLOCKED"
+    },
+    {
+      "name": "dgram",
+      "blocked": true,
+      "code": "PREVIEW_EGRESS_BLOCKED"
+    }
+  ]
+}

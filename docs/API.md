@@ -891,6 +891,14 @@ POST 接收 `{data}`。新设置的非空加密口令少于16位返回400；完�
 
 R2只允许显式配置的独立私密 `BACKUP_R2_BUCKET`，不得与公开资源桶相同，且维护者须核验后设置 `BACKUP_R2_PRIVATE_CONFIRMED=1`。2026-10-02后续修复使用独立的 `BACKUP_R2_ACCOUNT_ID`、`BACKUP_R2_ACCESS_KEY_ID`、`BACKUP_R2_SECRET_ACCESS_KEY`，不回退到资源客户端或其凭据；Account ID为32位十六进制，对应标准R2端点。缺少配置或上传/读回失败返回`complete:false`，已验证的本地副本保留。自动任务失败一小时后重试。恢复/维护说明见 `docs/compliance/S2_SERVER_ACCEPTANCE.md`。
 
+完整任务已运行时，`POST /admin-api/backup-run`返回409和`code:"BACKUP_BUSY"`；一致性快照暂停准入时为503，捕获阶段竞争为409。上述忙碌拒绝不作为运行故障告警，也不清除原有故障。其余完整备份失败会触发下述运行告警；通知发送结果不改变原备份HTTP结果。
+
+### 通知机器人运行告警用途
+
+`POST /admin-api/notify-bots`的`purposes`支持`moderation`、`digest`及新增`ops`。仅明确启用且包含`ops`的机器人接收应用日志/完整备份故障卡片，旧配置不自动订阅。通知只含固定故障类别、UTC时间和建议；HTTP非2xx或上游业务失败均不能计为发送成功。成功后同类故障30分钟冷却，失败至少一分钟重试，恢复后新故障重新告警；状态不跨重启保存。后台表单支持新用途的保存、回填、重置和展示。
+
+`POST /admin-api/notify-test`仍只向选择的单个机器人发送测试，需原`backup.manage`权限并留管理审计；此接口不会主动破坏日志或备份。生产实际送达、入口故障及磁盘外部监控不由本地测试代验。
+
 取运行快照期间拒绝新请求503并等待在途请求结束，短暂暂停是为了取得一致时间点；在途超时或文件故障使备份失败，不用半成品冒充完整。
 
 ```bash
