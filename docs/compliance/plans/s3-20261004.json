@@ -1,0 +1,860 @@
+{
+  "kind": "S3_IMPLEMENTATION_PREPARATION",
+  "date": "2026-10-04",
+  "status": "PREPARED_NOT_IMPLEMENTED",
+  "sourceBaseline": "383237cd01b1994192fe6498f1c7e52a7d6f46e6",
+  "scope": "已批准本轮依赖告警处理及S3准备；S3接口/页面/迁移尚未实施或验收。",
+  "principles": [
+    "公开性是安全属性，处理完成不是批准公开；回复也不是批准公开。",
+    "private由服务端根据原始提交决定并永久保留；页面只展示，不提供解除私密或改原始类型。",
+    "用户提交原文、联系方式、原始类型、归属只读；管理员回复与处置是独立数据。",
+    "一个保存意图只提交该条显式变更；规则和其他条目草稿不属于本次保存。",
+    "匿名受理与站内回复可达是两个事实；无账号关联不声称有站内送达。",
+    "界面成功必须来自服务端持久成功；错误/断网/冲突保留草稿，不假成功。"
+  ],
+  "currentFacts": [
+    {
+      "file": "src/pages/admin.astro",
+      "lines": [
+        1448,
+        1525,
+        3163,
+        3272,
+        3288,
+        3330,
+        5314
+      ],
+      "fact": "普通反馈、举报专页、规则和批量共用feedbackState；POST /admin-api/feedback {data,expectedRevision}全量保存；改状态自动提交，编辑回复可隐式completed；原文标题/内容/contact/type可编辑；没有逐条取消和刷新未保存保护。"
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "lines": [
+        1504,
+        1530,
+        3256,
+        3262
+      ],
+      "fact": "后台创建并显示handled_by/handled_at蛇形字段；服务端stampContentActor保护camel handledBy/handledAt，因此当前显示未完全使用可信服务端值。"
+    },
+    {
+      "file": "server/admin-audit.mjs",
+      "lines": [
+        33
+      ],
+      "fact": "合成纯函数验证：客户端handled_by=forged-client/handled_at=1900仍保留，同时服务端生成handledBy=real-server/handledAt=2026-10-04T00:00:00.000Z。新审核入口必须拒绝旧snake字段，页面统一读服务端camel元数据。"
+    },
+    {
+      "file": "server/admin-server.mjs",
+      "lines": [
+        1532,
+        1536,
+        2394,
+        2473,
+        2991
+      ],
+      "fact": "publicFeedback已使用白名单；已有private=true在全量POST与publish preserve中保留。当前仍completed可公开、启动open→approved；历史举报无private仍可能改type逃逸；不能把台账旧spread风险当作现状。"
+    },
+    {
+      "file": "src/pages/feedback.astro",
+      "lines": [
+        39,
+        308,
+        330
+      ],
+      "fact": "仅bug/feature/content表单；公共列表GET /feedback-api/feedback，普通提交POST /feedback-api/submit；失败通常保留表单，成功reset；没有投诉举报专门入口、认证状态指引。"
+    },
+    {
+      "file": "src/pages/me.astro",
+      "lines": [
+        294,
+        323
+      ],
+      "fact": "GET /api/v1/me/feedback?page=1&page_size=50已调用，但网页仅展示标题/正文摘要/旧status/createdAt，不展示服务端已返回的reply/repliedAt；请求错误被转换成空列表，可能误导为没有反馈。"
+    },
+    {
+      "file": "server/public-api-service.mjs",
+      "lines": [
+        514
+      ],
+      "fact": "getMyFeedback按user_id归属过滤，DTO包含reply/repliedAt；它不是匿名查询接口。"
+    },
+    {
+      "file": "server/admin-server.mjs",
+      "lines": [
+        1587,
+        1600,
+        1647
+      ],
+      "fact": "S1已允许无凭证举报，固定新举报private=true、user_id=null；提供凭证则仍须有效，有效登录投诉可以关联本人；普通投稿依旧requirePhoneVerifiedUgcUser。"
+    },
+    {
+      "file": "src/pages/privacy.astro",
+      "lines": [
+        23
+      ],
+      "fact": "投诉举报按钮当前链接/feedback/，但该页没有举报类型或举报表单。"
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "lines": [
+        2968,
+        3080,
+        5240
+      ],
+      "fact": "评价管理也有免审配置、正文/老师/评分/课程原文编辑和全量批量保存；MOD-04/ADM-07不能只改反馈就标整项完成。"
+    },
+    {
+      "file": "server/review-submission-service.mjs",
+      "lines": [
+        129,
+        141
+      ],
+      "fact": "联系方式/关键词检测仅在keywordFilter.enabled=true时应用于评价正文；moderationRequired=false且无命中会自动approved；普通反馈未共用识别器。"
+    }
+  ],
+  "model": {
+    "status": "proposed, not implemented",
+    "storageVersion": 2,
+    "immutableFeedback": [
+      "id",
+      "title",
+      "content",
+      "type",
+      "contact",
+      "resourceRef",
+      "report_url",
+      "report_target",
+      "user_id",
+      "createdAt",
+      "private",
+      "ipHash",
+      "userAgent",
+      "publicationBlocked",
+      "publicationBlockedReason"
+    ],
+    "immutableReview": [
+      "id",
+      "courseTitle",
+      "teacher",
+      "rating",
+      "tags",
+      "content",
+      "user_id",
+      "createdAt",
+      "ipHash",
+      "userAgent"
+    ],
+    "private": "使用已有private:boolean；新report/complaint由服务器强制true。既有true永不可清除；type原文冻结；公共gate额外排除report/complaint及report相关字段，防止迁移遗漏。未知历史来源由publicationBlocked单独阻止批准，不能直接据现type=false判断可公开。",
+    "handlingStatus": [
+      "open",
+      "processing",
+      "completed",
+      "rejected",
+      "parked"
+    ],
+    "publicationState": [
+      "pending",
+      "approved",
+      "rejected"
+    ],
+    "feedbackFields": [
+      "handlingStatus",
+      "publicationState",
+      "reviewedBy",
+      "reviewedAt",
+      "updatedBy",
+      "updatedAt",
+      "handledBy",
+      "handledAt",
+      "reply",
+      "replyVisibility",
+      "repliedBy",
+      "repliedAt"
+    ],
+    "reviewFields": [
+      "publicationState",
+      "reviewedBy",
+      "reviewedAt",
+      "updatedBy",
+      "updatedAt",
+      "hidden"
+    ],
+    "reply": "复用已有reply:string/repliedAt/repliedBy；新增replyVisibility=submitter|public。空字符串明确清空。默认submitter；private强制submitter；public需管理员明确选择且条目公共gate成立。回复、处理、隐藏的变更不改变publicationState。不引入replyRecord双模型。",
+    "replyMaxLength": 2000,
+    "lengths": "长度按现有JS .length口径；新入口对超长拒绝并保留用户本地输入，不再悄悄slice后声称完整保存。标题120、正文2000、联系120、URL300、对象120、资源引用200；评论教师80/课程120/标签最多12x40延续现有边界。",
+    "approval": "只有publicationDecision=approve由授权管理员决定（或待产品选择的显式批准policy）才写approved及reviewedBy/reviewedAt；reject→rejected，revoke→pending。客户端不能写state/actor/time/source/private。所有新版字段均为服务端权威。",
+    "gate": "schemaVersion===2 && publicationState==='approved' && validServerApproval && private!==true && !knownReportOrigin && !publicationBlocked && hidden!==true；handlingStatus完全不参与。",
+    "itemRevision": "反馈hash规范化权威单条；评价hash原文+审核字段，排除helpfulBy/helpfulCount与派生DTO/兼容status，避免正常点赞触发无关审核冲突。revision不是鉴权凭证。",
+    "settingsRevision": "独立hash规范化title/announcement/rules（评价rules），排除items/reviews和每日updated；与单条revision分开。",
+    "authorityValidation": "读入/迁移/启动统一验证schema与ID唯一性；无效schema或有歧义来源失败或block，不能将旧status回退成批准。未知额外内部字段不进入公共DTO。"
+  },
+  "apiContracts": [
+    {
+      "route": "POST /feedback-api/report",
+      "auth": "可匿名；提供凭证须有效；有效未认证用户可关联本人；user_id只能服务器产生",
+      "request": {
+        "title": "标题",
+        "content": "原因/原文",
+        "reportUrl": "可选URL",
+        "reportTarget": "可选对象/ID",
+        "resourceRef": "可选资源ID",
+        "contact": "可选联系",
+        "website": "反滥用蜜罐"
+      },
+      "response": {
+        "ok": true,
+        "accepted": true,
+        "private": true,
+        "receiptId": "随机回执ID",
+        "replyAvailable": false
+      },
+      "notes": "服务端固定private=true/type=report、handlingStatus=open、publicationState=pending；replyAvailable:boolean按实际已保存账号归属确定，不是通知已送达。匿名无裸ID查询接口/匿名凭证。有效受理成功必须持久后才accepted:true。"
+    },
+    {
+      "route": "POST /feedback-api/submit",
+      "auth": "普通反馈继续有效登录+手机号认证+未封禁；旧type=report/complaint别名调用同一私密受理服务",
+      "request": "保留现有payload；公开字段private/user_id/status无权威；举报字段type只用于分流",
+      "response": "保持{ok:true}兼容，新增accepted/private/receiptId/replyAvailable可选",
+      "notes": "普通submissionOpen/指南开关与普通minLength不影响投诉；拒绝未知公开type。旧新举报入口同一举报quota，不能利用两入口翻倍。"
+    },
+    {
+      "route": "GET /admin-api/feedback",
+      "auth": "所有有效管理员可查询(C-08)",
+      "response": "保留{ok:true,data,revision}，增加itemRevisions:{ID:hash},settingsRevision；每条DTO提供publicationBlocked/Reason及publicEligible，由服务端计算；camel元数据权威。"
+    },
+    {
+      "route": "GET /admin-api/feedback/:id",
+      "auth": "所有有效管理员",
+      "response": "{ok:true,data:item,itemRevision}；不存在404"
+    },
+    {
+      "route": "PATCH /admin-api/feedback/:id",
+      "auth": "有效管理员+现content.moderate；现同源Origin/Fetch-Site/header/JSON检查继续",
+      "request": {
+        "expectedItemRevision": "hash",
+        "changes": {
+          "handlingStatus": "可选",
+          "hidden": "可选boolean",
+          "publicationDecision": "可选approve|reject|revoke",
+          "reply": "可选string或空串",
+          "replyVisibility": "可选submitter|public"
+        }
+      },
+      "response": "200 {ok:true,data:item,itemRevision,publicEligible}；只返回这一条，不替换其他草稿"
+    },
+    {
+      "route": "PATCH /admin-api/feedback/settings",
+      "auth": "有效管理员+现content.moderate",
+      "request": {
+        "expectedSettingsRevision": "hash",
+        "changes": {
+          "title": "可选",
+          "announcement": "可选",
+          "rules": "只含允许设置字段"
+        }
+      },
+      "response": "{ok:true,data:settings,settingsRevision}；路径先于/:id匹配"
+    },
+    {
+      "route": "POST /admin-api/feedback/batch",
+      "auth": "有效管理员+content.moderate",
+      "request": "{items:[{id,expectedItemRevision}],changes:{handlingStatus?,hidden?,publicationDecision?}}；最多100，明确选中对象与共同行为，禁止原文/规则/广播回复",
+      "response": "全部校验后原子执行；任何冲突409 {code:'ITEM_CONFLICT',conflicts:[{id,currentItem,currentItemRevision}]}且全部不写；成功返回仅选中条目新base/token"
+    },
+    {
+      "route": "GET /admin-api/reviews 与 GET /admin-api/reviews/:id",
+      "auth": "所有有效管理员读取；兼容全库DTO和新增单条",
+      "response": "与feedback同构revision；原文course/teacher/rating/tags/content不可编辑"
+    },
+    {
+      "route": "PATCH /admin-api/reviews/:id",
+      "auth": "有效管理员+保持现content.edit；不顺带重定评价写权限",
+      "request": "{expectedItemRevision,changes:{hidden?,publicationDecision?}}",
+      "response": "与feedback单条同构；不增加评价回复/处理业务"
+    },
+    {
+      "route": "PATCH /admin-api/reviews/settings",
+      "auth": "有效管理员+现content.edit",
+      "request": "{expectedSettingsRevision,changes:{rules:<allowlisted rules>}}",
+      "response": "{ok:true,data:settings,settingsRevision,effectivePublicationMode,configurationWarnings?}；免审模式选择见未决"
+    },
+    {
+      "route": "GET /api/v1/me/feedback 与 /api/v1/me/reviews",
+      "auth": "有效本人Cookie/Bearer，服务器取ID并严格正整数归属筛选；no-store",
+      "response": "保留旧DTO字段，补handlingStatus/publicationState/private/允许本人查看的reply/repliedAt；不返回IP、userAgent、管理员账号与内部审计材料。匿名举报不在任何账号列表出现。"
+    },
+    {
+      "route": "GET /admin-api/law-query 与 /admin-api/law-export",
+      "auth": "继续C-08所有有效管理员；no-store且成功/拒绝/失败审计",
+      "response": "继续完整授权查询/导出；新永久私密含义不阻断管理员查询。S4交付分页/文书流程本轮不扩大。"
+    }
+  ],
+  "errors": {
+    "badRequest": "400 INVALID_CHANGES / READ_ONLY_FIELD / REPLY_TOO_LONG / LEGACY_MULTIPLE_CHANGES / LEGACY_PUBLICATION_DECISION_REQUIRED",
+    "missingRevision": "400 ITEM_REVISION_REQUIRED / SETTINGS_REVISION_REQUIRED",
+    "privateApprove": "400 PRIVATE_PUBLICATION_FORBIDDEN；原始私密无批准选项，其他状态可处理/隐藏/回复。",
+    "legacyUnconfirmedApprove": "400 PUBLICATION_BLOCKED；不改变原文、私密、处理/回复状态。",
+    "conflict": "409 {ok:false,code:'ITEM_CONFLICT',error:'此条记录已被修改，未保存本次内容。',currentItem,currentItemRevision}；客户端保留base/draft，手动三方核对，不自动重试覆盖。",
+    "settingsConflict": "409 {ok:false,code:'SETTINGS_CONFLICT',currentSettings,currentSettingsRevision}",
+    "identity": "401无效会话/普通账号；403无写权限/不符来源；429持续限流；503现BACKUP_BUSY、存储/审计准入不可用；错误返回不含用户原文/联系。"
+  },
+  "legacyCompatibility": [
+    "保留公开/本人客户端现有payload形状与reply字符串；status仅派生展示字段，所有公共权威判断使用新版gate。反馈public status可按handlingStatus供旧过滤器使用；owner/admin保留有文档的兼容映射并同时给新字段；review旧status从publicationState派生，旧通过=approved仅用于显示。",
+    "旧全量POST /admin-api/feedback 与 /admin-api/reviews保留过渡适配器，不再整表替换。服务器在同文件锁内比对原始ID集合/不可变原文；丢行、增行、换ID、原文/联系/归属/私密变化拒绝400。",
+    "全库revision仍按旧expectedRevision校验；一次payload只允许恰好一条允许的处置/回复变化，且规则/页面元数据未变，或仅设置变化且零行变化。两条变化或条目+设置混合全部400；零变化可幂等返回，无效后端值不能改列表base。",
+    "旧actor/time字段包括snake aliases一律不当权威；适配器可剥离这些弃用字段并给compatibilityWarnings；新版PATCH对任何这些输入严格拒绝。旧client timestamp不能当作内容冲突或公开证据。",
+    "旧status=completed/processing/rejected/parked仅映射handlingStatus；旧hidden仅映射hidden；旧approved/通过无法作为新明确批准，返回LEGACY_PUBLICATION_DECISION_REQUIRED，引导新界面。撤销等只允许安全收窄，不能偷偷借status扩张可见范围。",
+    "旧管理员多条批量功能必须用明确batch endpoint；保留原有全量POST批量语义会违反ADM-08，无法同时承诺单条不夹带。迁移提示、明确错误和新版静态页面一起发布，不能静默丢弃用户动作或报告成功。",
+    "旧公开投稿type=report/complaint别名与新举报入口使用同一强制私密服务/规则/频控；既有小程序服务端真实源码/真机仍需独立验收。"
+  ],
+  "submissionAbuse": [
+    "保留PersistentRateLimiter的IP/global attempt准入、蜜罐、readPublicBody严格UTF-8/JSON/体积边界。新增入口必须接attachSubmissionAudit，intent/结果report.submit、target feedback:ID，日志只存服务端对象和安全代码，不存正文/URL。",
+    "投诉有独立固定或单独配置的minLength=5/maxLength=2000和提交限额，初始沿用3/hour、15/day量级；与普通投稿分scope，不让普通投稿关闭或高minLength封死举报。新旧举报路由共用同一scope、同时保留聚合attempt防刷。",
+    "联系方式/违规原文/敏感词允许出现在私密投诉，标记供管理员识别但不因此自动拒绝；未知新字段/超长给明确400。投诉URL只保存与显示转义文本，不由后端抓取。",
+    "真实notify保持本轮暂缓；以后如恢复，通知载荷不能携带私密投诉正文、联系或关联URL。此项是未来方案，本任务不连通知。"
+  ],
+  "migration": {
+    "mode": "仅准备；将来实施必须合成验证和单独授权生产迁移，不能访问生产个人数据",
+    "proposedPaths": [
+      "server/moderation-model.mjs",
+      "scripts/migrate-content-moderation.mjs"
+    ],
+    "requirements": [
+      "移除open→approved启动迁移；version=2初始化/迁移必须await完成；失败或不支持schema明确拒绝启动/公共读取，不吞错误。Schema迁移可在维护窗口用dry-run计划、源文件哈希、私密原始备份、maintenance lock、expectedPlanHash、原子写入和私密回执。",
+      "保持全部ID、原文、账号归属、联系方式、举报关联及数量，不以删数据规避隐私验收。重复ID/无ID/非法结构报错隔离处理，不自动改ID打破私密历史。",
+      "已知私密来源取并集：private===true、type=report/complaint、report_url/report_target（含历史camel别名）、可核实原始提交审计report.submit。设private=true并冻结，处理旧status与批准状态分离。",
+      "无法证明原始privacy来源的旧行publicationBlocked=true、reason=LEGACY_PRIVACY_UNCONFIRMED；仍能管理员处理/本人读取。审核PATCH不能解block或改private，受控来源核验仅凭可复核旧记录；永不提供解除已知私密按钮。",
+      "旧open/pending/approved/通过/completed本身均不能证明明确批准；无可复核批准事件/迁移证据的publicationState=pending。历史批量保存、浏览器时间、启动迁移或关闭moderationRequired不能伪造成管理员批准。",
+      "旧处理状态completed/processing/rejected/parked保留对应handlingStatus，其余映射open；旧hidden/status hidden保留hidden=true；legacyStatus仅内部迁移信息，不参与gate。",
+      "旧回复文本保留，replyVisibility默认submitter。旧snake人/时间保留在私密迁移快照/证据，界面不显示为可信actor；不能把导入时间/迁移机器人称为当时审批人。已有可信S2 camel元数据可保留但不据此自动approved。",
+      "迁移重复两次不改ID/原文/新批准/回复/元数据，不重复加时间戳；失败/中断后不能出现部分旧status公开。恢复旧备份须先再次迁移并复用私密/撤销决定记录；禁止直接恢复旧版public gate来回滚。",
+      "报告脱敏的数量/待人工批准量/blocked来源量、源目标hash与回执，不将投诉原文、联系或操作秘密写共享报告。"
+    ]
+  },
+  "publicationExportsAndRevocation": {
+    "immediateDefinition": "成功处置响应之后的新网络请求/重新加载必须读到撤销或隐藏结果；已下载到用户设备的数据不能由服务端追回。生产缓存旧策略的清理必须作为部署验收，不用本地过滤替代。",
+    "gatePaths": [
+      "server/admin-server.mjs visibleFeedback/approvedReviews/publicFeedback/publicReview",
+      "server/public-api-dto.mjs approvedReview/buildReviewGroups，影响course ratings/teachers、reviews/groups/home、search-index/search-data",
+      "src/lib/reviews.ts approvedReviews与所有未来静态构建入口",
+      "src/pages/feedback.astro以及reviews/index/detail的运行GET及浏览器本地搜索",
+      "server/public-api-service.mjs getMyFeedback仅本人；law-query/export为有效管理员，不是公共出口"
+    ],
+    "http": [
+      "首选最小可执行控制：所有依赖UGC批准的公开GET用Cache-Control:no-store，不生成可复用304，并在代理/CDN对相应路径禁缓存。不更改与审核无关的guides/resources/about等缓存。",
+      "具体v1范围：/api/v1/home、/api/v1/courses、/api/v1/courses/:id、/api/v1/review-groups、/api/v1/review-groups/:key、/api/v1/search-index、/api/v1/search-data；legacy /feedback-api/feedback、/review-api/reviews维持no-store。",
+      "仅改新响应头无法驱逐旧max-age60/SWR300缓存；S3部署时需授权清理这些API与受影响HTML的CDN/代理旧缓存，或以新URL版本/强制网络更新方式切流，并验收实际入口headers、旧ETag不会304带回旧体。没有生产清缓存证据不能宣称立即撤销已验收。"
+    ],
+    "processCache": [
+      "复用每次请求检查reviews文件指纹的既有SnapshotCache；新增invalidate方法和PublicApiService.invalidatePublicationSnapshot，在成功持久审核写/迁移后同步调用，变更schema/gate也进入版本。",
+      "不把3秒TTL当立即失效证据；原子更新结束后首个home/course/group/search请求就必须删掉被撤销条目及其统计/教师派生；文件读取/版本故障必须失败不回旧快照。",
+      "继续单写入进程部署前提；若扩为多进程，需各实例版本检测或共享失效通知，不能沿用仅本进程invalidate即声称全部失效。"
+    ],
+    "static": [
+      "当前页面只静态输出feedback配置，不输出UGC行；建议固定这条边界，构建只接同一gate后的公共投影/配置，所有正文列表在运行请求读取。readBuildData不能将raw items/reviews注入script/JSON/sourcemap/public文件。",
+      "以合成哨兵分别放原文、reply、contact、report URL、type变化和未知字段，检查所有dist HTML/JS/JSON/sourcemap不存在私密/未批准哨兵；管理员bundle不夹带运行库。还要检查当前正式部署旧HTML及旧生成URL，而不是仅新build。",
+      "新版不嵌入UGC时，单条处理保存不需要为用户行触发整站构建；settings title/announcement变更仍走现ContentPublishService+StaticReleasePublisher的CAS/持久journal/构建回滚。",
+      "如果以后生成含UGC的静态快照，撤销必须同时禁止/清理旧静态出口，再构建并原子切换/清缓存；不能承诺异步build完成前已消失。build失败不能把安全撤销静默回滚为公开；需要fail-closed页面或明确失败状态与待发布回执。最小S3不增加这种静态正文快照。",
+      "最终发布仍由主窗口/维护者另行授权；本次不触发buildAndDeploy、Caddy/CDN或R2变更。"
+    ],
+    "outputWhitelists": {
+      "publicFeedback": "id,title,content,type,handlingStatus,publicationState,createdAt,updatedAt；旧status派生；reply仅replyVisibility=public且公共gate成立时加reply/repliedAt。永不加contact,user_id,report_url,report_target,resourceRef,ipHash,userAgent,private元证据或admin actor。",
+      "publicReview": "现公开id/courseTitle/teacher/rating/tags/content/helpfulCount/createdAt等白名单与v1DTO保持；publication gate一致；无原始身份和审计字段。",
+      "owner": "服务器归属验证后原文及本人可见reply；contact/report字段若需要回显也只能从本人DTO单独白名单，最小版本维持现DTO范围；不加管理员内部备注/审计。",
+      "admin": "有效管理员可以完整查询已授权举报、联系/资源信息及审计；no-store；无需admin之间拆query/export权限。"
+    }
+  },
+  "contentChecks": {
+    "actualPublicText": [
+      "公开评价courseTitle/teacher/tags/content",
+      "公开普通反馈title/content",
+      "明确public的管理员reply",
+      "反馈页面title/announcement（管理员设置）"
+    ],
+    "checks": "将reviewKeywordMatch抽为可复用辅助，联系方式pattern始终执行、custom keyword开关仅控制自定义词；检查普通反馈title/content与评价course/teacher/tags/content以及public reply，结果flag辅助人工批准。私密投诉可以包含违规词/联系，照常受理并永不公开。",
+    "nickname": "目前public review/feedback DTO不含用户nickname。账号nickname属于登录/本人/受限服务信息；S3不擅自新增昵称公开。捐赠页另有明确公开的nickname和自动支付记录，需在实际公开文本清单中单列边界，不能宣称全站所有昵称已自动治理；不把捐赠/注销业务混入本批。",
+    "unsupportedClaims": [
+      "所有字段自动审核",
+      "未命中关键词等于合规",
+      "联系号码一律拒绝",
+      "私密举报会公开回复",
+      "现管理员时间页面已完全由服务端权威提供"
+    ]
+  },
+  "pages": {
+    "adminFeedback": {
+      "summary": "每条卡片三部分：只读用户原文；已保存处理/公开/隐藏状态；本条管理员处置及回复草稿。",
+      "fields": "标题、正文、联系、原始type、账号归属、举报URL/对象和提交时间均静态展示。处理状态独立选择；公开决定单独控件；隐藏独立复选。reply为独立textarea/Markdown编辑器，展示2000字限制和replyVisibility。",
+      "publicLabels": "区分待批准公开/已批准公开/公开被拒绝，与待处理/处理中/完成/不予完成/搁置。不能把hidden=false写成公开显示。",
+      "save": "改变控件仅产生本条草稿，按钮保存本条提交dirty允许字段；成功仅替换本条base/itemRevision并清理该条草稿，保留B和规则草稿。",
+      "cancel": "取消本条恢复本条最新已知base；不影响其他条、规则、选择范围。",
+      "readOnlyRoles": "无写权限可读卡片并显示状态，写控件与保存禁用；C-08查询/导出不另拆权限，仍遵守既有管理写职责。",
+      "filters": "处理、公开和隐藏独立筛选；查询基于已保存base，草稿变化不使条目提前消失。翻页/搜索/切tab保留按id保存的草稿。",
+      "settings": "页面title/announcement/rules独立草稿、独立保存设置/取消设置；删除顶部保存全部反馈按钮或改为明确设置保存。",
+      "batch": "批量只勾选ID及明确一个字段动作；显示选中数量和动作预览。可复用单条PATCH逐项串行，逐项结果回报；不传其他草稿或规则。选中项有未保存草稿先明确处理，不能夹带回复。失败项保持选中，成功项清除，409不自动重试。",
+      "history": "publicationBlocked=true展示来源待核验，暂不可公开；无解除永久私密按钮。"
+    },
+    "adminReports": {
+      "membership": "按服务端private原始属性归类（旧type仅兼容辅助），避免只按当前type过滤而漏历史私密记录。",
+      "alwaysPrivate": "每条显著始终不公开，不渲染approve控件；仍可逐条处理、隐藏、回复、保存、取消。",
+      "replyHint": "关联账号：提交者可在我的反馈查看；匿名：仅保存管理员回复记录，未关联账号无法站内查看，不显示送达。",
+      "trustedMetadata": "读服务端camel handledBy/handledAt/repliedBy/repliedAt；不再显示或写旧snake字段。",
+      "sharedDrafts": "反馈与举报两个面板用同一个按ID的草稿库，切换面板不能出现两个不同版本或双保存。"
+    },
+    "publicFeedback": {
+      "purpose": "普通公开投稿；浏览匿名。表单告知登录、手机号已认证、未封禁及先审核后公开。",
+      "complaintCta": "明显投诉举报链接/report/，可匿名、始终私密。",
+      "submit": "继续普通POST /feedback-api/submit；前端maxlength/必填同步server；401/403/400/429/500/断网保留输入，成功仅在服务端明确保存后reset。",
+      "status": "公共列表只显示server返回已批准条目，以handlingStatus显示处理进度。reply只有server允许公开时渲染。",
+      "loadErrors": "加载失败显示错误与重试，不能伪装成还没有公开反馈。",
+      "editor": "保留正常Vditor路径并给可靠textarea fallback；保存与切换不能重复挂载或清空内容。"
+    },
+    "report": {
+      "form": "标题/举报原因正文、关联URL或ID/对象、可选联系方式；textarea即可提交，不依赖外部编辑器。明确这些字段仅管理员和允许的本人访问。",
+      "anonymity": "未登录可直接提交；已登录未认证也可提交并归属本人。后台用null表示匿名；页面不伪造user_id或已认证。无效/过期/封禁凭证明确失败并保留表单，不暗中降级成匿名。",
+      "successAnonymous": "已受理，投诉举报始终不公开。未关联账号，无法在我的反馈查看站内回复；可选联系方式只用于管理员后续核对。",
+      "successAuthenticated": "已受理，始终不公开，可到我的反馈查看处理状态和管理员已保存的回复；不把可查看称为已送达。",
+      "privacyLink": "privacy.astro投诉举报按钮改为/report/；/feedback/、忘记密码现有入口提供可发现的私密受理CTA。"
+    },
+    "myFeedback": {
+      "fields": "标题、可展开原文、handlingStatus、普通反馈publicationState或始终私密徽标、创建时间、管理员reply及可信repliedAt。HTML仅转义或安全Markdown。",
+      "pagination": "复用page/page_size，展示页码和总数；现只拉前50条应补分页，避免投诉旧记录不可发现。",
+      "errors": "认证过期与加载失败分别显示可重试状态；不得将error当作空列表。",
+      "ownership": "不新增任意ID查看别人的反馈接口；始终仅用/me/feedback，由服务端验证当前user_id。",
+      "contact": "不必为显示回复给本人下发其他账号身份、IP、userAgent、内部操作者权限或公共不必要联系方式。"
+    }
+  },
+  "draftState": {
+    "key": "Map<contentKind + ':' + itemId, DraftState>",
+    "stateFields": [
+      "baseItem",
+      "baseItemRevision",
+      "draftChanges",
+      "dirtyFields",
+      "phase:clean|dirty|saving|error|conflict",
+      "error",
+      "conflictServerItem",
+      "conflictServerRevision"
+    ],
+    "settingsState": "独立SettingsDraft(baseSettings,settingsRevision,changes,phase)。",
+    "serialization": "只从dirtyFields生成允许changes，不能JSON.stringify整个baseItem、feedbackState或DOM全部输入。",
+    "saving": "保存开始冻结本次payload；本条可暂时禁用编辑/重复保存，其他条仍可编辑；finally必定退出saving。",
+    "errors": "400/401/403/429/500/断网/超时/非JSON响应都保留draftChanges；不更新base/revision，不显示已保存。401重认证过程不得清空draftMap。",
+    "conflict": "保存base、自己的draft和最新server三方对照；不能直接刷新覆盖草稿。用户逐字段选择保留自己的改变或接受server，形成最新revision上的新draft，手动再次保存；无自动覆盖重试。",
+    "navigation": "有dirty/error/conflict草稿时刷新/离开触发beforeunload，面板重载/退出有明确未保存提示。取消或全部成功才解除提示。",
+    "privacy": "私密草稿仅内存，不未经说明写localStorage；用户明确放弃/离开才丢弃。失败保留不等于跨浏览器会话自动留存。"
+  },
+  "layoutPlan": {
+    "widths": [
+      1440,
+      390,
+      320
+    ],
+    "targets": [
+      "/admin/反馈",
+      "/admin/举报处置",
+      "/feedback/",
+      "/report/",
+      "/me/我的反馈"
+    ],
+    "css": "卡片/表单/编辑器grid子项min-width:0;输入width:100%、max-width:100%;窄屏操作纵向/换行；移除内联搜索min-width:220px在窄容器中的强约束；长URL/ID/标题/联系overflow-wrap:anywhere；reply/footer状态换行；Vditor工具栏容器内滚动/换行且不推宽页面。",
+    "pass": "documentElement/body及主内容scrollWidth <= clientWidth + 1；卡片、字段、编辑器和按钮bounds在内容容器内；不通过body overflow-x:hidden裁掉操作来假装无溢出。",
+    "contentCases": [
+      "最大长标题",
+      "2000字正文/回复",
+      "无断点长URL与资源ID",
+      "长联系方式",
+      "长管理员名/错误信息",
+      "编辑器展开与预览",
+      "409三方对照",
+      "批量反馈"
+    ],
+    "accessibility": "字段有可见label；错误aria-live；保存禁用与焦点可理解；手机触控按钮不被隐藏/截断。"
+  },
+  "acceptanceMatrix": [
+    {
+      "id": "AUTO-01",
+      "tasks": [
+        "MOD-04"
+      ],
+      "method": "真实HTTP+JSON读回+重启",
+      "steps": "合成普通反馈pending分别仅reply、仅completed、仅hidden=false；GET公共反馈与刷新/重启读回",
+      "expected": "都不因这些动作公开；只有明确publicationDecision=approve且非私密未隐藏才出现",
+      "evidence": "请求/响应状态、字段、重启读回，正文用合成内容",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-02",
+      "tasks": [
+        "MOD-04"
+      ],
+      "method": "服务/迁移+真实HTTP",
+      "steps": "seed旧open/completed/approved但无可靠批准证据；迁移两次并重启；请求旧status写",
+      "expected": "未知批准默认pending；旧status不批准；迁移幂等，无原文/账号/回复数据丢失",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-03",
+      "tasks": [
+        "REP-05"
+      ],
+      "method": "组合接口测试",
+      "steps": "历史report/complaint无private与新private=true；尝试改type、删除private、status=approved/completed、hidden=false、legacy全量写、PATCH批准",
+      "expected": "原始私密不可改；所有处理/隐藏/批准组合公共接口无投诉正文/回复/URL/对象/contact；有效admin读到，不删数据绕过",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-04",
+      "tasks": [
+        "REP-05",
+        "ADM-07"
+      ],
+      "method": "真实HTTP账户A/B/匿名/失效admin",
+      "steps": "A提交私密投诉并回复；B GET /me/feedback；未登录/普通用户/失效admin请求管理读；有效admin按C-08读取与调取既有路径",
+      "expected": "本人A可读允许回复；B/匿名不能读A私密；失效admin拒绝；有效admin读取按既定权限，不拆查询/导出权限",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-05",
+      "tasks": [
+        "REP-06"
+      ],
+      "method": "真实HTTP+文件读回+重启",
+      "steps": "匿名POST /feedback-api/report，已登录未认证POST，关闭普通submissionOpen和guide开关后再投指南形状投诉",
+      "expected": "有效投诉都受理且永久private；匿名user_id=null、已登录归属正确；与ordinary开关无关；重启仍在；无裸ID查询",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-06",
+      "tasks": [
+        "REP-06"
+      ],
+      "method": "真实HTTP拒绝/反滥用",
+      "steps": "构造空标题/正文<5/正文>2000/超限URL/website honeypot/新旧路由连续请求/无效Cookie或Bearer",
+      "expected": "边界校验明确；不静默裁剪长原文伪装已完整受理；频控共享；无效凭证不得降匿名；honeypot静默回执不能被UI当真实accepted 新举报入口只有持久有效提交后accepted=true；website蜂蜜罐不得显示真实受理成功。",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-07",
+      "tasks": [
+        "ADM-07"
+      ],
+      "method": "真实PATCH和legacy请求",
+      "steps": "额外title/content/contact/type/user_id/private/createdAt/report_url、camel及snake actor/timestamp；reply2000/2001、清空",
+      "expected": "越权字段明确拒绝或按契约忽略且持久原文不变；2001拒绝不截断；清空需显式动作；服务端生成可信元数据",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-08",
+      "tasks": [
+        "ADM-07",
+        "REP-05"
+      ],
+      "method": "真实HTTP DTO+安全渲染",
+      "steps": "私密/普通replyVisibility=submitter/public与未批准/批准/隐藏状态组合；回复含script/img onerror/链接",
+      "expected": "私密始终submitter；仅public gate允许公开回复；本人可读允许回复；JS不执行；DTO白名单不漏contact/IP/user_id",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-09",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实HTTP CAS",
+      "steps": "A/B/settings取各revision；两管理员同时改A；另一次只改B/新用户提交C/settings",
+      "expected": "A旧revision409且无覆盖；改B/C/settings不使A无故冲突；同一JSON并发更新不丢其他项；settings独立CAS",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-10",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "草稿控制器单元测试（拟新增）",
+      "steps": "A/B/settings同时改，serialize A、cancel A、保存B成功、A请求500/409/网络reject",
+      "expected": "payload只含A dirty允许字段；cancel仅A；B/settings草稿保留；所有错误退出saving保留草稿；不把原文和actor序列化",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-11",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "浏览器请求拦截+真实后端",
+      "steps": "勾选A/B批量completed，C及设置有草稿；A成功B409/500",
+      "expected": "只发送选中ID和handlingStatus字段；隐藏不被自动取消、回复/公开状态不变；逐项回报，B保留选择/草稿，不能泛化全部成功",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-12",
+      "tasks": [
+        "MOD-04",
+        "CNT-19"
+      ],
+      "method": "review所有入口真实HTTP",
+      "steps": "legacy/v1评价在moderationRequired=false、关键词开/关、联系方式命中/不命中提交；再明确批准、撤销、隐藏",
+      "expected": "公开投稿认证仍必需；按用户最终选择的人工批准或已批准规则策略决定公开；普通旧status/处理/回复不能批准，命中敏感规则须人工复核；公共评价/group/detail与本人状态一致，撤销隐藏按缓存契约生效。",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-13",
+      "tasks": [
+        "CNT-19"
+      ],
+      "method": "合成文本矩阵",
+      "steps": "评价/普通反馈/举报标题与正文/管理员公开回复/实际公开昵称分别含电话、邮箱、微信、合成关键词",
+      "expected": "公共文本检查范围清晰；命中是审核辅助，不替代人工批准；私密正当投诉含联系方式/违规原文仍受理；未实现昵称自动检测不得声称覆盖",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "AUTO-14",
+      "tasks": [
+        "ADM-08",
+        "AUD-10"
+      ],
+      "method": "既有审计回归+新schema集成",
+      "steps": "成功/409/400/500审核、reply/publication/handling变化检查实际admin_audit_log",
+      "expected": "真实server actor、目标id、允许字段与小枚举变化/结果可查；无正文/联系方式/凭证；新字段不是一律other_fields",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-01",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器+请求捕获+持久读回",
+      "steps": "A改回复、B改处理、设置改notes；只点保存A；刷新另一浏览器/读JSON",
+      "expected": "只A存入，B/settings未改变；页面B/settings草稿保留；A成功后元数据显示服务端",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-02",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器",
+      "steps": "A/B同时有草稿；取消A；搜索、翻页、切反馈→举报→反馈",
+      "expected": "只A恢复；B继续；编辑器值与draftMap一致、不因重渲染丢稿；待保存status不影响已保存筛选",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-03",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器409注入+两个admin会话",
+      "steps": "第1会话A草稿，第2会话保存A，再第1保存；三方对照逐字段选择再保存",
+      "expected": "409停saving而保留草稿；不覆盖第2会话；显示可理解冲突、无自动重试；解决后手动保存正确值",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-04",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器500/HTML错误/断网/超时注入",
+      "steps": "草稿后分别返回500 JSON、500 HTML、浏览器离线/断连接，恢复保存",
+      "expected": "无已保存假提示；按钮恢复可用；草稿不丢；恢复后真实HTTP保存且刷新/重启读回",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-05",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器",
+      "steps": "有草稿点重载、刷新、离开、退出或401重新认证；取消离开；最后成功/取消所有草稿",
+      "expected": "提前提示未保存；取消导航草稿仍在；401保留；无草稿后不反复提示",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-06",
+      "tasks": [
+        "REP-06"
+      ],
+      "method": "真实浏览器匿名上下文→admin上下文",
+      "steps": "从隐私页点举报；匿名填写并提交；admin读回处理/回复；匿名刷新公共反馈",
+      "expected": "表单真正可用，成功仅受理无站内送达/查询按钮；admin读到且可处理回复；任何公开页搜不到",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-07",
+      "tasks": [
+        "REP-06",
+        "ADM-07"
+      ],
+      "method": "真实浏览器用户A/B/admin",
+      "steps": "未认证A登录投诉，admin保存回复，A /me/刷新；B /me/刷新",
+      "expected": "A看到处理/回复和始终私密徽标；B不可见；reply读可信日期；多于50条可分页；错误不是空列表",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-08",
+      "tasks": [
+        "MOD-04",
+        "UGC-02"
+      ],
+      "method": "真实浏览器普通投稿认证",
+      "steps": "匿名、未认证、认证未封禁、封禁、提交途中会话过期分别普通反馈/评价",
+      "expected": "浏览可匿名；普通投稿认证边界保持，失败保留输入；按用户选定公开模式及真实服务器结果显示状态，不能由前端自行宣称已公开。",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-09",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器截图+DOM bounds",
+      "steps": "1440/390/320宽，后台普通/举报与public反馈/report/me，展开长内容、长URL、正常Vditor/预览/冲突/按钮错误",
+      "expected": "无page横向溢出或被裁操作；scrollWidth<=clientWidth+1；键盘/手机可触发保存取消；截图记录各宽度",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-10",
+      "tasks": [
+        "REP-06",
+        "ADM-08"
+      ],
+      "method": "真实浏览器编辑器正常/加载失败",
+      "steps": "正常Vditor挂载测试输入保存；阻断编辑器资源重复表单操作；/report/无Vditor依赖提交",
+      "expected": "正常编辑器不清稿；fallback textarea仍可操作，私密投诉关键入口可提交；不以mock替代正常编辑器验收",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "WEB-11",
+      "tasks": [
+        "MOD-04",
+        "REP-05"
+      ],
+      "method": "浏览器公开页与HTTP缓存",
+      "steps": "普通批准后公开、撤销/隐藏后用已有缓存标签和刷新访问；私密不同状态重复请求",
+      "expected": "普通旧内容及时停止公开，私密始终无缓存泄露；HTML构建产物不含私密测试正文/联系/回复",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "REAL-01",
+      "tasks": [
+        "MOD-04",
+        "REP-05",
+        "REP-06",
+        "ADM-07",
+        "ADM-08"
+      ],
+      "method": "实施后维护者授权生产合成验收",
+      "steps": "记录部署commit；合成匿名及认证投诉→有效admin读取/处理/回复→真实网页本人刷新→服务重启→公共匿名访问",
+      "expected": "HTTP、持久性、本人/公众边界与部署代码一致；未执行前保持需生产验证，不凭本地mock关闭",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "REAL-02",
+      "tasks": [
+        "WX-22",
+        "MOD-04",
+        "ADM-07"
+      ],
+      "method": "实施后网站/真实微信真机联调",
+      "steps": "用维护者可控测试账号验证普通认证投稿、私密本人投诉、状态/回复与网页及小程序一致",
+      "expected": "旧客户端兼容、不会因旧status或全量请求自动公开；未执行明确列待真实链路，不索要真实密码",
+      "status": "PLANNED_NOT_RUN"
+    },
+    {
+      "id": "REAL-03",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "实施后实际手机390/320等效设备",
+      "steps": "真实网络与正常编辑器加载，长字段/键盘打开/保存取消/冲突反馈/返回",
+      "expected": "没有桌面模拟无法暴露的键盘遮挡或操作截断；留脱敏截图与设备宽度",
+      "status": "PLANNED_NOT_RUN"
+    }
+  ],
+  "productDecision": {
+    "id": "S3 review moderationRequired=false",
+    "status": "主窗口已经询问；本准备不阻塞，也不擅自取消既有受支持配置。",
+    "choices": [
+      {
+        "mode": "manual_explicit",
+        "effect": "统一人工批准，保留旧boolean解析/读回与清晰迁移通知/DTO effectivePublicationMode；旧false不能被悄悄当true或静默忽略。新增提交publicationState=pending；后台新界面明确此模式语义。"
+      },
+      {
+        "mode": "approved_rule_policy",
+        "effect": "保留免审行为，但必须先由有权管理员明确保存/批准版本化自动公开policy；每条服务端记录policy id/revision、decision source/system actor、approvedAt及输入审核版本，普通处理/reply/status仍不批准。旧false无policy不可当批准；敏感词/联系方式命中一律pending走人工；匿名/私密举报永远不能policy公开。"
+      }
+    ],
+    "transition": "产品选择完成后再实现统一schema与公开gate。迁移旧false要显式提示/确认有效策略并留审计，不偷改配置；策略启停仅影响后续自动决定，不能追认历史approved。D-01独立待决策，S5继续不扩大。"
+  },
+  "integrationNotes": [
+    "计划以本JSON及主台账为统一契约。任何待选免审模式在用户回答前保持待决策，不从其他段落推定统一强制人工；不得静默改变现有false配置。",
+    "历史公开记录迁移可能影响现有可见内容，实施阶段先输出脱敏dry-run分类计数和可复核依据，不在本轮批量撤下或迁移生产数据。来源不明的私密性问题须按具体存储域和来源分析，不能仅因缺少新字段把所有历史评价视为投诉。",
+    "S3实施采用按批次文件所有权；主窗口独占admin-server、admin-audit、route-permissions的接线及共享文档，子智能体产出模块/页面/专属测试，防止同文件竞争。",
+    "独立验收由未编写对应实现的子智能体与主窗口执行；所有28项目前是计划而非已通过。",
+    "现有CSRF、认证、管理员写权限、日志耐久性和S1/S2安全断言继续有效；新PATCH必须走相同边界。C-08只决定查询导出不拆权限，不扩大写权限。",
+    "当前构建与回归结果属于依赖升级，不是S3业务测试结果。"
+  ],
+  "implementationBatches": [
+    {
+      "batch": "S3-A 契约/迁移与隐私gate",
+      "filesOwner": "后端模型智能体：server/moderation-model.mjs、scripts/migrate-content-moderation.mjs、test/moderation-model.test.mjs、test/moderation-migration.test.mjs；主窗口拥有admin-server接线",
+      "work": "权威schema、冻结原文/永久private、处理/公开分离、历史fail-closed、全出口gate；明确产品免审模式后固化",
+      "acceptance": "合成旧普通open/completed/approved/自动review和report无private等组合；两次迁移/故障恢复/数量和原文保持；只明确批准的普通条目可公开。"
+    },
+    {
+      "batch": "S3-B 单条写/设置/兼容",
+      "filesOwner": "后端智能体：server/moderation-service.mjs、单条/批量服务测试；主窗口：server/admin-server.mjs、server/admin-audit.mjs、server/admin-route-permissions.mjs、scripts/api-route-extractor.mjs及接线集成测试",
+      "work": "单条item CAS、设置CAS、可选明确batch；旧全量POST安全适配；reply长度/可见性/服务端metadata；审计真实对象及状态",
+      "acceptance": "A/B/设置只存A；两管理员同条冲突、不同条互不覆盖；新投稿/点赞不无关冲突；失败不假成功；原文/私密/actor各别名注入；匿名普通与失效admin拒绝。"
+    },
+    {
+      "batch": "S3-C 举报受理与本人链路",
+      "filesOwner": "后端受理智能体或主窗口：server/feedback-submission-service.mjs、server/public-api-service.mjs、相关合成集成测试；主窗口仍独占admin-server接线；前端智能体独占src/pages/admin.astro、feedback.astro、me.astro、privacy.astro、新report.astro及确需CSS",
+      "work": "新独立匿名入口+旧alias，独立限额/长度/开关与日志；前端原文只读、逐条草稿、回复显示/隐私文案",
+      "acceptance": "匿名/未认证登录投诉真实持久→后台处理回复→刷新重启；普通/指南关闭投诉仍通；本人A不能看B、匿名无裸ID查询；私密任何状态无公共输出。"
+    },
+    {
+      "batch": "S3-D 缓存/构建/回归与正式证据",
+      "filesOwner": "公开服务智能体：server/public-api-dto.mjs、server/snapshot-cache.mjs、server/public-api-router.mjs、src/lib/reviews.ts、公共cache测试；主窗口统一接线/共享docs/API.md、docs/public-api.md、docs/data-schema.md、docs/compliance/SECURITY_ASSESSMENT_READINESS.md和验收证据；文档不能多人争写",
+      "work": "批准gate统一、UGC HTTP no-store、同步进程失效、静态不嵌UGC约束、旧cache部署清理操作单、API文档与状态表",
+      "acceptance": "先公开并填充etag/快照/搜索→撤销/隐藏→第一新请求无原文/reply及派生统计；产物sentinel无泄露；构建/回归/真实刷新/重启；生产缓存与静态清理另由维护者回执。"
+    }
+  ],
+  "fileOwnership": {
+    "backendModelAndService": [
+      "server/moderation-model.mjs (new)",
+      "server/moderation-service.mjs (new)",
+      "scripts/migrate-content-moderation.mjs (new)",
+      "test/moderation-model.test.mjs (new)",
+      "test/moderation-migration.test.mjs (new)",
+      "service-specific tests"
+    ],
+    "frontend": [
+      "src/pages/admin.astro",
+      "src/pages/feedback.astro",
+      "src/pages/me.astro",
+      "src/pages/report.astro (new)",
+      "src/pages/privacy.astro",
+      "src/styles/global.css",
+      "src/lib/admin-moderation-drafts.js (new)",
+      "test/s3-moderation-drafts.test.mjs (new)"
+    ],
+    "publicProjectionLaterBatch": [
+      "server/public-api-dto.mjs",
+      "server/public-api-service.mjs",
+      "server/public-api-router.mjs",
+      "server/snapshot-cache.mjs",
+      "src/lib/reviews.ts",
+      "public projection/cache tests"
+    ],
+    "mainCoordinator": [
+      "server/admin-server.mjs",
+      "server/admin-audit.mjs",
+      "server/admin-route-permissions.mjs",
+      "scripts/api-route-extractor.mjs if needed",
+      "integration tests",
+      "docs/API.md",
+      "docs/data-schema.md",
+      "docs/compliance/SECURITY_ASSESSMENT_READINESS.md",
+      "package.json",
+      "package-lock.json"
+    ]
+  }
+}
