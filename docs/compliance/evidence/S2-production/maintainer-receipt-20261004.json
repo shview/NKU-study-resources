@@ -1,0 +1,74 @@
+{
+  "receivedDate": "2026-10-04",
+  "source": "User-relayed maintainer summary. The assistant independently checked GitHub, but did not log into production or read production data.",
+  "independentlyVerifiedGitHub": {
+    "url": "https://github.com/shview/NKU-study-resources/pull/2",
+    "state": "MERGED",
+    "baseRefName": "main",
+    "headCommit": "4c40f1a65307464e7c2e53f109df54447a879a74",
+    "mergeCommit": "8ddcdc53cc62c27ce5a177dfe059fcda52bbd77e",
+    "mergedAtUtc": "2026-10-04T00:04:16Z",
+    "mergedAtShanghai": "2026-10-04T08:04:16+08:00",
+    "method": "GitHub CLI PR readback and fetch of origin/main"
+  },
+  "reportedDeployment": {
+    "candidateCommit": "4c40f1a",
+    "release": "20261004-pr2",
+    "dependencyInstall": "npm ci",
+    "sharp": "0.35.5",
+    "libvips": "8.18.7",
+    "libheif": "1.23.5",
+    "healthAndSiteStatus": 200,
+    "adminAndCaddyServices": "active",
+    "staticBuildUsedRealRuntimeData": true,
+    "temporaryAccountsRemoved": true
+  },
+  "reportedLinuxTests": {
+    "firstRunPassed": 305,
+    "total": 307,
+    "firstRunFailed": 2,
+    "failureCause": "Root-owned release prevented service-user writes to .astro and node_modules/.vite.",
+    "remediation": "Maintainer corrected release directory ownership to nkustudy and reran tests.",
+    "finalPassed": 307,
+    "finalFailed": 0
+  },
+  "reportedEntryLogs": {
+    "removedUnfilteredStdoutAccessBlocks": ["nkustudy.top", "www.nkustudy.top"],
+    "s2AccessLogImportRetained": true,
+    "caddyRuntimeJournalRetained": true,
+    "caddyValidationPassed": true,
+    "threeSitesHealthyAfterRestart": true,
+    "syntheticQueryAndCustomHeaderProbe": true,
+    "journalContainsProbeQueryHeaderOrPath": false,
+    "s2FileContainsProbeRequest": true,
+    "s2FileRetainedFields": ["method", "path", "status", "user_agent"],
+    "s2FileRemovedFields": ["query parameters", "request headers"],
+    "scope": "Post-change probe only. Historical unfiltered copies were not reported deleted or inspected."
+  },
+  "reportedBackupAndRollback": {
+    "backup": "backup-pr2-20261004",
+    "reportedSize": "136M",
+    "method": "SQLite online backup plus JSON",
+    "retainedReleases": ["20260930-s1", "20261001-s2"],
+    "scope": "No new candidate-specific encrypted decryption/isolated restore rehearsal reported. The 477b191 rehearsal remains historical evidence."
+  },
+  "reportedSmokeChecks": {
+    "unauthenticatedAvatar": "401 AUTH_REQUIRED",
+    "avatarFormatChecks": "Covered by reported 307-test run; real-device upload/moderation flow pending.",
+    "searchDataThreeRequestsSeconds": "approximately 0.25-0.32",
+    "cacheBoundary": "Maintainer reports cache active; timings alone do not quantify hit rate or isolate improvement."
+  },
+  "pending": [
+    "Real WeChat avatar upload/persistence and reaction readback",
+    "Explicit receipt for legacy password cleanup in ordinary settings, preserving the private password",
+    "Private R2 bucket and dedicated credentials; PUT/GET hash equality, anonymous denial, retention",
+    "User backup-password custody and independent decryption",
+    "External host/Caddy/capacity monitoring",
+    "Remaining six dependency audit alerts: reachability and compatible remediation",
+    "D-01 and post-snapshot deletion reconciliation in S5",
+    "QA-21 type-check debt and final cross-stage verification"
+  ],
+  "deferredByUser": ["Real notification integration and delivery tests"],
+  "overallAcceptance": "Current candidate merged and deployed per maintainer receipt; S2 overall remains pending the separately listed items.",
+  "productionDataReadByAssistant": false
+}
