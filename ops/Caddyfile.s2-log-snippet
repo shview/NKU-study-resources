@@ -1,0 +1,23 @@
+# Import at top level; then import s2_access_log inside each production site block.
+# This file was validated with Caddy 2.11.4. Validate on the actual installed version.
+(s2_access_log) {
+  log s2_access {
+    output file {$S2_ACCESS_LOG:/var/log/nkustudy/access.jsonl} {
+      mode 0600
+      roll_size 100MiB
+      roll_keep -1
+      roll_keep_for 9600h
+    }
+    format filter {
+      wrap json
+      fields {
+        request>uri regexp "[?].*$" ""
+        request>headers delete
+        resp_headers delete
+      }
+    }
+  }
+  # Only UA is retained from headers. Never log authentication/query headers.
+  log_append user_agent {http.request.header.User-Agent}
+  log_append source_port_kind direct_peer
+}

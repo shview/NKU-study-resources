@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-03",
+  "checkpoint": "49507d99959231eea98b34242556b17f7c62c7b8",
+  "sourceHashes": 16,
+  "artifactHashes": 14,
+  "hashMismatches": [],
+  "changedFiles": 37,
+  "excludedPathCandidates": [],
+  "files": [
+    ".gitattributes",
+    "docs/API.md",
+    "docs/DEPLOYMENT.md",
+    "docs/compliance/S2_ACCEPTANCE.md",
+    "docs/compliance/S2_SERVER_ACCEPTANCE.md",
+    "docs/compliance/SECURITY_ASSESSMENT_READINESS.md",
+    "scripts/smoke-public-api.mjs",
+    "server/admin-server.mjs",
+    "server/feishu-notify-service.mjs",
+    "server/runtime-backup.mjs",
+    "src/pages/admin.astro",
+    "test/mp-favorites-notify.test.mjs",
+    "test/s2-durability.test.mjs",
+    "docs/compliance/evidence/S2-parallel-20261002/api-docs.txt",
+    "docs/compliance/evidence/S2-parallel-20261002/backup-preflight.tap",
+    "docs/compliance/evidence/S2-parallel-20261002/build-fixtures.txt",
+    "docs/compliance/evidence/S2-parallel-20261002/fixtures.txt",
+    "docs/compliance/evidence/S2-parallel-20261002/full-suite.tap",
+    "docs/compliance/evidence/S2-parallel-20261002/guide-smoke-after.txt",
+    "docs/compliance/evidence/S2-parallel-20261002/guide-smoke-before.txt",
+    "docs/compliance/evidence/S2-parallel-20261002/guide-smoke-tests.tap",
+    "docs/compliance/evidence/S2-parallel-20261002/ops-http.tap",
+    "docs/compliance/evidence/S2-parallel-20261002/summary.json",
+    "docs/compliance/evidence/S2-parallel-20261002/type-baseline.txt",
+    "docs/compliance/evidence/S2-parallel-20261002/type-candidate.txt",
+    "docs/compliance/evidence/S2-parallel-20261002/type-comparison.json",
+    "docs/compliance/evidence/S2-parallel-20261002/type-initial-cache-failure.txt",
+    "docs/compliance/evidence/S2-parallel-20261002/type-source-manifest.json",
+    "scripts/lib/public-api-smoke-contract.mjs",
+    "scripts/s2-backup-preflight.mjs",
+    "server/backup-preflight.mjs",
+    "server/ops-alerts.mjs",
+    "test/backup-preflight.test.mjs",
+    "test/feishu-ops-notify.test.mjs",
+    "test/ops-alerts.test.mjs",
+    "test/public-api-smoke.test.mjs",
+    "test/s2-ops-alerts.integration.test.mjs"
+  ],
+  "checks": [
+    {
+      "name": "Full regression",
+      "exitCode": 0,
+      "tests": 296,
+      "pass": 296,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Actual HTTP operational alerts and backup durability",
+      "exitCode": 0,
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Read-only preflight",
+      "exitCode": 0,
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Guide contract negative cases and actual HTTP",
+      "exitCode": 0,
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "Original guide smoke defect",
+      "exitCode": 1
+    },
+    {
+      "name": "Standalone guide smoke",
+      "exitCode": 0
+    },
+    {
+      "name": "API route documentation",
+      "exitCode": 0
+    },
+    {
+      "name": "Fixtures",
+      "exitCode": 0
+    },
+    {
+      "name": "UI fixture build",
+      "exitCode": 0
+    },
+    {
+      "name": "Astro type check",
+      "exitCode": 1
+    }
+  ]
+}

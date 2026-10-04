@@ -1,0 +1,8 @@
+{
+  "baseline": "historical S1 independent review, not a fresh af2cf13 type-check run",
+  "baselineErrors": 2022,
+  "currentErrors": 1997,
+  "added": [],
+  "removedCount": 25,
+  "conclusion": "Type check still FAIL; no added diagnostic signatures/counts versus the historical S1 evidence."
+}

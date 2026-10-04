@@ -3,6 +3,7 @@ import { jsapiPrepay, miniPayParams, nativePrepay } from "./wxpay-v3.mjs";
 import { normalizeRecords as normalizeDonateRecords } from "./donate-records.mjs";
 import { PublicApiError } from "./public-api-errors.mjs";
 import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
+import { SnapshotCache } from "./snapshot-cache.mjs";
 import {
   buildReviewGroups,
   isVisibleCourseMetaTag,
@@ -57,7 +58,9 @@ function indexItemBase({ id, type, name, shortName = "", aliases = [], tags = []
 }
 
 export class PublicApiService {
-  constructor({ readManifest, readReviews, readHome, readAbout = null, readDonate = null, donatePayReady = null, donatePayStore = null, donateOrderStore = null, notifyBase = "", wxpayFetch = undefined, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
+  #snapshotCache = null;
+
+  constructor({ readManifest, readReviews, readSnapshotVersion = null, snapshotCacheTtlMs = 3_000, snapshotCacheNow = undefined, readHome, readAbout = null, readDonate = null, donatePayReady = null, donatePayStore = null, donateOrderStore = null, notifyBase = "", wxpayFetch = undefined, learningCompass = null, guideAssistant = null, readVisitStats = () => null, readFeedback = null, courseCatalog = null, reviewSubmissionService, publicResourceOrigin = "https://resources.nkustudy.top", guideCorrectionUrl = "", assertMpAuthAttempt = () => true, mpAuthService = null, serviceRateLimiter = null } = {}) {
     if (!readManifest || !readReviews || !readHome || !reviewSubmissionService) {
       throw new Error("PublicApiService dependencies are required.");
     }
@@ -82,18 +85,36 @@ export class PublicApiService {
     this.publicResourceOrigin = publicResourceOrigin;
     this.guideCorrectionUrl = guideCorrectionUrl;
     this.assertMpAuthAttempt = assertMpAuthAttempt;
+    if (readSnapshotVersion) {
+      this.#snapshotCache = new SnapshotCache({
+        readVersion: () => [readSnapshotVersion(), this.courseCatalog?.courses, this.learningCompass],
+        ttlMs: snapshotCacheTtlMs,
+        now: snapshotCacheNow,
+        load: () => structuredClone(this.#loadSnapshot()),
+      });
+    }
   }
 
-  snapshot({ viewerId = null } = {}) {
+  #loadSnapshot({ viewerId = null } = {}) {
     const manifest = this.readManifest();
     const reviewData = this.readReviews();
     if (!manifest || !Array.isArray(manifest.courses)) throw new Error("Runtime course data is unavailable.");
     const groups = buildReviewGroups(manifest, reviewData, this.courseCatalog, { viewerId });
-    return { manifest, reviewData, groups, learningCompass: this.learningCompass };
+    return { manifest, reviewData, groups };
+  }
+
+  snapshot({ viewerId = null, force = false } = {}) {
+    if (!this.#snapshotCache) return { ...this.#loadSnapshot({ viewerId }), learningCompass: this.learningCompass };
+    // Group DTOs contain nested arrays and references to courses/catalog entries.
+    // Detach them before callers can mutate them or add a viewer's reaction.
+    const cached = this.#snapshotCache.get({ force });
+    const data = structuredClone(viewerId ? { manifest: cached.manifest, reviewData: cached.reviewData } : cached);
+    if (viewerId) data.groups = structuredClone(buildReviewGroups(data.manifest, data.reviewData, this.courseCatalog, { viewerId }));
+    return { ...data, learningCompass: this.learningCompass };
   }
 
   health() {
-    this.snapshot();
+    this.snapshot({ force: true });
     return { status: "ok" };
   }
 
@@ -528,7 +549,7 @@ export class PublicApiService {
     const { manifest, groups } = this.snapshot();
     return {
       courses: manifest.courses.map((course) => ({ id: course.uid, name: course.title })),
-      catalog: (this.courseCatalog?.courses || []).map((entry) => ({ id: entry.id, name: entry.name, teachers: entry.teachers || [] })),
+      catalog: (this.courseCatalog?.courses || []).map((entry) => ({ id: entry.id, name: entry.name, teachers: Array.isArray(entry.teachers) ? entry.teachers.slice() : [] })),
       groups: groups.map((group) => ({ name: group.courseTitle, teacher: group.teacher })),
     };
   }
@@ -576,6 +597,8 @@ export class PublicApiService {
     if (typeof context?.notify === "function" && result.pending && result.notify) {
       Promise.resolve(context.notify({ type: "review.pending", ...result.notify })).catch(() => {});
     }
+    // Keep the public response stable while giving the audit layer the stored ID.
+    context?.onSubmitted?.({ reviewId: result.reviewId || "", pending: result.pending });
     return { submitted: true, pending: result.pending };
   }
 }

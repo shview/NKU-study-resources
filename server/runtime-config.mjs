@@ -78,6 +78,7 @@ function assertSecureRegularFile(filePath, label) {
 export function preflightProductionRuntime(env = process.env) {
   const dataDir = resolveDataDir(env);
   const stateDbPath = resolveStateDbPath(env);
+  if (fs.existsSync(path.join(dataDir, ".restore-quarantine")) || fs.existsSync(path.join(path.dirname(stateDbPath), ".restore-quarantine"))) throw new Error("Restored runtime remains quarantined; reconcile account/deletion state before activation.");
   const adminSecretPath = resolveAdminSecretPath(env);
   const publicDir = resolvePublicDir(env);
   const publicReleasesDir = resolvePublicReleasesDir(env);

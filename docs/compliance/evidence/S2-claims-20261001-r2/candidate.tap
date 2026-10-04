@@ -1,0 +1,138 @@
+TAP version 13
+# Subtest: S2 administrator HTTP audit, local I/O recovery, consistent private backup and restart
+    # Subtest: sensitive reads, exports and backups audit success, missing target, anonymous, disabled and denied requests
+    ok 1 - sensitive reads, exports and backups audit success, missing target, anonymous, disabled and denied requests
+      ---
+      duration_ms: 589.441917
+      type: 'test'
+      ...
+    # Subtest: review and complaint changes stamp the real actor and audit IDs, fields, states, failures and deletions
+    ok 2 - review and complaint changes stamp the real actor and audit IDs, fields, states, failures and deletions
+      ---
+      duration_ms: 1751.209917
+      type: 'test'
+      ...
+    # Subtest: SQLite log failure preserves successful HTTP outcomes in a private queue and restart replays them
+    ok 3 - SQLite log failure preserves successful HTTP outcomes in a private queue and restart replays them
+      ---
+      duration_ms: 171.773625
+      type: 'test'
+      ...
+    # Subtest: HTTP full backup decrypts and restores all runtime tables; private remote failure is not complete success
+    ok 4 - HTTP full backup decrypts and restores all runtime tables; private remote failure is not complete success
+      ---
+      duration_ms: 509.416416
+      type: 'test'
+      ...
+    # Subtest: WebDAV upload is verified through actual HTTP; corrupt readback fails and retry recovers
+    ok 5 - WebDAV upload is verified through actual HTTP; corrupt readback fails and retry recovers
+      ---
+      duration_ms: 339.983125
+      type: 'test'
+      ...
+    1..5
+ok 1 - S2 administrator HTTP audit, local I/O recovery, consistent private backup and restart
+  ---
+  duration_ms: 3829.689666
+  type: 'test'
+  ...
+# Subtest: S2 log recovery: failed SQLite commits queue durably, survive restart and replay exactly once
+ok 2 - S2 log recovery: failed SQLite commits queue durably, survive restart and replay exactly once
+  ---
+  duration_ms: 28.318167
+  type: 'test'
+  ...
+# Subtest: S2 crash after SQLite commit does not duplicate an event, and hard process death keeps an interrupted intent
+ok 3 - S2 crash after SQLite commit does not duplicate an event, and hard process death keeps an interrupted intent
+  ---
+  duration_ms: 54.786084
+  type: 'test'
+  ...
+# Subtest: S2 unwritable journal refuses admission and corrupted queue remains visible rather than disappearing
+ok 4 - S2 unwritable journal refuses admission and corrupted queue remains visible rather than disappearing
+  ---
+  duration_ms: 2.348875
+  type: 'test'
+  ...
+# Subtest: S2 archive requires durable readback before deletion; interruption and disk failure retain source
+ok 5 - S2 archive requires durable readback before deletion; interruption and disk failure retain source
+  ---
+  duration_ms: 94.988042
+  type: 'test'
+  ...
+# Subtest: S2 20,010 user records survive quantity threshold; 400-day boundary and archived pagination are exact
+ok 6 - S2 20,010 user records survive quantity threshold; 400-day boundary and archived pagination are exact
+  ---
+  duration_ms: 826.408792
+  type: 'test'
+  ...
+# Subtest: S2 complete encrypted snapshot includes WAL, runtime JSON, logs and secrets; restore is isolated and sessions revoked
+ok 7 - S2 complete encrypted snapshot includes WAL, runtime JSON, logs and secrets; restore is isolated and sessions revoked
+  ---
+  duration_ms: 729.489958
+  type: 'test'
+  ...
+# Subtest: S2 snapshot gate waits for in-flight mutation and rejects overlap; failed snapshot reopens traffic
+ok 8 - S2 snapshot gate waits for in-flight mutation and rejects overlap; failed snapshot reopens traffic
+  ---
+  duration_ms: 0.314542
+  type: 'test'
+  ...
+# Subtest: S2 entry log archive readback, interruption, disk failure, corrupt input and time-only expiry
+ok 9 - S2 entry log archive readback, interruption, disk failure, corrupt input and time-only expiry
+  ---
+  duration_ms: 89.707666
+  type: 'test'
+  ...
+# Subtest: S2 user events: real HTTP outcomes, exact actors/targets, one event and no copied content
+    # Subtest: public writes log anonymous, unverified and invalid input exactly once
+    ok 1 - public writes log anonymous, unverified and invalid input exactly once
+      ---
+      duration_ms: 296.513083
+      type: 'test'
+      ...
+    # Subtest: stored review and feedback IDs match the persisted rows
+    ok 2 - stored review and feedback IDs match the persisted rows
+      ---
+      duration_ms: 158.588875
+      type: 'test'
+      ...
+    # Subtest: private complaints omit report URL, target, title and body from logs
+    ok 3 - private complaints omit report URL, target, title and body from logs
+      ---
+      duration_ms: 84.003
+      type: 'test'
+      ...
+    # Subtest: ignored traps/disabled guide feedback and throttled submissions remain distinguishable
+    ok 4 - ignored traps/disabled guide feedback and throttled submissions remain distinguishable
+      ---
+      duration_ms: 578.911125
+      type: 'test'
+      ...
+    # Subtest: profile, avatar and password outcomes are captured without their values
+    ok 5 - profile, avatar and password outcomes are captured without their values
+      ---
+      duration_ms: 475.503125
+      type: 'test'
+      ...
+    # Subtest: logout/deletion capture the actor before credentials disappear
+    ok 6 - logout/deletion capture the actor before credentials disappear
+      ---
+      duration_ms: 117.204667
+      type: 'test'
+      ...
+    1..6
+ok 10 - S2 user events: real HTTP outcomes, exact actors/targets, one event and no copied content
+  ---
+  duration_ms: 2107.269333
+  type: 'test'
+  ...
+1..10
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3871.895792

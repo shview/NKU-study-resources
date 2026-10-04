@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-03",
+  "method": "Main window CUA real browser on freshly built synthetic localhost site backed by unchanged real admin API. UI actions performed through visible controls, persisted JSON readback separately.",
+  "steps": [
+    {
+      "id": "UI-01",
+      "action": "展开新增/编辑机器人",
+      "expected": "运行告警默认未勾选",
+      "actual": "unchecked",
+      "pass": true
+    },
+    {
+      "id": "UI-02",
+      "action": "编辑现有仅待审合成机器人",
+      "expected": "保留moderation，ops不自动订阅",
+      "actual": {
+        "moderation": true,
+        "digest": false,
+        "ops": false
+      },
+      "pass": true
+    },
+    {
+      "id": "UI-03",
+      "action": "勾选运行告警并保存",
+      "expected": "已保存提示，列表和服务端文件包含moderation+ops",
+      "actual": [
+        "moderation",
+        "ops"
+      ],
+      "pass": true
+    },
+    {
+      "id": "UI-04",
+      "action": "刷新页面并重新编辑",
+      "expected": "用途列表保留，ops勾选正确回填",
+      "actual": {
+        "moderation": true,
+        "digest": false,
+        "ops": true
+      },
+      "pass": true
+    },
+    {
+      "id": "UI-05",
+      "action": "取消勾选但点击取消编辑，再次编辑",
+      "expected": "未保存变化不落盘，ops仍勾选",
+      "actual": {
+        "ops": true
+      },
+      "pass": true
+    },
+    {
+      "id": "UI-06",
+      "action": "取消勾选并保存，刷新后再次编辑",
+      "expected": "ops不勾选，原moderation保留",
+      "actual": {
+        "moderation": true,
+        "digest": false,
+        "ops": false
+      },
+      "pass": true
+    },
+    {
+      "id": "UI-07",
+      "action": "核对另一机器人以及浏览器错误",
+      "expected": "另一机器人仍仅ops，无console error/warn",
+      "actual": {
+        "otherBotPurposes": [
+          "ops"
+        ],
+        "consoleWarnings": 0,
+        "consoleErrors": 0
+      },
+      "pass": true
+    }
+  ],
+  "realNotificationTestClicked": false,
+  "newBotCreationSubmitted": false,
+  "scope": "Desktop browser edit/save/refresh/cancel only; no live notification delivery or production environment."
+}

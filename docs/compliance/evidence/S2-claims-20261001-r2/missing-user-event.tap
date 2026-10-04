@@ -1,0 +1,190 @@
+TAP version 13
+# Subtest: S2 user events: real HTTP outcomes, exact actors/targets, one event and no copied content
+    # Subtest: public writes log anonymous, unverified and invalid input exactly once
+    not ok 1 - public writes log anonymous, unverified and invalid input exactly once
+      ---
+      duration_ms: 10.5415
+      type: 'test'
+      location: '/private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:86:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        /api/v1/reviews should emit exactly one outcome
+        
+        0 !== 1
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 1
+      actual: 0
+      operator: 'strictEqual'
+      stack: |-
+        request (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:65:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:88:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:86:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: stored review and feedback IDs match the persisted rows
+    not ok 2 - stored review and feedback IDs match the persisted rows
+      ---
+      duration_ms: 18.772
+      type: 'test'
+      location: '/private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:93:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        /api/v1/reviews should emit exactly one outcome
+        
+        0 !== 1
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 1
+      actual: 0
+      operator: 'strictEqual'
+      stack: |-
+        request (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:65:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:95:23)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:93:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: private complaints omit report URL, target, title and body from logs
+    not ok 3 - private complaints omit report URL, target, title and body from logs
+      ---
+      duration_ms: 19.321209
+      type: 'test'
+      location: '/private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:101:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        /feedback-api/submit should emit exactly one outcome
+        
+        0 !== 1
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 1
+      actual: 0
+      operator: 'strictEqual'
+      stack: |-
+        request (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:65:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:103:21)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:101:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: ignored traps/disabled guide feedback and throttled submissions remain distinguishable
+    not ok 4 - ignored traps/disabled guide feedback and throttled submissions remain distinguishable
+      ---
+      duration_ms: 12.044
+      type: 'test'
+      location: '/private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:108:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        /feedback-api/submit should emit exactly one outcome
+        
+        0 !== 1
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 1
+      actual: 0
+      operator: 'strictEqual'
+      stack: |-
+        request (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:65:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:109:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:108:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: profile, avatar and password outcomes are captured without their values
+    not ok 5 - profile, avatar and password outcomes are captured without their values
+      ---
+      duration_ms: 10.753667
+      type: 'test'
+      location: '/private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:116:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        /api/v1/me/profile should emit exactly one outcome
+        
+        0 !== 1
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 1
+      actual: 0
+      operator: 'strictEqual'
+      stack: |-
+        request (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:65:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:117:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:116:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: logout/deletion capture the actor before credentials disappear
+    not ok 6 - logout/deletion capture the actor before credentials disappear
+      ---
+      duration_ms: 10.370583
+      type: 'test'
+      location: '/private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:135:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        /api/v1/me/delete-account should emit exactly one outcome
+        
+        0 !== 1
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 1
+      actual: 0
+      operator: 'strictEqual'
+      stack: |-
+        request (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:65:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:136:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:135:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    1..6
+not ok 1 - S2 user events: real HTTP outcomes, exact actors/targets, one event and no copied content
+  ---
+  duration_ms: 322.381167
+  type: 'test'
+  location: '/private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:14:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(events.length >= 35)
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/s2-claim-check-WUqnzy/missing-user-event/test/s2-user-events.integration.test.mjs:146:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 7
+# suites 0
+# pass 0
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 363.554625

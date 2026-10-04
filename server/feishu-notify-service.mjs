@@ -65,7 +65,7 @@ function normalizeSettings(raw) {
   return { version: 2, updated: data.updated || "", bots: [] };
 }
 
-const KNOWN_PURPOSES = new Set(["moderation", "digest"]);
+const KNOWN_PURPOSES = new Set(["moderation", "digest", "ops"]);
 
 function normalizePurposes(value) {
   const list = Array.isArray(value) ? value : ["moderation"];
@@ -164,13 +164,16 @@ export class FeishuNotifyService {
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(8000),
       });
+      if (!response.ok) {
+        return { bot: bot.id, sent: false, reason: `feishu-http-${Number.isInteger(response.status) ? response.status : "error"}` };
+      }
       const payload = await response.json().catch(() => ({}));
       if (payload?.code !== 0 && payload?.StatusCode !== 0) {
         return { bot: bot.id, sent: false, reason: `feishu-${payload?.code ?? response.status}` };
       }
       return { bot: bot.id, sent: true };
     } catch (error) {
-      return { bot: bot.id, sent: false, reason: error.name === "TimeoutError" ? "timeout" : "network" };
+      return { bot: bot.id, sent: false, reason: error?.name === "TimeoutError" ? "timeout" : "network" };
     }
   }
 

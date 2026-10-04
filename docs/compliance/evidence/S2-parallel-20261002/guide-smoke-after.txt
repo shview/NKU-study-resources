@@ -1,0 +1,5 @@
+
+> nkustudy@0.1.0 smoke:public-api
+> node scripts/smoke-public-api.mjs
+
+smoke passed: {"health":"ok","courses":1,"search":19,"guides":18,"variants":29,"snapshotVersion":"c3w1IAmwrjRrhxvwjzMYjyr5","sourceVersion":"6a8ddab4f413ad00c6d94a85","etag":304,"publicAdmin":404,"disabledAuth":503}

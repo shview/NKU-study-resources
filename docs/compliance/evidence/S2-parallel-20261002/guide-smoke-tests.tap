@@ -1,0 +1,113 @@
+TAP version 13
+# Subtest: public guide smoke accepts reviewed content of a different size, all details and isolated variants
+ok 1 - public guide smoke accepts reviewed content of a different size, all details and isolated variants
+  ---
+  duration_ms: 35.359542
+  type: 'test'
+  ...
+# Subtest: public guide smoke detects missing data, misrouted content, source leaks and stale versions
+    # Subtest: missing listed guide despite plausible response envelope
+    ok 1 - missing listed guide despite plausible response envelope
+      ---
+      duration_ms: 3.357042
+      type: 'test'
+      ...
+    # Subtest: duplicate list ID with unchanged totals
+    ok 2 - duplicate list ID with unchanged totals
+      ---
+      duration_ms: 1.663666
+      type: 'test'
+      ...
+    # Subtest: listed guide returns 404
+    ok 3 - listed guide returns 404
+      ---
+      duration_ms: 5.653292
+      type: 'test'
+      ...
+    # Subtest: wrong guide detail ID
+    ok 4 - wrong guide detail ID
+      ---
+      duration_ms: 7.930541
+      type: 'test'
+      ...
+    # Subtest: right guide ID but wrong body
+    ok 5 - right guide ID but wrong body
+      ---
+      duration_ms: 2.957667
+      type: 'test'
+      ...
+    # Subtest: missing original source
+    ok 6 - missing original source
+      ---
+      duration_ms: 5.08375
+      type: 'test'
+      ...
+    # Subtest: redirected original file URL
+    ok 7 - redirected original file URL
+      ---
+      duration_ms: 1.767292
+      type: 'test'
+      ...
+    # Subtest: private retrieval leaked into public detail
+    ok 8 - private retrieval leaked into public detail
+      ---
+      duration_ms: 2.592292
+      type: 'test'
+      ...
+    # Subtest: stale guide list version
+    ok 9 - stale guide list version
+      ---
+      duration_ms: 1.795834
+      type: 'test'
+      ...
+    # Subtest: variant content belongs to another college
+    ok 10 - variant content belongs to another college
+      ---
+      duration_ms: 2.844792
+      type: 'test'
+      ...
+    # Subtest: unknown guide accidentally accepted
+    ok 11 - unknown guide accidentally accepted
+      ---
+      duration_ms: 5.800417
+      type: 'test'
+      ...
+    # Subtest: invalid category accidentally accepted
+    ok 12 - invalid category accidentally accepted
+      ---
+      duration_ms: 2.853958
+      type: 'test'
+      ...
+    1..12
+ok 2 - public guide smoke detects missing data, misrouted content, source leaks and stale versions
+  ---
+  duration_ms: 49.351458
+  type: 'test'
+  ...
+# Subtest: public guide smoke rejects a self-consistent but incomplete search or snapshot
+ok 3 - public guide smoke rejects a self-consistent but incomplete search or snapshot
+  ---
+  duration_ms: 5.815584
+  type: 'test'
+  ...
+# Subtest: smoke child environment isolates runtime paths and does not inherit credentials or preload options
+ok 4 - smoke child environment isolates runtime paths and does not inherit credentials or preload options
+  ---
+  duration_ms: 1.191125
+  type: 'test'
+  ...
+# Subtest: public API smoke runs real isolated HTTP with fixture runtime data and committed guide content
+ok 5 - public API smoke runs real isolated HTTP with fixture runtime data and committed guide content
+  ---
+  duration_ms: 3531.522208
+  type: 'test'
+  ...
+1..5
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3813.256

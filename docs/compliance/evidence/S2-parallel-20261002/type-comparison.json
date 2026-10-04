@@ -1,0 +1,279 @@
+{
+  "baselineCommit": "49507d99959231eea98b34242556b17f7c62c7b8",
+  "candidateHead": "49507d99959231eea98b34242556b17f7c62c7b8",
+  "candidateCapturedAt": "2026-10-02T15:11:27.528Z",
+  "comparisonAt": "2026-10-02T15:14:24.500Z",
+  "method": "Group by relative file, diagnostic source/TS code, printed severity and full message; compare multiplicities, ignoring shifted line and column positions. Astro prints hints as warning headers; totals use its final summary. Both checks run with synthetic fixture DATA_DIR. No type configurations were modified.",
+  "baseline": {
+    "files": 136,
+    "errors": 1997,
+    "warnings": 0,
+    "hints": 34,
+    "parsedDiagnostics": 2031,
+    "uniqueSignatures": 514,
+    "rawLogSha256": "63b9a78c9f1e8f24b35b691430de7ae1b8d937ebc3e9bbb239d50577b9412502",
+    "exitCode": 1,
+    "startedAt": "2026-10-02T15:02:42.771Z",
+    "finishedAt": "2026-10-02T15:06:12.550Z"
+  },
+  "candidate": {
+    "files": 145,
+    "errors": 1973,
+    "warnings": 0,
+    "hints": 34,
+    "parsedDiagnostics": 2007,
+    "uniqueSignatures": 509,
+    "rawLogSha256": "aaedc5ecb9983433b19eb833cbf61aba52e3fd43bdf26466b01d42cf1542eaaa",
+    "exitCode": 1,
+    "startedAt": "2026-10-02T15:11:27.910Z",
+    "finishedAt": "2026-10-02T15:13:31.541Z"
+  },
+  "addedDiagnosticCount": 0,
+  "removedDiagnosticCount": 24,
+  "added": [],
+  "removed": [
+    {
+      "file": "src/pages/admin.astro",
+      "source": "ts",
+      "code": 2339,
+      "printedSeverity": "error",
+      "message": "Property 'name' does not exist on type 'never'.",
+      "count": 10,
+      "positions": [
+        {
+          "line": 4747,
+          "column": 53
+        },
+        {
+          "line": 4745,
+          "column": 61
+        },
+        {
+          "line": 4742,
+          "column": 54
+        },
+        {
+          "line": 4731,
+          "column": 46
+        },
+        {
+          "line": 4722,
+          "column": 102
+        },
+        {
+          "line": 4707,
+          "column": 66
+        },
+        {
+          "line": 4692,
+          "column": 52
+        },
+        {
+          "line": 2133,
+          "column": 36
+        },
+        {
+          "line": 2114,
+          "column": 84
+        },
+        {
+          "line": 2087,
+          "column": 49
+        }
+      ],
+      "baselineCount": 10,
+      "candidateCount": 3,
+      "removed": 7
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "source": "ts",
+      "code": 2339,
+      "printedSeverity": "error",
+      "message": "Property 'id' does not exist on type 'never'.",
+      "count": 7,
+      "positions": [
+        {
+          "line": 4744,
+          "column": 91
+        },
+        {
+          "line": 4733,
+          "column": 62
+        },
+        {
+          "line": 4722,
+          "column": 88
+        },
+        {
+          "line": 4706,
+          "column": 64
+        },
+        {
+          "line": 2135,
+          "column": 76
+        },
+        {
+          "line": 2123,
+          "column": 76
+        },
+        {
+          "line": 2111,
+          "column": 76
+        }
+      ],
+      "baselineCount": 7,
+      "candidateCount": 3,
+      "removed": 4
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "source": "ts",
+      "code": 2339,
+      "printedSeverity": "error",
+      "message": "Property 'enabled' does not exist on type 'never'.",
+      "count": 7,
+      "positions": [
+        {
+          "line": 4722,
+          "column": 150
+        },
+        {
+          "line": 4719,
+          "column": 40
+        },
+        {
+          "line": 4710,
+          "column": 71
+        },
+        {
+          "line": 4693,
+          "column": 41
+        },
+        {
+          "line": 2123,
+          "column": 150
+        },
+        {
+          "line": 2120,
+          "column": 34
+        },
+        {
+          "line": 2089,
+          "column": 38
+        }
+      ],
+      "baselineCount": 7,
+      "candidateCount": 3,
+      "removed": 4
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "source": "ts",
+      "code": 2339,
+      "printedSeverity": "error",
+      "message": "Property 'webhookUrl' does not exist on type 'never'.",
+      "count": 3,
+      "positions": [
+        {
+          "line": 4722,
+          "column": 124
+        },
+        {
+          "line": 4708,
+          "column": 65
+        },
+        {
+          "line": 4692,
+          "column": 127
+        }
+      ],
+      "baselineCount": 3,
+      "candidateCount": 0,
+      "removed": 3
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "source": "ts",
+      "code": 2339,
+      "printedSeverity": "error",
+      "message": "Property 'purposes' does not exist on type 'never'.",
+      "count": 3,
+      "positions": [
+        {
+          "line": 4712,
+          "column": 75
+        },
+        {
+          "line": 4711,
+          "column": 79
+        },
+        {
+          "line": 4694,
+          "column": 42
+        }
+      ],
+      "baselineCount": 3,
+      "candidateCount": 0,
+      "removed": 3
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "source": "ts",
+      "code": 2339,
+      "printedSeverity": "error",
+      "message": "Property 'signSecretConfigured' does not exist on type 'never'.",
+      "count": 1,
+      "positions": [
+        {
+          "line": 4695,
+          "column": 41
+        }
+      ],
+      "baselineCount": 1,
+      "candidateCount": 0,
+      "removed": 1
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "source": "ts",
+      "code": 7006,
+      "printedSeverity": "error",
+      "message": "Parameter 'purpose' implicitly has an 'any' type.",
+      "count": 1,
+      "positions": [
+        {
+          "line": 4694,
+          "column": 75
+        }
+      ],
+      "baselineCount": 1,
+      "candidateCount": 0,
+      "removed": 1
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "source": "ts",
+      "code": 2339,
+      "printedSeverity": "error",
+      "message": "Property 'guide_feedback_enabled' does not exist on type '{ bots: never[]; updated: string; loaded: boolean; }'.",
+      "count": 1,
+      "positions": [
+        {
+          "line": 4660,
+          "column": 86
+        }
+      ],
+      "baselineCount": 1,
+      "candidateCount": 0,
+      "removed": 1
+    }
+  ],
+  "changedDuringSampling": [],
+  "baselineProvenance": {
+    "originalEvidenceDirectory": "/private/tmp/nkustudy-s2-astro-aGPU8W",
+    "reusedWithoutRerun": true,
+    "originalEnvironmentFailure": "baseline-initial-enotempty.log",
+    "finalCandidateCache": "individual dependency links with an isolated Vite cache"
+  }
+}

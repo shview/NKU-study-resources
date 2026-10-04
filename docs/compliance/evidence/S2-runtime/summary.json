@@ -1,0 +1,135 @@
+{
+  "date": "2026-10-01",
+  "branch": "codex/s2-logs-20261001",
+  "base": "af2cf13e6a54f35e66b4039de533a976a300e192",
+  "node": "v22.23.2",
+  "npm": "10.9.8",
+  "localScope": "S2 local implementation and synthetic acceptance complete; independent review and production acceptance outstanding",
+  "tests": {
+    "tests": 254,
+    "pass": 254,
+    "fail": 0,
+    "skipped": 0
+  },
+  "finalTargetedDurabilityTests": {
+    "pass": 8,
+    "fail": 0,
+    "includesRecoveryCli": true
+  },
+  "apiRoutes": 123,
+  "fixtureBuildPages": 13,
+  "fixtureContentValidation": "PASS",
+  "encodingCheck": "PASS for 0 JSON files in default empty runtime directory; not a production-content check",
+  "syntaxModules": 20,
+  "diffCheck": "PASS",
+  "caddy": {
+    "ok": true,
+    "version": "v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=",
+    "syntheticOnly": true,
+    "results": [
+      {
+        "topology": "direct peer, forged forwarding ignored",
+        "fields": [
+          "timestamp",
+          "direct peer IP/port",
+          "trusted client IP",
+          "method",
+          "host",
+          "path without query",
+          "status",
+          "UA"
+        ],
+        "redaction": "PASS",
+        "permissions": "0600",
+        "countRetentionDisabled": true,
+        "retentionDays": 400
+      },
+      {
+        "topology": "explicit synthetic trusted proxy",
+        "fields": [
+          "timestamp",
+          "direct peer IP/port",
+          "trusted client IP",
+          "method",
+          "host",
+          "path without query",
+          "status",
+          "UA"
+        ],
+        "redaction": "PASS",
+        "permissions": "0600",
+        "countRetentionDisabled": true,
+        "retentionDays": 400
+      }
+    ]
+  },
+  "typeCheck": {
+    "status": "FAIL",
+    "errors": 1997,
+    "warnings": 0,
+    "hints": 34,
+    "firstAttempt": "Node heap exhausted, exit 134",
+    "completedWith": "NODE_OPTIONS=--max-old-space-size=8192",
+    "comparison": "check-comparison.json; historical S1, no added diagnostic signatures/counts"
+  },
+  "guideSmoke": "Not rerun; existing QA-21 failure remains open",
+  "committed": false,
+  "pushed": false,
+  "deployed": false,
+  "productionDataUsed": false,
+  "messagesSent": false,
+  "lockChanged": false,
+  "boundaries": [
+    "S1 live user acceptance is inherited, not reverified here",
+    "D-01 unchanged; restored runtime remains quarantined until post-snapshot account/deletion reconciliation",
+    "Caddy/CDN and private R2 bucket production permissions, space, retention and alerts require operator evidence",
+    "Remote HTTP upload/readback tests use only a synthetic local WebDAV service",
+    "Admin HTTP test uses a tiny synthetic static build in an isolated source copy; real 13-page Astro fixture build recorded separately",
+    "Current full-backup scope excludes external R2 object bytes; optional course object copies are separate",
+    "Existing S1 handoff document changes preserved"
+  ],
+  "sourceHashes": {
+    ".gitignore": "7b46f9e0bc623a36650343649a2853624e699e519ae8c8fedbb8be5ac3494dbf",
+    "ops/Caddyfile.s2-log-snippet": "470eace4bc633dbeae6bba7ef6057cac3e7d909a33194b86f84378c224b4039b",
+    "scripts/archive-entry-logs.mjs": "0d44f04f4c95c8b2c512c576321e38692c19e03da688303f5cbb46bc30d4f395",
+    "scripts/runtime-backup.mjs": "7c684dbbf2e0a79b5ba06b91750d568965f99bb9ff04585e0fbc9e19c8652034",
+    "scripts/s2-storage-health.mjs": "b1b8145237240249b971b76257206c82de000b373facbe784648617d338f392a",
+    "scripts/verify-s2-entry-log.mjs": "2011aa0fff0a02f3f48000218c18adf68cce5975f14656c2197bf2d41da68703",
+    "server/admin-accounts-store.mjs": "3fe4305058caad0764201d06925f540ceefb015a9f6eaaa9bf1197a66153b770",
+    "server/admin-audit.mjs": "d655346181f64b4a3a8d4e1b7e35f8fdac9e1a64340fc67eb6870d96e9b2d636",
+    "server/admin-server.mjs": "aad289a276142f30db91125d280be19ea129553e961b34f592f3cccd12b26df5",
+    "server/atomic-json-store.mjs": "aa91cccabd962851d169f242b039b9726730e95f311d272c2720d31e794bef5d",
+    "server/durable-log.mjs": "b6334426def299c2e40966a88ef0020924c8d3c65f050da0f80fed6aded1b177",
+    "server/entry-log-archive.mjs": "d6f7f1984b326b7f2abdf6a8db8e992055a380d0ecd1b1f05c60496443184656",
+    "server/law-enforcement-store.mjs": "86adc11e01c5aec1569e783c48bb9683d1b3e9e00b3e9644112ec7b75b846646",
+    "server/mp-auth-service.mjs": "15115af6e8865b858ed9c6aa788c2df33b253d9c8c3cf8604124aa249ea88b97",
+    "server/public-api-router.mjs": "3f5cb384db77793fb091f479c1b8f82ea4e0852a0371a72236331a546b1b3a1f",
+    "server/public-api-service.mjs": "85ee4c59b579c691c1c2ddf138be3cba6d6656f1d3c5f25af3dfa8085a67df11",
+    "server/runtime-backup.mjs": "53bf1cba8c24d064eca4347ad32452b95ec749a6e957f47c5d0f787f90e6c04d",
+    "server/runtime-config.mjs": "f5377dc7cabc34c9b4dbe276b5c7f4d7a43a48ea8ee81d042977daba5a9273be",
+    "server/user-security-log-store.mjs": "28744ce0a9c728948c22a1e664e64580da39bc29de00c10145313ef12bcf530d",
+    "src/pages/admin.astro": "172712dec1d3eb6376675bbdb264a33780013569f2f1ae95a25c15e41b63751c",
+    "test/s2-admin-runtime.integration.test.mjs": "4b24a5b06b53794320a870403ba1679875a04dafa020bf1fa72e59366944c9ee",
+    "test/s2-durability.test.mjs": "8db20eff0db5d4e87ca9005a1b13f1cd4b9ad0d62dc6473417af509cd731b1e2",
+    "test/s2-user-events.integration.test.mjs": "8db87cf3962662398f7cc948eeb20ba0b25465c5b71414b727cd09084e40d3b0"
+  },
+  "evidenceHashes": {
+    "api-docs.log": "322811cf756ae4772aac6b57e9fc89ce00222fb177007413946ce918b3973913",
+    "build-fixtures.log": "5a629d845f4e00a3c7082b5cf7f84d28ef7fed585d2ea143d8a1ca8bb500f1d6",
+    "check-comparison.json": "33547078d37d2ea7ea3f960a17aee8146110b46fd9aa12fbf5c4a6166c32f3f4",
+    "check.log": "215ce41cc285e6876096dbd6c948a997271d84215be4f22d9db28803706577d8",
+    "durability-final.log": "f0870818c6ca0b67b02d188e1c6ca35af1dcfe3c3da135e1d72fe7f6c8f5cf3d",
+    "encoding.log": "1ac849deedcb7969c1fb41012ce8568d7822216f28be84d9e6059c953e6d966a",
+    "entry-log.json": "a14c1bd251a431c187c45cec9a9834cad44d2453219e73d2b011b22587f0e0ce",
+    "fixtures.log": "ef818d1c731feb9e27e888d0a82cd794023241974898ddf921bf0c38f6d872d0",
+    "npm-test.log": "8b2f27bc7c917360e6f41100861d38af51f3eaad9931e60411badbd6e4c37dbb",
+    "syntax.json": "dadd5439e4f257828db6a1c7b0f2669ae583d26eeee375f34e700150f0138219"
+  },
+  "remaining": [
+    "independent review",
+    "maintainer production deployment/entry topology/retention/capacity/alerts",
+    "private remote anonymous-denial and lifecycle proof",
+    "production encrypted backup and isolated restore receipt",
+    "D-01/S5 post-snapshot deletion/account-state replay policy"
+  ]
+}

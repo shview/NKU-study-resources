@@ -1,0 +1,76 @@
+TAP version 13
+# Subtest: S2 administrator HTTP audit, local I/O recovery, consistent private backup and restart
+    # Subtest: sensitive reads, exports and backups audit success, missing target, anonymous, disabled and denied requests
+    ok 1 - sensitive reads, exports and backups audit success, missing target, anonymous, disabled and denied requests
+      ---
+      duration_ms: 388.461958
+      type: 'test'
+      ...
+    # Subtest: review and complaint changes stamp the real actor and audit IDs, fields, states, failures and deletions
+    ok 2 - review and complaint changes stamp the real actor and audit IDs, fields, states, failures and deletions
+      ---
+      duration_ms: 1373.215584
+      type: 'test'
+      ...
+    # Subtest: SQLite log failure preserves successful HTTP outcomes in a private queue and restart replays them
+    ok 3 - SQLite log failure preserves successful HTTP outcomes in a private queue and restart replays them
+      ---
+      duration_ms: 167.624041
+      type: 'test'
+      ...
+    # Subtest: HTTP full backup decrypts and restores all runtime tables; private remote failure is not complete success
+    ok 4 - HTTP full backup decrypts and restores all runtime tables; private remote failure is not complete success
+      ---
+      duration_ms: 523.37025
+      type: 'test'
+      ...
+    # Subtest: backup settings keep passwords write-only and remove legacy secret copies on save
+    not ok 5 - backup settings keep passwords write-only and remove legacy secret copies on save
+      ---
+      duration_ms: 40.349541
+      type: 'test'
+      location: '/Users/carlos/Documents/ChatGPT/New project 2/NKU-study-resources-s2/test/s2-admin-runtime.integration.test.mjs:151:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        backup settings response must not echo secrets
+        
+        true !== false
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: false
+      actual: true
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///Users/carlos/Documents/ChatGPT/New%20project%202/NKU-study-resources-s2/test/s2-admin-runtime.integration.test.mjs:159:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///Users/carlos/Documents/ChatGPT/New%20project%202/NKU-study-resources-s2/test/s2-admin-runtime.integration.test.mjs:151:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: WebDAV upload is verified through actual HTTP; corrupt readback fails and retry recovers
+    ok 6 - WebDAV upload is verified through actual HTTP; corrupt readback fails and retry recovers
+      ---
+      duration_ms: 345.254375
+      type: 'test'
+      ...
+    1..6
+not ok 1 - S2 administrator HTTP audit, local I/O recovery, consistent private backup and restart
+  ---
+  duration_ms: 3441.266041
+  type: 'test'
+  location: '/Users/carlos/Documents/ChatGPT/New project 2/NKU-study-resources-s2/test/s2-admin-runtime.integration.test.mjs:14:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 7
+# suites 0
+# pass 5
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3496.044542

@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "files": [
+    "scripts/archive-entry-logs.mjs",
+    "scripts/runtime-backup.mjs",
+    "scripts/s2-storage-health.mjs",
+    "scripts/verify-s2-entry-log.mjs",
+    "server/admin-accounts-store.mjs",
+    "server/admin-audit.mjs",
+    "server/admin-server.mjs",
+    "server/atomic-json-store.mjs",
+    "server/durable-log.mjs",
+    "server/entry-log-archive.mjs",
+    "server/law-enforcement-store.mjs",
+    "server/mp-auth-service.mjs",
+    "server/public-api-router.mjs",
+    "server/public-api-service.mjs",
+    "server/runtime-backup.mjs",
+    "server/runtime-config.mjs",
+    "server/user-security-log-store.mjs",
+    "test/s2-admin-runtime.integration.test.mjs",
+    "test/s2-durability.test.mjs",
+    "test/s2-user-events.integration.test.mjs"
+  ],
+  "gitDiffCheck": "PASS"
+}

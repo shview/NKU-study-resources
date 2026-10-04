@@ -1,0 +1,21 @@
+{
+  "bots": [
+    {
+      "id": "synthetic-ops",
+      "name": "synthetic-ops",
+      "enabled": true,
+      "purposes": [
+        "ops"
+      ]
+    },
+    {
+      "id": "synthetic-moderation",
+      "name": "synthetic-moderation",
+      "enabled": true,
+      "purposes": [
+        "moderation",
+        "ops"
+      ]
+    }
+  ]
+}
