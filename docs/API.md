@@ -831,7 +831,8 @@ curl -sS -b admin.cookies https://nkustudy.top/admin-api/sync-r2-all \
 | `/admin-api/about` | `{title,content}`，分别最多 120/6000 字符 |
 | `/admin-api/participate` | `{title,content}`，分别最多 120/8000 字符 |
 | `/admin-api/links` | `{title,intro,mutualTitle,recommendedTitle,siteInfoTitle,siteInfo:{name,url,description},links:[{id,type,name,url,description,hidden}]}`；type 仅 `mutual`/`recommended` |
-| `/admin-api/feedback` | 完整反馈 store：`{version,updated,title,announcement,rules,items}` |
+
+`/admin-api/feedback` 的 GET 仍返回完整反馈 store，但 S3 的单条处置与纯设置保存采用下节协议：单条处置持久化后使公开快照失效，不执行 Astro 构建；反馈设置保存仍触发构建发布。旧整份 POST 仅作为受限制的兼容入口，不能按上述通用内容发布协议增删、重排或批量修改反馈。
 
 主要错误：缺/过期 revision 分别为 `400`/`409`；构建失败会回滚内容并可能返回 `rolledBack:true`；发布状态不明确时可能 `503`。静态目录已切换但 fsync 或旧 release 清理降级时，成功响应保持原有字段并附加 `warnings: string[]`；管理页面会显示这些警告，调用方也应记录并安排运维核查。示例：
 

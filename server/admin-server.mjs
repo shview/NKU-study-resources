@@ -1262,11 +1262,7 @@ function defaultReviews() {
 }
 
 function normalizeReviewData(data) {
-  const defaults = defaultReviews();
-  data = structuredClone(data || {});
-  data.rules = { ...defaults.rules, ...(data.rules || {}) };
-  data.reviews = Array.isArray(data.reviews) ? data.reviews : [];
-  return normalizeReviewsDocument(data);
+  return normalizeReviewsDocument(data, { rulesDefaults: defaultReviews().rules });
 }
 
 function readReviews() {
@@ -1296,7 +1292,8 @@ function readFeedback() {
 
 function normalizeFeedbackData(data) {
   const defaults = defaultFeedback();
-  return normalizeFeedbackDocument({ ...defaults, ...data, rules: { ...defaults.rules, ...data?.rules } });
+  const normalized = normalizeFeedbackDocument(data, { rulesDefaults: defaults.rules });
+  return { ...defaults, ...normalized };
 }
 
 function readAbout() {
@@ -2469,6 +2466,10 @@ async function cleanupOrphanContentImages(owner, oldObject, nextObject) {
 
 /** Startup completes the idempotent authority migration before any public read. */
 async function migrateModerationAtStartup() {
+  // Reject an invalid source before either file is migrated. Defaults must not
+  // conceal a malformed document, rules object, or review collection.
+  normalizeFeedbackData(await jsonStore.read(feedbackPath));
+  normalizeReviewData(await jsonStore.read(reviewsPath));
   await jsonStore.update(feedbackPath, normalizeFeedbackData);
   await jsonStore.update(reviewsPath, normalizeReviewData);
 }

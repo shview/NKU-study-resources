@@ -2,6 +2,35 @@
   "kind": "S3_IMPLEMENTATION_AND_ACCEPTANCE_RECORD",
   "date": "2026-10-04",
   "status": "LOCAL_AUTO_AND_PARTIAL_BROWSER_VERIFIED_PRODUCTION_PENDING",
+  "deliveryReadiness20261005": {
+    "status": "LOCAL_VERIFIED_PRODUCTION_READONLY_PREVIEW_PENDING",
+    "coreCommit": "98304954038735b8e437a43ea2a84f3b48816c94",
+    "candidateCommitReference": "后续修复的固定提交及源码树以交付包RELEASE.json为准；本记录随该提交保存，未声称推送或生产部署。",
+    "changes": [
+      "启动先校验原始root/rules/集合，再添加默认值；两份文档均先预检，格式错误时不迁移任何一份。",
+      "只读预览匹配启动默认值；失败只输出固定错误码与文档名，不输出解析器原文、账号/条目ID或路径。",
+      "预览拒绝非法UTF-8、结构/版本、重复ID和直接符号链接；alreadyMigrated要求v2且规范化后语义不变。",
+      "操作单明确只读预览、停写后复核source hash、私密原始备份、v2兼容回退和生产缓存关卡。"
+    ],
+    "verification": {
+      "startupBeforeFix": "六类坏结构均意外启动，真实子进程回归失败；负控制TAP保留。",
+      "startupAfterFixAndS3Contracts": { "tests": 12, "pass": 12, "fail": 0 },
+      "previewCli": { "tests": 25, "pass": 25, "fail": 0 },
+      "fullSuite": { "command": "TMPDIR=/private/tmp npm test", "tests": 386, "pass": 386, "fail": 0, "skip": 0 },
+      "apiDocs": { "registeredMethodPathPairs": 130, "result": "PASS" },
+      "fixtures": "PASS: 1 synthetic course, 0 files",
+      "buildFixtures": { "pages": 14, "result": "PASS_NOT_DEPLOYED" },
+      "syntaxAndWhitespace": "两个修改的mjs均node --check通过；git diff --check通过。",
+      "typecheck": "本次未改前端，未重跑；沿用S3核心1691历史错误/新增归一诊断0记录，不表示类型检查通过。"
+    },
+    "evidenceDirectory": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-readiness-20261005/",
+    "limits": [
+      "未读取生产JSON或执行迁移，真实历史影响数量仍未知。",
+      "预览不加维护锁，不提供两文件共同时间点快照；sourceSha256是原始字节，previewSha256不是apply锁或启动后文件hash。",
+      "双文件迁移不是跨文件事务；拒绝坏输入不代表后续I/O错误可原子回滚两文件。",
+      "其他浏览器/真实微信/手机待验保持不变；真实通知与私密R2暂缓。"
+    ]
+  },
   "sourceBaseline": "383237cd01b1994192fe6498f1c7e52a7d6f46e6",
   "scope": "用户2026-10-04确认按原有规则自动公开课程评价并授权S3实施；本地实现与验收，未授权生产迁移/部署。",
   "principles": [
