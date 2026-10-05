@@ -1,7 +1,7 @@
 import { SnapshotGate, captureRuntime, saveEncryptedBackup, verifiedUpload } from "./runtime-backup.mjs";
 import { uploadPrivateR2Backup } from "./backup-r2.mjs";
 import { createOpsAlerts } from "./ops-alerts.mjs";
-import { queryAuditMetadata, contentChanges, stampContentActor } from "./admin-audit.mjs";
+import { queryAuditMetadata } from "./admin-audit.mjs";
 import { authorizationOf, requirePhoneVerifiedUser } from "./user-identity.mjs";
 import { createHmac, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
@@ -69,6 +69,8 @@ import { createAvatarService, AVATAR_MAX_BYTES } from "./avatar-service.mjs";
 import { createWechatImageModeration } from "./wechat-image-moderation.mjs";
 import sharp from "sharp";
 import { StaticReleasePublisher } from "./static-release-publisher.mjs";
+import { normalizeFeedbackDocument, normalizeReviewsDocument, isFeedbackPublicEligible, isReviewPublicEligible, newFeedbackModerationFields } from "./moderation-model.mjs";
+import { ModerationService } from "./moderation-service.mjs";
 
 const root = projectRoot;
 const runtime = preflightProductionRuntime();
@@ -896,7 +898,7 @@ async function runDailyDigest() {
   const newReviews = (reviewData.reviews || []).filter((review) => String(review.createdAt || "").slice(0, 10) === day).length;
   const pendingReviews = (reviewData.reviews || []).filter((review) => String(review.status || "pending") === "pending" && !review.hidden).length;
   const newFeedback = (feedbackData.items || []).filter((item) => String(item.createdAt || "").slice(0, 10) === day).length;
-  const openFeedback = (feedbackData.items || []).filter((item) => !item.hidden && String(item.status || "open") === "open").length;
+  const openFeedback = (feedbackData.items || []).filter((item) => !item.hidden && ["open", "processing"].includes(item.handlingStatus || "open")).length;
   const mpOverview = mpAuthService.adminOverview({ dayStartMs: Date.parse(`${day}T00:00:00+08:00`) });
   lastDigestDate = beijingDay;
   await feishuNotify.broadcast({
@@ -1037,10 +1039,10 @@ function requirePhoneVerifiedUgcUser(req, res, ip) {
 function attachSubmissionAudit(req, res, url) {
   const method = req.method;
   const pathname = url.pathname;
-  if (method !== "POST" || !["/review-api/submit", "/feedback-api/submit"].includes(pathname)) return;
+  if (method !== "POST" || !["/review-api/submit", "/feedback-api/submit", "/feedback-api/report"].includes(pathname)) return;
   const review = url.pathname === "/review-api/submit";
   const event = req.__userEvent = {
-    action: review ? "review.submit" : "feedback.submit",
+    action: review ? "review.submit" : pathname === "/feedback-api/report" ? "report.submit" : "feedback.submit",
     userId: mpAuthService.auditUserId(authorizationOf(req)),
     targetType: review ? "review" : "feedback", targetId: "", result: "ok", code: "",
   };
@@ -1252,7 +1254,7 @@ function defaultReviews() {
       dailyLimit: 10,
       minLength: 12,
       submissionOptions: { allowCustomCourse: false, allowCustomTeacher: true },
-      announcement: "评价内容会先进入待审核。请尽量描述授课风格、作业考试情况与适合人群，避免人身攻击或泄露隐私。",
+      announcement: "评价按当前规则决定是否自动公开。请尽量描述授课风格、作业考试情况与适合人群，避免人身攻击或泄露隐私。",
       notes: "",
     },
     reviews: [],
@@ -1264,7 +1266,7 @@ function normalizeReviewData(data) {
   data = structuredClone(data || {});
   data.rules = { ...defaults.rules, ...(data.rules || {}) };
   data.reviews = Array.isArray(data.reviews) ? data.reviews : [];
-  return data;
+  return normalizeReviewsDocument(data);
 }
 
 function readReviews() {
@@ -1282,37 +1284,19 @@ function defaultFeedback() {
       hourlyLimit: 3,
       dailyLimit: 15,
       minLength: 5,
-      notes: "默认反馈公开显示，管理员可以隐藏、搁置或标记完成。",
+      notes: "反馈处理状态与公开批准分别记录；投诉举报始终私密。",
     },
     items: [],
   };
 }
 
 function readFeedback() {
-  const defaults = defaultFeedback();
-  const data = readJsonFile(feedbackPath);
-  data.title = cleanText(data.title, 120) || defaults.title;
-  data.announcement = cleanText(data.announcement, 4000);
-  data.rules = { ...defaults.rules, ...(data.rules || {}) };
-  data.items = Array.isArray(data.items) ? data.items : [];
-  return data;
+  return normalizeFeedbackData(readJsonFile(feedbackPath));
 }
 
-function normalizeFeedbackData(data, defaults = defaultFeedback().rules) {
-  return {
-    version: Number(data.version || 1),
-    updated: today(),
-    title: cleanText(data.title, 120) || "问题与建议",
-    announcement: cleanText(data.announcement, 4000),
-    rules: {
-      submissionOpen: data.rules?.submissionOpen !== false,
-      hourlyLimit: Math.max(1, Number(data.rules?.hourlyLimit || defaults.hourlyLimit || 3)),
-      dailyLimit: Math.max(1, Number(data.rules?.dailyLimit || defaults.dailyLimit || 15)),
-      minLength: Math.max(1, Number(data.rules?.minLength || defaults.minLength || 5)),
-      notes: cleanText(data.rules?.notes ?? defaults.notes, 2000),
-    },
-    items: Array.isArray(data.items) ? data.items : [],
-  };
+function normalizeFeedbackData(data) {
+  const defaults = defaultFeedback();
+  return normalizeFeedbackDocument({ ...defaults, ...data, rules: { ...defaults.rules, ...data?.rules } });
 }
 
 function readAbout() {
@@ -1530,7 +1514,9 @@ function publicReview(review) {
 }
 
 function publicFeedback(item) {
-  return Object.fromEntries(["id", "title", "content", "type", "status", "hidden", "createdAt", "updatedAt", "reply", "repliedAt"].filter((key) => Object.hasOwn(item, key)).map((key) => [key, item[key]]));
+  const fields = ["id", "title", "content", "type", "status", "handlingStatus", "publicationState", "hidden", "createdAt", "updatedAt"];
+  if (isFeedbackPublicEligible(item) && item.replyVisibility === "public") fields.push("reply", "repliedAt");
+  return Object.fromEntries(fields.filter((key) => Object.hasOwn(item, key)).map((key) => [key, item[key]]));
 }
 
 function visibleFeedback() {
@@ -1543,8 +1529,7 @@ function visibleFeedback() {
       minLength: Number(data.rules?.minLength || 5),
     },
     items: data.items
-    .filter((item) => item.private !== true && item.status !== "hidden" && !item.hidden)
-    .filter((item) => (item.status === "approved" || item.status === "completed") && !["report", "complaint"].includes(item.type))
+    .filter(isFeedbackPublicEligible)
     .map(publicFeedback),
   };
 }
@@ -1567,11 +1552,11 @@ function cleanManifestResources(manifest) {
 function approvedReviews() {
   const data = readReviews();
   return data.reviews
-    .filter((review) => ["approved", "通过"].includes(String(review.status || "").trim()) && !review.hidden)
+    .filter(isReviewPublicEligible)
     .map(publicReview);
 }
 
-async function handleFeedbackSubmit(req, res) {
+async function handleFeedbackSubmit(req, res, { reportOnly = false } = {}) {
   const ip = clientIp(req);
   if (!consumeLayeredAttempt("feedback-attempt", ip, { perIp: 30, global: 1_000 })) {
     json(res, 429, { ok: false, error: "请求太频繁，请稍后再试。" });
@@ -1583,11 +1568,11 @@ async function handleFeedbackSubmit(req, res) {
   const body = await readPublicBody(req);
   if (body.website) {
     Object.assign(req.__userEvent, { result: "ignored", code: "HONEYPOT" });
-    json(res, 200, { ok: true });
+    json(res, 200, { ok: true, accepted: false });
     return;
   }
 
-  const type = cleanText(body.type, 40) || "bug";
+  const type = reportOnly ? "report" : cleanText(body.type, 40).toLowerCase() || "bug";
   const isReport = type === "report" || type === "complaint";
   req.__userEvent.action = isReport ? "report.submit" : "feedback.submit";
   if (!isReport && !rules.submissionOpen) {
@@ -1602,19 +1587,19 @@ async function handleFeedbackSubmit(req, res) {
     ugcUser = requirePhoneVerifiedUgcUser(req, res, ip);
     if (!ugcUser) return;
   }
+  for (const [field, max] of Object.entries({ title: 120, content: 2000, contact: 120, resourceRef: 200, reportUrl: 300, reportTarget: 120 })) {
+    if (body[field] !== undefined && (typeof body[field] !== "string" || body[field].trim().length > max)) {
+      throw new PublicApiError(400, `字段 ${field} 超出长度限制或格式无效。`, "INVALID_FEEDBACK");
+    }
+  }
   const title = cleanText(body.title, 120);
   const content = cleanText(body.content, 2000);
   const contact = cleanText(body.contact, 120);
   const resourceRef = cleanText(body.resourceRef, 200);
   const reportUrl = cleanText(body.reportUrl, 300);
   const reportTarget = cleanText(body.reportTarget, 120);
-  if (!title || content.length < Number(rules.minLength || 5)) {
+  if (!title || content.length < (isReport ? 5 : Number(rules.minLength || 5))) {
     json(res, 400, { ok: false, error: "请填写标题，并补充更完整的反馈内容。" });
-    return;
-  }
-
-  if (!checkFeedbackRate(ip, rules)) {
-    json(res, 429, { ok: false, error: "提交太频繁，请稍后再试。" });
     return;
   }
 
@@ -1626,13 +1611,25 @@ async function handleFeedbackSubmit(req, res) {
     } catch {}
     if (!guideFeedbackEnabled) {
       Object.assign(req.__userEvent, { result: "ignored", code: "GUIDE_FEEDBACK_DISABLED" });
-      json(res, 200, { ok: true });
+      json(res, 200, { ok: true, accepted: false });
       return;
     }
   }
 
   const itemId = `feedback-${Date.now()}-${randomBytes(4).toString("hex")}`;
-  await jsonStore.update(feedbackPath, (current) => {
+  await jsonStore.update(feedbackPath, (persisted) => {
+    const current = normalizeFeedbackData(persisted);
+    // Recheck after waiting for a concurrent settings/build transaction.
+    if (isReport) {
+      if (authorizationOf(req)) ugcUser = mpAuthService.requireUser(authorizationOf(req));
+    } else {
+      ugcUser = requirePhoneVerifiedUser(mpAuthService, req);
+      if (current.rules.submissionOpen === false) throw new PublicApiError(403, "反馈提交暂未开放。", "SUBMISSION_CLOSED");
+      if (content.length < Number(current.rules.minLength || 5)) throw new PublicApiError(400, "请补充更完整的反馈内容。", "INVALID_FEEDBACK");
+    }
+    if (!(isReport ? checkRate("report-submit", ip, { hourlyLimit: 3, dailyLimit: 15 }, { hourlyLimit: 3, dailyLimit: 15 }) : checkFeedbackRate(ip, current.rules))) {
+      throw new PublicApiError(429, "提交太频繁，请稍后再试。", "RATE_LIMITED");
+    }
     current.items = Array.isArray(current.items) ? current.items : [];
     current.items.unshift({
       id: itemId,
@@ -1645,7 +1642,7 @@ async function handleFeedbackSubmit(req, res) {
       ...(reportTarget ? { report_target: reportTarget } : {}),
       user_id: ugcUser?.id || null,
       ...(isReport ? { private: true } : {}),
-      status: "pending",
+      ...newFeedbackModerationFields({ type, now: nowIso() }),
       hidden: false,
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -1657,7 +1654,7 @@ async function handleFeedbackSubmit(req, res) {
   });
   Object.assign(req.__userEvent, { userId: ugcUser?.id || null, targetId: itemId, result: "pending", code: "OK" });
   Promise.resolve(notifyModerators({ type: isReport ? "report.pending" : "feedback.pending", title, feedbackType: type, content, resourceRef })).catch(() => {});
-  json(res, 200, { ok: true });
+  json(res, 200, { ok: true, accepted: true, private: isReport, receiptId: itemId, replyAvailable: Boolean(ugcUser) });
 }
 
 /** 微信支付回调：原始报文验签（支付公钥）→ AES-GCM 解密 → 幂等置 paid。 */
@@ -1775,40 +1772,40 @@ async function handleReviewSubmit(req, res) {
       pending: result.pending,
     })).catch(() => {});
   }
-  json(res, 200, { ok: true, pending: result.pending });
+  json(res, 200, { ok: true, accepted: Boolean(result.reviewId), pending: result.pending });
 }
 
-async function readReviewStore() {
-  const data = readReviews();
-  return { data, revision: manifestRevision(data) };
+function moderationService(kind, req = null) {
+  return new ModerationService({
+    store: jsonStore, filePath: kind === "reviews" ? reviewsPath : feedbackPath, kind,
+    normalize: kind === "reviews" ? normalizeReviewData : normalizeFeedbackData,
+    beforeWrite: req ? ({ changes, scope }) => recordModerationChanges(req, kind, changes, scope) : undefined,
+  });
 }
 
-async function updateReviewStore(input, expectedRevision) {
-  let revision;
-  let beforeImages = null;
-  const migrated = await migrateContentDataUris("reviews", structuredClone(input));
-  const next = migrated.data;
-  const migratedImages = migrated.migrated;
-  const data = await jsonStore.update(reviewsPath, (persisted) => {
-    const current = normalizeReviewData(persisted);
-    beforeImages = structuredClone(current);
-    const currentRevision = manifestRevision(current);
-    if (!expectedRevision) {
-      const error = new Error("expectedRevision is required; reload reviews before saving.");
-      error.statusCode = 400;
-      throw error;
-    }
-    if (expectedRevision !== currentRevision) {
-      throw new ManifestConflictError("Reviews changed after they were loaded; no changes were written. Refresh and retry.", currentRevision);
-    }
-    if (next.rules) current.rules = { ...(current.rules || {}), ...next.rules };
-    if (Array.isArray(next.reviews)) current.reviews = next.reviews;
-    current.updated = today();
-    revision = manifestRevision(current);
-    return current;
-  }, { mode: 0o600 });
-  const cleanup = beforeImages ? await cleanupOrphanContentImages("reviews", beforeImages, data) : { removed: 0 };
-  return { data, revision, ...(cleanup.warning ? { contentImageWarning: cleanup.warning } : {}), ...(migratedImages ? { migratedImages } : {}) };
+function recordModerationChanges(req, kind, changes, scope) {
+  req.__audit.changes = changes;
+  req.__audit.objectType = kind === "reviews" ? "review" : "feedback";
+  req.__audit.summary = { scope, changedItems: changes.length };
+  prepareChangeAudit(req);
+}
+
+async function updateModerationDocument(kind, req, body, { legacy = false } = {}) {
+  const service = moderationService(kind);
+  let outcome;
+  const result = await contentPublishService.publish(kind === "reviews" ? reviewsPath : feedbackPath, null, {
+    normalize: kind === "reviews" ? normalizeReviewData : normalizeFeedbackData,
+    mutate: async (current) => {
+      outcome = legacy ? service.adaptLegacyDocument(current, body, req.__adminAccount.username)
+        : service.patchSettingsDocument(current, body, req.__adminAccount.username);
+      recordModerationChanges(req, kind, outcome.result.changes || [], outcome.scope);
+      return outcome.document;
+    },
+    shouldBuild: () => kind === "feedback" && outcome.scope === "settings",
+  });
+  publicApiService.invalidateSnapshot();
+  if (legacy) return { ...await service.read(), ...(result.warnings ? { warnings: result.warnings } : {}) };
+  return { ...outcome.result, ...(result.warnings ? { warnings: result.warnings } : {}) };
 }
 
 async function uploadFileToR2({ course, section, filename, stream, mimeType, abortSignal }) {
@@ -2470,17 +2467,10 @@ async function cleanupOrphanContentImages(owner, oldObject, nextObject) {
   }
 }
 
-/** 一次性迁移：反馈公开语义变更（open→approved），举报类一律非公开。 */
-function migrateFeedbackForModeration() {
-  jsonStore.update(feedbackPath, (current) => {
-    let changed = false;
-    for (const item of current.items || []) {
-      if (item.type === "report" || item.type === "complaint") { item.status = item.status === "open" ? "pending" : item.status; changed = true; continue; }
-      if (item.status === "open") { item.status = "approved"; changed = true; }
-    }
-    if (changed) current.updated = today();
-    return current;
-  }).catch(() => {});
+/** Startup completes the idempotent authority migration before any public read. */
+async function migrateModerationAtStartup() {
+  await jsonStore.update(feedbackPath, normalizeFeedbackData);
+  await jsonStore.update(reviewsPath, normalizeReviewData);
 }
 
 async function initializeRuntimeData() {
@@ -2507,7 +2497,7 @@ await manifestService.recoverStartup();
 await contentPublishService.recoverStartup();
 await initializeRuntimeData();
 
-migrateFeedbackForModeration();
+await migrateModerationAtStartup();
 
 const server = createServer(async (req, res) => {
   let url;
@@ -2542,6 +2532,10 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith("/feedback-api/")) {
       if (req.method === "GET" && url.pathname === "/feedback-api/feedback") {
         json(res, 200, { ok: true, ...visibleFeedback() });
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/feedback-api/report") {
+        await handleFeedbackSubmit(req, res, { reportOnly: true });
         return;
       }
       if (req.method === "POST" && url.pathname === "/feedback-api/submit") {
@@ -2984,28 +2978,57 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/admin-api/feedback") {
       if (!requirePermission(req, account, "content.read", res)) return;
-      json(res, 200, { ok: true, ...await readPublishedContent(feedbackPath, normalizeFeedbackData) });
+      json(res, 200, { ok: true, ...await moderationService("feedback").read() });
       return;
     }
-
     if (req.method === "POST" && url.pathname === "/admin-api/feedback") {
       if (!requirePermission(req, account, "content.moderate", res)) return;
-      const body = await readBody(req);
-      const before = readFeedback();
-      const incoming = stampContentActor(body.data || {}, before, "items", account.username);
-      const privateIds = new Set(before.items.filter(item => item.private === true).map(item => item.id));
-      for (const item of incoming.items) if (privateIds.has(item.id)) item.private = true;
-      req.__audit.changes = contentChanges(before, normalizeFeedbackData(incoming), "items");
-      req.__audit.objectType = "feedback";
-      prepareChangeAudit(req);
-      const result = await publishContent(feedbackPath, incoming, body.expectedRevision, normalizeFeedbackData);
-      json(res, result.ok ? 200 : result.statusCode || 400, result);
+      json(res, 200, { ok: true, ...await updateModerationDocument("feedback", req, await readBody(req), { legacy: true }) });
+      return;
+    }
+    if (req.method === "PATCH" && url.pathname === "/admin-api/feedback/settings") {
+      if (!requirePermission(req, account, "content.moderate", res)) return;
+      json(res, 200, { ok: true, ...await updateModerationDocument("feedback", req, await readBody(req)) });
+      return;
+    }
+    // GET/PATCH /admin-api/feedback/:id
+    const feedbackItemRoute = url.pathname.match(/^\/admin-api\/feedback\/([^/]+)$/);
+    if (feedbackItemRoute && (req.method === "GET" || req.method === "PATCH")) {
+      if (!requirePermission(req, account, req.method === "GET" ? "content.read" : "content.moderate", res)) return;
+      const service = moderationService("feedback", req);
+      const id = decodePathPart(feedbackItemRoute[1]);
+      req.__audit.target = `feedback:${id}`;
+      const result = req.method === "GET" ? await service.get(id) : await service.patchItem(id, await readBody(req), account.username);
+      if (req.method === "PATCH") publicApiService.invalidateSnapshot();
+      json(res, 200, { ok: true, ...result });
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/admin-api/reviews") {
       if (!requirePermission(req, account, "content.read", res)) return;
-      json(res, 200, { ok: true, ...await readReviewStore() });
+      json(res, 200, { ok: true, ...await moderationService("reviews").read() });
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/admin-api/reviews") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      json(res, 200, { ok: true, ...await updateModerationDocument("reviews", req, await readBody(req), { legacy: true }) });
+      return;
+    }
+    if (req.method === "PATCH" && url.pathname === "/admin-api/reviews/settings") {
+      if (!requirePermission(req, account, "content.edit", res)) return;
+      json(res, 200, { ok: true, ...await updateModerationDocument("reviews", req, await readBody(req)) });
+      return;
+    }
+    // GET/PATCH /admin-api/reviews/:id
+    const reviewsItemRoute = url.pathname.match(/^\/admin-api\/reviews\/([^/]+)$/);
+    if (reviewsItemRoute && (req.method === "GET" || req.method === "PATCH")) {
+      if (!requirePermission(req, account, req.method === "GET" ? "content.read" : "content.edit", res)) return;
+      const service = moderationService("reviews", req);
+      const id = decodePathPart(reviewsItemRoute[1]);
+      req.__audit.target = `review:${id}`;
+      const result = req.method === "GET" ? await service.get(id) : await service.patchItem(id, await readBody(req), account.username);
+      if (req.method === "PATCH") publicApiService.invalidateSnapshot();
+      json(res, 200, { ok: true, ...result });
       return;
     }
 
@@ -3058,18 +3081,6 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "POST" && url.pathname === "/admin-api/reviews") {
-      if (!requirePermission(req, account, "content.edit", res)) return;
-      const body = await readBody(req);
-      const before = readReviews();
-      const incoming = stampContentActor(body.data || {}, before, "reviews", account.username);
-      req.__audit.changes = contentChanges(before, incoming, "reviews");
-      req.__audit.objectType = "review";
-      prepareChangeAudit(req);
-      json(res, 200, { ok: true, ...await updateReviewStore(incoming, body.expectedRevision) });
-      return;
-    }
-
     if (req.method === "GET" && url.pathname === "/admin-api/session") {
       const reviewData = readReviews();
       const feedbackData = readFeedback();
@@ -3079,7 +3090,7 @@ const server = createServer(async (req, res) => {
         mustChangePassword: account.mustChangePassword,
         pendingReviews: (reviewData.reviews || []).filter((review) => String(review.status || "pending") === "pending" && !review.hidden).length,
         logHealth: { user: securityLogStore.writer.health(), admin: accountsStore.writer.health(), law: lawLogStore.writer.health() },
-        openFeedback: (feedbackData.items || []).filter((item) => !item.hidden && String(item.status || "open") === "open").length,
+        openFeedback: (feedbackData.items || []).filter((item) => !item.hidden && ["open", "processing"].includes(item.handlingStatus || "open")).length,
       } });
       return;
     }
@@ -3427,7 +3438,10 @@ const server = createServer(async (req, res) => {
       json(res, statusCode, {
         ok: false,
         error: statusCode < 500 || authenticatedAdmin ? error.message : "Internal server error.",
+        code: error.code,
         currentRevision: error.currentRevision,
+        ...(authenticatedAdmin ? { currentItem: error.currentItem, currentItemRevision: error.currentItemRevision,
+          currentSettings: error.currentSettings, currentSettingsRevision: error.currentSettingsRevision } : {}),
       });
     } catch (logError) {
       // The failure response must not recurse through an unavailable audit sink.

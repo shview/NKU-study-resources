@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ReviewSubmissionService } from "../server/review-submission-service.mjs";
+import { normalizeReviewsDocument } from "../server/moderation-model.mjs";
 
 function fixture() {
-  const data = {
+  const data = normalizeReviewsDocument({
     rules: { submissionOpen: true, moderationRequired: true, minLength: 12 },
     reviews: [
       { id: "review-1", courseTitle: "中文课程", teacher: "张老师", rating: 5, content: "正文", status: "approved", hidden: false },
       { id: "review-2", courseTitle: "历史课程", teacher: "李老师", rating: 4, content: "正文", status: "approved", hidden: false },
     ],
-  };
+  }, { nowIso: "2026-10-04T00:00:00.000Z" });
   const store = {
     async update(path, mutator) {
       return mutator(data);

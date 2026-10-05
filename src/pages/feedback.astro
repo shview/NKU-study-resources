@@ -7,13 +7,17 @@ const feedbackData = readBuildData("feedback.json");
 ---
 
 <Layout title="反馈" eyebrow="Feedback">
-  <section class="content">
+  <section class="content feedback-page">
     <div class="panel">
       <div class="panel-header review-head">
         <h2 id="feedback-title">{feedbackData.title ?? "问题与建议"}</h2>
-        <button class="button" id="open-feedback-form" type="button">提交反馈</button>
+        <div class="header-actions">
+          <a class="button secondary" href="/report/">私密投诉举报</a>
+          <button class="button" id="open-feedback-form" type="button">提交反馈</button>
+        </div>
       </div>
       <div class="panel-body">
+        <p class="muted">这里展示已获准公开的问题与建议。投诉举报请使用<a href="/report/">可匿名的私密入口</a>。</p>
         <div
           class="review-announcement markdown-body"
           id="feedback-announcement"
@@ -21,7 +25,7 @@ const feedbackData = readBuildData("feedback.json");
           set:html={markdownToHtml(feedbackData.announcement ?? "")}
         />
         <div class="filter-row" style="margin-bottom: 14px; align-items: center; gap: 10px;">
-          <input class="searchbar" id="feedback-search" type="text" placeholder="搜索反馈标题、内容或管理员回复" style="flex: 1; min-width: 220px;" />
+          <input class="searchbar" id="feedback-search" type="text" placeholder="搜索反馈标题、内容或管理员回复" style="flex: 1; min-width: 0;" />
           <span class="muted" id="feedback-search-clear" hidden style="cursor: pointer;">清除</span>
         </div>
         <div class="filter-row" id="feedback-status-filter" style="margin-bottom: 14px; flex-wrap: wrap; gap: 8px;"></div>
@@ -37,6 +41,7 @@ const feedbackData = readBuildData("feedback.json");
         <h2>提交反馈</h2>
       </div>
       <div class="panel-body">
+        <p class="field-hint">普通反馈需登录、手机号已认证且账号未封禁；提交后由管理员审核公开。认证需要微信小程序手机号授权。<button class="feedback-login-link" id="feedback-open-login" type="button">登录 / 注册</button>，或<a href="/me/">查看账号状态</a>。投诉举报可<a href="/report/">直接私密提交</a>。</p>
         <form class="review-form" id="feedback-form">
           <label class="admin-field">
             <span>类型</span>
@@ -48,35 +53,53 @@ const feedbackData = readBuildData("feedback.json");
           </label>
           <label class="admin-field">
             <span>标题</span>
-            <input name="title" placeholder="简短说明问题或建议" autocomplete="off" required />
+            <input name="title" maxlength="120" placeholder="简短说明问题或建议" autocomplete="off" required />
             <small class="field-hint">建议 5-40 字，便于管理员快速判断。</small>
           </label>
           <div class="admin-field">
             <span>内容</span>
+            <div id="feedback-basic-panel">
+              <textarea id="feedback-basic-content" aria-label="反馈内容" maxlength="2000" rows="7" placeholder="请描述出现位置、复现方式或希望改进的地方"></textarea>
+              <small class="field-hint" id="feedback-editor-fallback-hint">可直接输入文本，Markdown 编辑器不可用时仍可提交。</small>
+            </div>
             <div class="markdown-editor user-markdown-editor" id="feedback-content-editor"></div>
+            <button class="button secondary" id="feedback-toggle-editor" type="button" hidden>使用普通文本编辑</button>
             <input type="hidden" name="content" id="feedback-content-value" />
-            <small class="field-hint">最短允许 5 字；公开显示前管理员可修改状态或隐藏。</small>
+            <small class="field-hint" id="feedback-content-hint">最短允许 5 字，最多 2000 字；审核通过后才会公开。</small>
           </div>
           <label class="admin-field">
             <span>联系方式（可选）</span>
-            <input name="contact" placeholder="邮箱、QQ 或其他联系方式" autocomplete="off" />
+            <input name="contact" maxlength="120" placeholder="邮箱、QQ 或其他联系方式" autocomplete="off" />
             <small class="field-hint">只供管理员联系核对，公开页不会展示联系方式。</small>
           </label>
           <input class="review-honeypot" name="website" tabindex="-1" autocomplete="off" />
           <div class="filter-row">
-            <button class="button" type="submit">提交</button>
+            <button class="button" id="feedback-submit" type="submit">提交反馈</button>
             <button class="button secondary" id="close-feedback-form" type="button">取消</button>
-            <span class="muted" id="feedback-submit-status"></span>
+            <span class="muted" id="feedback-submit-status" role="status" aria-live="polite"></span>
           </div>
         </form>
       </div>
     </div>
   </section>
 
+  <style is:global>
+    .feedback-page .review-head, .feedback-page .filter-row, .feedback-page .pagination { flex-wrap: wrap; }
+    .feedback-page .admin-field, .feedback-page .review-form, .feedback-page .markdown-editor { min-width: 0; max-width: 100%; }
+    .feedback-page .review-card, .feedback-page .markdown-body, .feedback-page #feedback-submit-status { overflow-wrap: anywhere; }
+    .feedback-page .feedback-login-link { padding: 0; border: 0; background: none; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
+    .feedback-page .feedback-load-error { display: grid; gap: 10px; justify-items: start; }
+    .feedback-page .vditor-toolbar { flex-wrap: wrap; }
+    .feedback-page .vditor-reset { overflow-wrap: anywhere; }
+    .feedback-page .vditor-reset pre { max-width: 100%; overflow-x: auto; }
+    @media (max-width: 420px) { .feedback-page .header-actions { width: 100%; flex-wrap: wrap; } .feedback-page .header-actions .button { flex: 1 1 100%; } }
+  </style>
+
   <script>
     import Vditor from "vditor";
     import MarkdownIt from "markdown-it";
     import { normalizeMarkdown } from "../lib/markdown";
+    import { requestUserJson } from "../lib/user-submissions-controller.js";
 
     const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
     const pageSize = 10;
@@ -89,8 +112,14 @@ const feedbackData = readBuildData("feedback.json");
     const panel = document.querySelector("#feedback-submit-panel");
     const form = document.querySelector("#feedback-form");
     const statusEl = document.querySelector("#feedback-submit-status");
-    const contentEditorNode = document.querySelector("#feedback-content-editor");
-    const contentValue = document.querySelector("#feedback-content-value");
+    const contentEditorNode = document.querySelector<HTMLElement>("#feedback-content-editor");
+    const contentValue = document.querySelector<HTMLInputElement>("#feedback-content-value");
+    const basicEditor = document.querySelector<HTMLTextAreaElement>("#feedback-basic-content");
+    const basicPanel = document.querySelector<HTMLElement>("#feedback-basic-panel");
+    const toggleEditorButton = document.querySelector<HTMLButtonElement>("#feedback-toggle-editor");
+    let advancedEditorVisible = false;
+    let saving = false;
+    let loadFailed = false;
     let feedback = [];
     let visibleFeedbackItems = [];
     let currentPage = 1;
@@ -99,6 +128,7 @@ const feedbackData = readBuildData("feedback.json");
     const statusFilterOptions = [
       { value: "all", label: "全部" },
       { value: "open", label: "待处理" },
+      { value: "processing", label: "处理中" },
       { value: "completed", label: "已完成" },
       { value: "rejected", label: "不予完成" },
       { value: "parked", label: "搁置" },
@@ -109,10 +139,16 @@ const feedbackData = readBuildData("feedback.json");
       const shifted = new Date(date.getTime() + 8 * 60 * 60 * 1000);
       return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
     };
-    let contentEditor = null;
+    let contentEditor: {
+      getValue(): string;
+      setValue(value: string): void;
+      disabled(): void;
+      enable(): void;
+    } | null = null;
     let editorSettings = null;
 
-    const statusLabel = { open: "开放", completed: "已完成", rejected: "不予完成", parked: "搁置" };
+    const statusLabel: Record<string, string> = { open: "待处理", processing: "处理中", pending: "待处理", completed: "已完成", rejected: "不予完成", parked: "搁置" };
+    const handlingStatus = (item: { handlingStatus?: string; status?: string }) => item.handlingStatus || (item.status === "pending" ? "open" : item.status) || "open";
     const typeLabel = { bug: "Bug", feature: "功能改进", content: "内容问题" };
     const escapeHtml = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
     const markdownToHtml = (value = "") => markdown.render(normalizeMarkdown(value));
@@ -136,8 +172,7 @@ const feedbackData = readBuildData("feedback.json");
 
     async function loadEditorSettings() {
       try {
-        const response = await fetch("/editor-settings");
-        const data = await response.json();
+        const data = await requestUserJson("/editor-settings");
         editorSettings = data.data || null;
       } catch {
         editorSettings = null;
@@ -179,8 +214,17 @@ const feedbackData = readBuildData("feedback.json");
     }
 
     function mountContentEditor() {
-      if (!contentEditorNode) return;
-      contentEditor = new Vditor(contentEditorNode, {
+      if (!contentEditorNode || contentEditor) return;
+      const fallback = () => {
+        if (advancedEditorVisible) return;
+        contentEditorNode.hidden = true;
+        if (basicPanel) basicPanel.hidden = false;
+        const hint = document.querySelector("#feedback-editor-fallback-hint");
+        if (hint) hint.textContent = "Markdown 编辑器未就绪，可继续使用普通文本编辑并提交。";
+      };
+      const fallbackTimer = window.setTimeout(fallback, 8000);
+      try {
+        contentEditor = new Vditor(contentEditorNode, {
         mode: "sv",
         value: "",
         height: 220,
@@ -192,17 +236,45 @@ const feedbackData = readBuildData("feedback.json");
           actions: ["desktop", "tablet", "mobile"],
           markdown: {
             breaks: true,
-          },
+          } as IMarkdownConfig & { breaks: boolean },
         },
         after() {
+          window.clearTimeout(fallbackTimer);
+          const value = String(basicEditor?.value || contentValue?.value || "");
+          if (value) contentEditor?.setValue?.(value);
+          advancedEditorVisible = true;
+          contentEditorNode.hidden = false;
+          if (basicPanel) basicPanel.hidden = true;
+          if (toggleEditorButton) toggleEditorButton.hidden = false;
           enhanceVditorToolbar(contentEditorNode);
+          contentEditorNode.querySelector("textarea")?.setAttribute("aria-label", "反馈内容");
+          if (saving) contentEditor?.disabled?.();
           if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
         },
         input(value) {
+          if (!advancedEditorVisible) return;
           if (contentValue) contentValue.value = value;
+          if (basicEditor) basicEditor.value = value;
         },
-      });
+        });
+      } catch {
+        window.clearTimeout(fallbackTimer);
+        fallback();
+      }
     }
+
+    basicEditor?.addEventListener("input", () => { if (contentValue) contentValue.value = basicEditor.value; });
+    toggleEditorButton?.addEventListener("click", () => {
+      if (advancedEditorVisible) {
+        if (basicEditor) basicEditor.value = contentEditor?.getValue?.() || String(contentValue?.value || "");
+      } else {
+        contentEditor?.setValue?.(basicEditor?.value || "");
+      }
+      advancedEditorVisible = !advancedEditorVisible;
+      if (contentEditorNode) contentEditorNode.hidden = !advancedEditorVisible;
+      if (basicPanel) basicPanel.hidden = advancedEditorVisible;
+      toggleEditorButton.textContent = advancedEditorVisible ? "使用普通文本编辑" : "使用 Markdown 编辑器";
+    });
 
     function renderPagination(total) {
       const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -231,7 +303,7 @@ const feedbackData = readBuildData("feedback.json");
     function applyFeedbackFilters() {
       const keyword = searchKeyword.trim().toLowerCase();
       visibleFeedbackItems = feedback.filter((item) => {
-        if (filterStatus !== "all" && item.status !== filterStatus) return false;
+        if (filterStatus !== "all" && handlingStatus(item) !== filterStatus) return false;
         if (!keyword) return true;
         return [item.title, item.content, item.reply].filter(Boolean).join(" ").toLowerCase().includes(keyword);
       });
@@ -259,6 +331,7 @@ const feedbackData = readBuildData("feedback.json");
     }
 
     function renderFeedback() {
+      if (loadFailed) return;
       if (!visibleFeedbackItems.length) {
         list.innerHTML = `<p class="empty">${searchKeyword.trim() ? `没有匹配「${escapeHtml(searchKeyword.trim())}」的反馈。` : "还没有公开反馈。"}</p>`;
         pagination.hidden = true;
@@ -270,7 +343,7 @@ const feedbackData = readBuildData("feedback.json");
         <article class="review-card">
           <div class="course-meta">
             <span class="pill">${escapeHtml(typeLabel[item.type] || item.type || "反馈")}</span>
-            <span class="pill">${escapeHtml(statusLabel[item.status] || item.status || "开放")}</span>
+            <span class="pill">${escapeHtml(statusLabel[handlingStatus(item)] || handlingStatus(item))}</span>
           </div>
           <h3 style="margin: 12px 0 0;">${escapeHtml(item.title)}</h3>
           <div class="markdown-body">${markdownToHtml(item.content)}</div>
@@ -287,8 +360,8 @@ const feedbackData = readBuildData("feedback.json");
 
     async function loadFeedback() {
       try {
-        const response = await fetch("/feedback-api/feedback");
-        const data = await response.json();
+        const data = await requestUserJson("/feedback-api/feedback");
+        if (data.ok !== true || !Array.isArray(data.items)) throw new Error("反馈列表返回结果不完整。请重试。");
         if (titleEl) titleEl.textContent = data.title || "问题与建议";
         const announcement = data.announcement || "";
         if (announcementEl) {
@@ -296,8 +369,17 @@ const feedbackData = readBuildData("feedback.json");
           announcementEl.hidden = !announcement;
         }
         feedback = data.items || [];
-      } catch {
-        feedback = [];
+        loadFailed = false;
+        const minLength = Number(data.rules?.minLength || 5);
+        const contentHint = document.querySelector("#feedback-content-hint");
+        if (contentHint) contentHint.textContent = `最短允许 ${minLength} 字，最多 2000 字；审核通过后才会公开。`;
+      } catch (error) {
+        loadFailed = true;
+        const message = error instanceof Error ? error.message : "";
+        if (list) list.innerHTML = `<div class="feedback-load-error"><p class="empty">${escapeHtml(message || "反馈加载失败，请重试。")}</p><button class="button secondary" id="feedback-retry" type="button">重试加载</button></div>`;
+        if (pagination instanceof HTMLElement) pagination.hidden = true;
+        document.querySelector("#feedback-retry")?.addEventListener("click", () => loadFeedback());
+        return;
       }
       applyFeedbackFilters();
       renderStatusFilter();
@@ -325,17 +407,24 @@ const feedbackData = readBuildData("feedback.json");
       panel.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     closeButton?.addEventListener("click", () => { panel.hidden = true; });
+    document.querySelector("#feedback-open-login")?.addEventListener("click", () => document.querySelector<HTMLDialogElement>("#auth-modal")?.showModal());
     form?.addEventListener("submit", async (event) => {
       event.preventDefault();
-      statusEl.textContent = "提交中...";
+      if (saving) return;
       const data = new FormData(form);
-      const content = contentEditor?.getValue?.() || String(contentValue?.value || data.get("content") || "").trim();
+      const content = advancedEditorVisible ? contentEditor?.getValue?.() || String(contentValue?.value || "") : String(basicEditor?.value || contentValue?.value || data.get("content") || "");
       if (!content.trim()) {
         statusEl.textContent = "请先填写反馈内容。";
         return;
       }
+      if (content.length > 2000) { if (statusEl) statusEl.textContent = "反馈内容最多 2000 字，请缩短后提交。输入已保留。"; return; }
+      saving = true;
+      const lockedFields = Array.from(form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLButtonElement>("input,textarea,select,button")).map((field) => ({ field, disabled: field.disabled }));
+      lockedFields.forEach(({ field }) => { field.disabled = true; });
+      if (advancedEditorVisible) contentEditor?.disabled?.();
+      statusEl.textContent = "提交中…";
       try {
-        const response = await fetch("/feedback-api/submit", {
+        const result = await requestUserJson("/feedback-api/submit", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -346,15 +435,19 @@ const feedbackData = readBuildData("feedback.json");
             website: data.get("website"),
           }),
         });
-        const result = await response.json();
-        if (!response.ok || result.ok === false) throw new Error(result.error || "提交失败");
+        if (result.ok !== true || result.accepted !== true) throw new Error("服务器尚未确认保存，输入已保留。请稍后重试。");
         form.reset();
-        contentEditor?.setValue?.("");
+        if (advancedEditorVisible) contentEditor?.setValue?.("");
         if (contentValue) contentValue.value = "";
-        statusEl.textContent = "已提交。";
+        if (basicEditor) basicEditor.value = "";
+        statusEl.textContent = "已提交，等待公开审核。可在我的反馈查看处理状态和管理员回复。";
         await loadFeedback();
       } catch (error) {
         statusEl.textContent = error.message;
+      } finally {
+        saving = false;
+        lockedFields.forEach(({ field, disabled }) => { field.disabled = disabled; });
+        if (advancedEditorVisible) contentEditor?.enable?.();
       }
     });
 

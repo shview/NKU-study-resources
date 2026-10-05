@@ -1,0 +1,140 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="投诉举报" eyebrow="Private Report">
+  <section class="content report-page">
+    <article class="panel">
+      <div class="panel-header split-header">
+        <h2>投诉举报</h2>
+        <a class="button secondary" href="/feedback/">问题与建议</a>
+      </div>
+      <div class="panel-body">
+        <div class="report-notice">
+          <strong>可匿名提交，始终不公开</strong>
+          <p>标题、原因、关联对象和联系方式只供管理员处理，以及提交时已关联的本人账号查看。无需登录或手机号认证即可提交。</p>
+          <p>如需在「我的反馈」查看处理状态和管理员回复，请先<a href="/me/">登录账号</a>再填写。匿名提交不会自动关联以后登录的账号；联系方式仅用于管理员后续核对，不代表已经发出通知。</p>
+        </div>
+        <form class="review-form report-form" id="report-form">
+          <label class="admin-field">
+            <span>标题 <span class="muted">（必填）</span></span>
+            <input name="title" maxlength="120" required autocomplete="off" placeholder="简短说明投诉或举报事项" />
+            <small class="field-hint">最多 120 字。</small>
+          </label>
+          <label class="admin-field">
+            <span>投诉举报原因 <span class="muted">（必填）</span></span>
+            <textarea name="content" rows="8" maxlength="2000" required placeholder="请说明相关内容、发生位置、具体原因和希望核对的事实。"></textarea>
+            <small class="field-hint">最多 2000 字。为核对问题需要引用联系方式或违规原文时，可在此提供。</small>
+          </label>
+          <label class="admin-field">
+            <span>关联页面链接 <span class="muted">（可选）</span></span>
+            <input name="reportUrl" maxlength="300" inputmode="url" autocomplete="off" placeholder="相关页面的完整链接或站内路径" />
+          </label>
+          <label class="admin-field">
+            <span>投诉举报对象或记录 ID <span class="muted">（可选）</span></span>
+            <input name="reportTarget" maxlength="120" autocomplete="off" placeholder="课程评价、反馈或其他相关对象" />
+          </label>
+          <label class="admin-field">
+            <span>资源引用 <span class="muted">（可选）</span></span>
+            <input name="resourceRef" maxlength="200" autocomplete="off" placeholder="相关资源的名称或 ID" />
+          </label>
+          <label class="admin-field">
+            <span>联系方式 <span class="muted">（可选）</span></span>
+            <input name="contact" maxlength="120" autocomplete="off" placeholder="邮箱、QQ 或其他便于核对的联系方式" />
+            <small class="field-hint">仅用于管理员后续核对，不在公共页面展示。</small>
+          </label>
+          <input class="review-honeypot" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <div class="report-actions">
+            <button class="button" id="report-submit" type="submit">提交私密投诉举报</button>
+            <a class="button secondary" href="/privacy/">隐私政策</a>
+          </div>
+          <p id="report-submit-status" class="report-status" role="status" aria-live="polite"></p>
+        </form>
+        <div class="report-receipt" id="report-receipt" hidden role="status" aria-live="polite">
+          <h3>已受理，始终不公开</h3>
+          <p id="report-reply-hint"></p>
+          <p class="field-hint">受理回执：<code id="report-receipt-id"></code></p>
+          <p class="field-hint">回执用于标记本次受理，不提供凭回执查询私密内容的功能。</p>
+          <a class="button secondary" id="report-my-feedback" href="/me/" hidden>查看我的反馈</a>
+        </div>
+      </div>
+    </article>
+  </section>
+  <style>
+    .report-page { max-width: 850px; margin-inline: auto; }
+    .report-notice, .report-receipt { padding: 16px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 20px; }
+    .report-notice p, .report-receipt p { margin: 8px 0 0; line-height: 1.7; }
+    .report-receipt { margin: 20px 0 0; }
+    .report-receipt h3 { margin: 0; }
+    .report-receipt .button { margin-top: 14px; }
+    .report-form, .report-form label, .report-form input, .report-form textarea { min-width: 0; max-width: 100%; }
+    .report-form textarea { resize: vertical; }
+    .report-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .report-status { margin: 0; min-height: 1.5em; color: var(--muted); }
+    .report-status[data-error="true"] { color: #b91c1c; }
+    .report-page p, .report-page code { overflow-wrap: anywhere; }
+    @media (max-width: 420px) { .report-actions .button { width: 100%; } }
+  </style>
+  <script>
+    import { reportReceipt, requestUserJson } from "../lib/user-submissions-controller.js";
+
+    const form = document.querySelector<HTMLFormElement>("#report-form")!;
+    const status = document.querySelector<HTMLElement>("#report-submit-status")!;
+    const receiptPanel = document.querySelector<HTMLElement>("#report-receipt")!;
+    let saving = false;
+    let dirty = false;
+
+    form.addEventListener("input", () => { dirty = true; });
+    window.addEventListener("beforeunload", (event) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+    for (const name of ["reportUrl", "reportTarget", "resourceRef"]) {
+      const value = new URLSearchParams(window.location.search).get(name);
+      const field = form.elements.namedItem(name) as HTMLInputElement;
+      if (value && value.length <= field.maxLength) field.value = value;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (saving) return;
+      const fields = new FormData(form);
+      const payload = Object.fromEntries(["title", "content", "contact", "reportUrl", "reportTarget", "resourceRef", "website"].map((name) => [name, String(fields.get(name) || "").trim()]));
+      if (!payload.title || !payload.content) {
+        status.textContent = "请填写标题和投诉举报原因。";
+        status.dataset.error = "true";
+        return;
+      }
+      saving = true;
+      const lockedFields = Array.from(form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>("input,textarea,button")).map((field) => ({ field, disabled: field.disabled }));
+      lockedFields.forEach(({ field }) => { field.disabled = true; });
+      status.dataset.error = "false";
+      status.textContent = "正在提交，请等待受理结果…";
+      receiptPanel.hidden = true;
+      try {
+        const result = await requestUserJson("/feedback-api/report", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const receipt = reportReceipt(result);
+        document.querySelector("#report-receipt-id")!.textContent = receipt.receiptId;
+        document.querySelector("#report-reply-hint")!.textContent = receipt.replyAvailable
+          ? "本次提交已关联当前账号，可在「我的反馈」查看处理状态和管理员已保存的回复。"
+          : "本次提交未关联账号，无法在「我的反馈」查看站内回复。可选联系方式仅用于管理员后续核对。";
+        (document.querySelector("#report-my-feedback") as HTMLAnchorElement).hidden = !receipt.replyAvailable;
+        receiptPanel.hidden = false;
+        status.textContent = "";
+        form.reset();
+        dirty = false;
+      } catch (error) {
+        status.dataset.error = "true";
+        status.textContent = `${error instanceof Error ? error.message : "提交失败，请稍后重试。"} 输入已保留。`;
+      } finally {
+        saving = false;
+        lockedFields.forEach(({ field, disabled }) => { field.disabled = disabled; });
+      }
+    });
+  </script>
+</Layout>
