@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { strictR2BasePath, strictR2Path } from "./r2-mutation-plan.mjs";
+import { isReviewPublicEligible } from "./moderation-model.mjs";
 
-const APPROVED_STATUSES = new Set(["approved", "通过"]);
 const BLOCKED_META_TAG = "无固定年级";
 
 function text(value, max = 2000) {
@@ -24,7 +24,7 @@ export function isVisibleCourseMetaTag(manifest, course, value) {
 }
 
 function approvedReview(review) {
-  return APPROVED_STATUSES.has(text(review?.status, 20)) && review?.hidden !== true;
+  return isReviewPublicEligible(review);
 }
 
 export function normalizeReviewKeyPart(value) {

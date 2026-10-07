@@ -95,7 +95,8 @@ test("S2 user events: real HTTP outcomes, exact actors/targets, one event and no
       const { row } = await request(route, { body, cookie: a.cookie, action, userId: aId, result: "pending" });
       assert.ok(row.target_id);
       const saved = (await readData(file))[key].find((item) => item.id === row.target_id);
-      assert.equal(saved.user_id, aId); assert.equal(saved.status, "pending");
+      assert.equal(saved.user_id, aId); assert.equal(saved.publicationState, "pending");
+      if (file === "feedback") assert.equal(saved.handlingStatus, "open");
     }
   });
   await t.test("private complaints omit report URL, target, title and body from logs", async () => {

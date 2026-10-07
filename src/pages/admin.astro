@@ -1,4 +1,4 @@
-﻿---
+---
 import Layout from "../layouts/Layout.astro";
 import "vditor/dist/index.css";
 ---
@@ -33,6 +33,7 @@ import "vditor/dist/index.css";
         <p class="muted">当前使用初始密码，请在下方「修改我的密码」中设置新密码后继续。</p>
       </div>
       <aside class="admin-nav" id="admin-nav" aria-label="管理导航"></aside>
+      <p id="moderation-drafts-notice" class="field-hint" role="status" hidden></p>
 
       <div id="resource-admin-panel">
         <div class="panel admin-toolbar">
@@ -123,57 +124,39 @@ import "vditor/dist/index.css";
           <div class="panel-body">
             <div class="filter-row">
               <button class="button" id="save-reviews" type="button">保存评价设置</button>
+              <button class="button secondary" id="cancel-review-settings" type="button">取消设置草稿</button>
               <button class="button secondary clean-images" type="button" data-owner="reviews">清理未引用图片</button>
-              <button class="button secondary" id="reload-reviews" type="button">重新加载</button>
+              <button class="button secondary" id="reload-reviews" type="button">重新加载（保留草稿）</button>
               <button class="button secondary" id="logout-reviews" type="button">退出</button>
               <span class="muted" id="review-admin-status"></span>
             </div>
+            <div id="review-settings-conflict" class="moderation-conflict" hidden></div>
               <div class="review-admin-layout">
                 <details class="card admin-collapsible-card" open>
                   <summary>审核规则框架</summary>
-                  <div class="admin-form" id="review-rules-editor" style="margin-top: 14px;"></div>
+              <div class="admin-form" id="review-rules-editor" style="margin-top: 14px;"></div>
+              <p class="moderation-provenance muted" id="review-settings-provenance"></p>
                 </details>
                 <div class="card">
                   <h3>评论内容</h3>
                   <div class="admin-moderation-grid" style="margin-top: 14px;">
                     <aside class="admin-moderation-sidebar">
-                      <input class="searchbar" id="review-admin-sidebar-search" type="search" placeholder="筛选课程" autocomplete="off" />
+                      <input class="searchbar" id="review-admin-sidebar-search" type="search" aria-label="筛选评价课程" placeholder="筛选课程" autocomplete="off" />
                       <div class="admin-tree" id="review-admin-sidebar" style="margin-top: 10px;"></div>
                     </aside>
                     <div class="admin-moderation-main">
                       <div class="filter-row">
-                        <input class="searchbar" id="review-admin-search" type="search" placeholder="搜索评价内容" autocomplete="off" />
-                        <select class="searchbar" id="review-status-filter">
+                        <input class="searchbar" id="review-admin-search" type="search" aria-label="搜索评价内容" placeholder="搜索评价内容" autocomplete="off" />
+                        <select class="searchbar" id="review-status-filter" aria-label="筛选已保存的评价公开状态">
                           <option value="all">全部状态</option>
                           <option value="pending">待审</option>
                           <option value="approved">已通过</option>
                           <option value="hidden">已隐藏</option>
-                          <option value="visible">显示中</option>
+                          <option value="rejected">公开已拒绝</option>
+                          <option value="visible">公众可见</option>
                         </select>
                       </div>
-                      <div class="filter-row" id="review-batch-bar" style="margin-top: 12px;">
-                        <label class="perm-check"><input id="review-select-all" type="checkbox" /> 全选本页</label>
-                        <button class="button secondary" id="review-batch-approve" type="button">批量通过</button>
-                        <button class="button secondary" id="review-batch-hide" type="button">批量隐藏</button>
-                        <button class="button secondary" id="review-batch-merge" type="button">归并选中到…</button>
-                        <span class="muted" id="review-batch-status"></span>
-                      </div>
-                      <div class="admin-form" id="review-merge-panel" hidden style="margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px;">
-                        <label class="admin-field" style="flex:1;">
-                          <span>目标课程名（从课程库选择即可绑定到该课程）</span>
-                          <input id="review-merge-course" list="manifest-course-titles" placeholder="如：高等数学A（上）" autocomplete="off" />
-                        </label>
-                        <label class="admin-field" style="flex:1;">
-                          <span>目标老师</span>
-                          <input id="review-merge-teacher" list="review-teacher-options" placeholder="如：赵红梅" autocomplete="off" />
-                        </label>
-                        <small class="muted" style="grid-column: 1 / -1;">归并会把勾选评价的课程名和老师改成上面的目标值；目标已存在时会并入同一评价组。</small>
-                        <div class="filter-row" style="grid-column: 1 / -1;">
-                          <button class="button" id="review-merge-confirm" type="button">确认归并</button>
-                          <button class="button secondary" id="review-merge-cancel" type="button">取消</button>
-                          <span class="muted" id="review-merge-status"></span>
-                        </div>
-                      </div>
+                      <p class="field-hint">每条评价独立保存或取消。原文、课程、老师、评分和提交账号只读；批量处置与归并暂不提供。</p>
                       <details class="card admin-collapsible-card" style="margin-top: 14px;">
                         <summary>往目录池加课程（评价可选课程补充）</summary>
                         <div class="admin-form" style="margin-top: 14px;">
@@ -234,35 +217,35 @@ import "vditor/dist/index.css";
           </div>
           <div class="panel-body">
             <div class="filter-row">
-              <button class="button" id="save-feedback" type="button">保存反馈</button>
+              <button class="button" id="save-feedback" type="button">保存反馈设置</button>
+              <button class="button secondary" id="cancel-feedback-settings" type="button">取消设置草稿</button>
               <button class="button secondary clean-images" type="button" data-owner="feedback">清理未引用图片</button>
-              <button class="button secondary" id="reload-feedback" type="button">重新加载</button>
+              <button class="button secondary" id="reload-feedback" type="button">重新加载（保留草稿）</button>
               <span class="muted" id="feedback-admin-status"></span>
             </div>
+            <div id="feedback-settings-conflict" class="moderation-conflict" hidden></div>
             <details class="card admin-collapsible-card" open>
               <summary>反馈规则框架</summary>
               <div class="admin-form" id="feedback-settings-editor" style="margin-top: 14px;"></div>
               <div class="admin-form" id="feedback-rules-editor" style="margin-top: 14px;"></div>
+              <p class="moderation-provenance muted" id="feedback-settings-provenance"></p>
             </details>
             <div class="card" style="margin-top: 18px;">
               <h3>反馈内容</h3>
-              <input class="searchbar" id="feedback-admin-search" type="search" placeholder="搜索标题、内容或联系方式" autocomplete="off" />
-              <select class="searchbar" id="feedback-status-filter">
+              <input class="searchbar" id="feedback-admin-search" type="search" aria-label="搜索反馈标题、内容或联系方式" placeholder="搜索标题、内容或联系方式" autocomplete="off" />
+              <select class="searchbar" id="feedback-status-filter" aria-label="筛选已保存的反馈状态">
                 <option value="all">全部状态</option>
-                <option value="pending">待审核</option>
+                <option value="open">待处理</option>
                 <option value="processing">处理中</option>
-                <option value="approved">已公开</option>
+                <option value="public-approved">公开已批准</option>
+                <option value="public-pending">公开待审</option>
+                <option value="public-rejected">公开已拒绝</option>
                 <option value="completed">已完成</option>
                 <option value="rejected">驳回/不予完成</option>
                 <option value="parked">搁置</option>
                 <option value="hidden">已隐藏</option>
               </select>
-              <div class="filter-row" id="feedback-batch-bar" style="margin-top: 12px;">
-                <label class="perm-check"><input id="feedback-select-all" type="checkbox" /> 全选本页</label>
-                <button class="button secondary" id="feedback-batch-complete" type="button">批量标记完成</button>
-                <button class="button secondary" id="feedback-batch-hide" type="button">批量隐藏</button>
-                <span class="muted" id="feedback-batch-status"></span>
-              </div>
+              <p class="field-hint">每条反馈独立保存或取消。处理完成、添加回复均不会批准公开；批量处置暂不提供。</p>
               <div class="review-admin-list" id="feedback-admin-list" style="margin-top: 14px;"></div>
             </div>
           </div>
@@ -434,12 +417,12 @@ import "vditor/dist/index.css";
             <span class="muted" id="reports-admin-status"></span>
           </div>
           <div class="panel-body">
-            <p class="field-hint" style="margin: 0 0 12px;">违法有害信息举报与内容投诉。举报内容不公开展示；处置动作自动记录处理人与时间，并可封禁提交账号（封禁在「小程序用户」执行）。</p>
+            <p class="field-hint" style="margin: 0 0 12px;">违法有害信息举报与内容投诉始终私密。每条独立保存处置和回复，服务器记录处理人与时间；封禁提交账号在「小程序用户」执行。</p>
             <div class="filter-row" style="margin-bottom: 12px;">
-              <input class="searchbar" id="reports-search" type="search" placeholder="搜索举报标题/内容/对象" style="flex:1;min-width:220px;" />
-              <select class="searchbar" id="reports-status-filter" style="max-width: 140px;">
+              <input class="searchbar" id="reports-search" type="search" aria-label="搜索举报" placeholder="搜索举报标题/内容/对象" />
+              <select class="searchbar" id="reports-status-filter" aria-label="筛选已保存的举报处理进度" style="max-width: 140px;">
                 <option value="all">全部状态</option>
-                <option value="pending">待审核</option>
+                <option value="open">待处理</option>
                 <option value="processing">处理中</option>
                 <option value="completed">已处理</option>
                 <option value="rejected">不成立</option>
@@ -885,6 +868,94 @@ import "vditor/dist/index.css";
   <script>
     import Vditor from "vditor";
     import { r2SyncStatus, statusWithWarnings } from "../lib/admin-response-warnings.js";
+    import { createModerationDraftStore } from "../lib/moderation-drafts.js";
+
+    type ModerationKind = "reviews" | "feedback";
+    type ModerationRules = {
+      submissionOpen?: boolean;
+      moderationRequired?: boolean;
+      turnstileEnabled?: boolean;
+      hourlyLimit?: number;
+      dailyLimit?: number;
+      minLength?: number;
+      announcement?: string;
+      notes?: string;
+      submissionOptions?: { allowCustomCourse?: boolean; allowCustomTeacher?: boolean };
+      keywordFilter?: { enabled?: boolean; words?: string[] };
+      [key: string]: unknown;
+    };
+    type RulesProvenance = { hash: string; source: string; configuredAt?: string; configuredBy?: string | null };
+    type ModerationRecord = {
+      id: string;
+      type?: string;
+      title?: string;
+      content?: string;
+      contact?: string;
+      courseTitle?: string;
+      teacher?: string;
+      rating?: number;
+      user_id?: string | number | null;
+      private?: boolean;
+      hidden?: boolean;
+      handlingStatus?: string;
+      publicationState?: string;
+      publicationBlocked?: boolean;
+      publicationBlockedReason?: string;
+      publicEligible?: boolean;
+      decisionSource?: string;
+      reply?: string;
+      replyVisibility?: string;
+      reviewedBy?: string;
+      reviewedAt?: string;
+      createdAt?: string;
+      ruleHash?: string;
+      ruleSource?: string;
+      ruleConfiguredAt?: string;
+      ruleConfiguredBy?: string | null;
+      ruleSnapshot?: ModerationRules;
+      flagged?: string;
+      announcement?: string;
+      rules?: ModerationRules;
+      rulesProvenance?: RulesProvenance;
+      [key: string]: unknown;
+    };
+    type ModerationDocument = {
+      reviews?: ModerationRecord[];
+      items?: ModerationRecord[];
+      title?: string;
+      announcement?: string;
+      rules?: ModerationRules;
+      rulesProvenance?: RulesProvenance;
+      [key: string]: unknown;
+    };
+    type ModerationDraft = {
+      saved: ModerationRecord;
+      value: ModerationRecord;
+      changes: Record<string, unknown>;
+      revision: string;
+      dirty: boolean;
+      saving: boolean;
+      error: string;
+      message: string;
+      conflict: { item: ModerationRecord; revision: string } | null;
+    };
+    type ModerationDraftStore = Omit<ReturnType<typeof createModerationDraftStore>, "read" | "fail"> & {
+      read(id: string): ModerationDraft;
+      fail(id: string, error: unknown, conflict?: ModerationDraft["conflict"]): void;
+    };
+    type ModerationRequestError = Error & {
+      responseData?: {
+        currentItem?: ModerationRecord;
+        currentItemRevision?: string;
+        currentSettings?: ModerationRecord;
+        currentSettingsRevision?: string;
+      };
+    };
+    type ModerationGroup = { key: string; total: number; pending: number };
+    type MarkdownEditorNode = HTMLDivElement & {
+      __markdownOnInput?: (value: string) => void;
+      __markdownEditorRef?: Vditor;
+    };
 
     let state = null;
     let manifestRevision = "";
@@ -893,9 +964,19 @@ import "vditor/dist/index.css";
     let originalCourseBasePaths = new WeakMap();
     let originalCourseUids = new Set();
     const contentRevisions = new Map();
-    let reviewState = null;
-    let reviewRevision = "";
-    let feedbackState = null;
+    let reviewState: ModerationDocument | null = null;
+    let feedbackState: ModerationDocument | null = null;
+    const moderationDrafts: Record<ModerationKind, ModerationDraftStore> = {
+      reviews: createModerationDraftStore({ fields: ["hidden", "publicationDecision"] }) as ModerationDraftStore,
+      feedback: createModerationDraftStore({ fields: ["handlingStatus", "hidden", "publicationDecision", "reply", "replyVisibility"] }) as ModerationDraftStore,
+    };
+    const moderationSettingsDrafts: Record<ModerationKind, ModerationDraftStore> = {
+      reviews: createModerationDraftStore({ fields: ["rules"], revisionField: "expectedSettingsRevision" }) as ModerationDraftStore,
+      feedback: createModerationDraftStore({ fields: ["title", "announcement", "rules"], revisionField: "expectedSettingsRevision" }) as ModerationDraftStore,
+    };
+    const moderationEditorsOpen: Record<ModerationKind, Set<string>> = { reviews: new Set(), feedback: new Set() };
+    let reportsAdminPage = 1;
+    let moderationDepartureConfirmed = false;
     let aboutState = null;
     let homeState = null;
     let footerState = null;
@@ -907,9 +988,7 @@ import "vditor/dist/index.css";
     const adminPageSize = 10;
     let reviewAdminPage = 1;
     let reviewAdminSelected = "";
-    const reviewAdminSelection = new Set();
     let feedbackAdminPage = 1;
-    const feedbackAdminSelection = new Set();
     const selectedAdminFiles = new WeakSet();
 
     const loginPanel = document.querySelector("#login-panel");
@@ -926,9 +1005,9 @@ import "vditor/dist/index.css";
     const publishStatus = document.querySelector("#publish-status");
     const manifestSettings = document.querySelector("#manifest-settings");
     const resourceAdminPanel = document.querySelector("#resource-admin-panel");
-    const reviewAdminPanel = document.querySelector("#review-admin-panel");
-    const reviewRulesEditor = document.querySelector("#review-rules-editor");
-    const reviewAdminList = document.querySelector("#review-admin-list");
+    const reviewAdminPanel = document.querySelector<HTMLDivElement>("#review-admin-panel")!;
+    const reviewRulesEditor = document.querySelector<HTMLDivElement>("#review-rules-editor")!;
+    const reviewAdminList = document.querySelector<HTMLDivElement>("#review-admin-list")!;
     document.querySelector("#catalog-add-submit").addEventListener("click", async () => {
       const status = document.querySelector("#catalog-add-status");
       const name = document.querySelector("#catalog-add-name").value.trim();
@@ -948,18 +1027,18 @@ import "vditor/dist/index.css";
         status.textContent = error.message;
       }
     });
-    const reviewAdminSidebar = document.querySelector("#review-admin-sidebar");
-    const reviewAdminSidebarSearch = document.querySelector("#review-admin-sidebar-search");
-    const reviewAdminSearch = document.querySelector("#review-admin-search");
-    const reviewStatusFilter = document.querySelector("#review-status-filter");
-    const reviewAdminStatus = document.querySelector("#review-admin-status");
-    const feedbackAdminPanel = document.querySelector("#feedback-admin-panel");
-    const feedbackAdminList = document.querySelector("#feedback-admin-list");
-    const feedbackStatusFilter = document.querySelector("#feedback-status-filter");
-    const feedbackAdminSearch = document.querySelector("#feedback-admin-search");
-    const feedbackSettingsEditor = document.querySelector("#feedback-settings-editor");
-    const feedbackRulesEditor = document.querySelector("#feedback-rules-editor");
-    const feedbackAdminStatus = document.querySelector("#feedback-admin-status");
+    const reviewAdminSidebar = document.querySelector<HTMLDivElement>("#review-admin-sidebar")!;
+    const reviewAdminSidebarSearch = document.querySelector<HTMLInputElement>("#review-admin-sidebar-search")!;
+    const reviewAdminSearch = document.querySelector<HTMLInputElement>("#review-admin-search")!;
+    const reviewStatusFilter = document.querySelector<HTMLSelectElement>("#review-status-filter")!;
+    const reviewAdminStatus = document.querySelector<HTMLSpanElement>("#review-admin-status")!;
+    const feedbackAdminPanel = document.querySelector<HTMLDivElement>("#feedback-admin-panel")!;
+    const feedbackAdminList = document.querySelector<HTMLDivElement>("#feedback-admin-list")!;
+    const feedbackStatusFilter = document.querySelector<HTMLSelectElement>("#feedback-status-filter")!;
+    const feedbackAdminSearch = document.querySelector<HTMLInputElement>("#feedback-admin-search")!;
+    const feedbackSettingsEditor = document.querySelector<HTMLDivElement>("#feedback-settings-editor")!;
+    const feedbackRulesEditor = document.querySelector<HTMLDivElement>("#feedback-rules-editor")!;
+    const feedbackAdminStatus = document.querySelector<HTMLSpanElement>("#feedback-admin-status")!;
     const linksAdminPanel = document.querySelector("#links-admin-panel");
     const linksSettingsEditor = document.querySelector("#links-settings-editor");
     const linksAdminList = document.querySelector("#links-admin-list");
@@ -971,8 +1050,8 @@ import "vditor/dist/index.css";
     const aboutAdminEditor = document.querySelector("#about-admin-editor");
     const donateAdminPanel = document.querySelector("#donate-admin-panel");
     const privacyAdminPanel = document.querySelector("#privacy-admin-panel");
-    const reportsAdminPanel = document.querySelector("#reports-admin-panel");
-    const reportsList = document.querySelector("#reports-list");
+    const reportsAdminPanel = document.querySelector<HTMLDivElement>("#reports-admin-panel")!;
+    const reportsList = document.querySelector<HTMLDivElement>("#reports-list")!;
     const lawAdminPanel = document.querySelector("#law-admin-panel");
     const donateAdminStatus = document.querySelector("#donate-admin-status");
     const privacyAdminEditor = document.querySelector("#privacy-admin-editor");
@@ -1168,13 +1247,19 @@ import "vditor/dist/index.css";
           ...(options.headers || {}),
         },
       });
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw Object.assign(new Error(`服务器返回异常（HTTP ${response.status}），请稍后重试；未保存草稿已保留。`), { status: response.status });
+      }
       if (!response.ok || data.ok === false) {
         const error = Object.assign(new Error(data.error || data.errors?.join("\n") || "请求失败"), {
           status: response.status,
           currentRevision: data.currentRevision,
+          responseData: data,
         });
-        if (response.status === 409) error.message += "\n服务器内容已变化，本次没有覆盖。请重新加载后再编辑。";
+        if (response.status === 409) error.message += "\n服务器内容已变化，本次没有覆盖。草稿已保留，请选择如何处理冲突。";
         if (response.status === 401) {
           error.message = "登录已过期，请重新登录。";
           showSessionExpired();
@@ -1440,15 +1525,20 @@ import "vditor/dist/index.css";
 
     async function loadReviewsAdmin() {
       const data = await api("/reviews");
-      reviewState = data.data;
-      reviewRevision = data.revision;
+      const document: ModerationDocument = data.data;
+      reviewState = document;
+      moderationDrafts.reviews.hydrate(document.reviews ?? [], data.itemRevisions);
+      moderationSettingsDrafts.reviews.hydrate([{ id: "settings", rules: document.rules ?? {}, rulesProvenance: document.rulesProvenance }], { settings: data.settingsRevision });
       renderReviewAdmin();
     }
 
     async function loadFeedbackAdmin() {
       const data = await api("/feedback");
-      feedbackState = data.data;
+      const document: ModerationDocument = data.data;
+      feedbackState = document;
       contentRevisions.set("feedback", data.revision);
+      moderationDrafts.feedback.hydrate(document.items ?? [], data.itemRevisions);
+      moderationSettingsDrafts.feedback.hydrate([{ id: "settings", title: document.title ?? "问题与建议", announcement: document.announcement ?? "", rules: document.rules ?? {}, rulesProvenance: document.rulesProvenance }], { settings: data.settingsRevision });
       renderFeedbackAdmin();
     }
 
@@ -1474,73 +1564,39 @@ import "vditor/dist/index.css";
     }
 
     function reportsFiltered() {
-      const keyword = String(document.querySelector("#reports-search")?.value || "").trim().toLowerCase();
-      const status = document.querySelector("#reports-status-filter")?.value || "all";
-      return (feedbackState?.items ?? [])
+      const keyword = String(document.querySelector<HTMLInputElement>("#reports-search")?.value || "").trim().toLowerCase();
+      const status = document.querySelector<HTMLSelectElement>("#reports-status-filter")?.value || "all";
+      return savedModerationItems("feedback")
         .filter((item) => item.type === "report" || item.type === "complaint")
-        .filter((item) => status === "all" || String(item.status || "pending") === status)
-        .filter((item) => !keyword || `${item.title} ${item.content} ${item.report_target || ""} ${item.report_url || ""}`.toLowerCase().includes(keyword));
+        .filter((item) => status === "all" || item.handlingStatus === status)
+        .filter((item) => !keyword || `${item.title} ${item.content} ${item.report_target || item.reportTarget || ""} ${item.report_url || item.reportUrl || ""}`.toLowerCase().includes(keyword));
     }
 
     function renderReportsAdmin() {
       if (!reportsList) return;
       if (!feedbackState) {
-        reportsList.innerHTML = '<p class="empty">加载中…（数据来自反馈库）</p>';
-        loadFeedbackAdmin().then(() => renderReportsAdmin()).catch(() => {});
+        reportsList.innerHTML = '<p class="empty">正在加载举报…</p>';
+        loadFeedbackAdmin().then(() => renderReportsAdmin()).catch((error) => {
+          reportsList.textContent = `举报加载失败：${error.message}。切换页面后可重试。`;
+        });
         return;
       }
+      destroyMarkdownEditors(reportsList);
+      reportsList.innerHTML = "";
       const items = reportsFiltered();
       if (!items.length) {
-        reportsList.innerHTML = '<p class="empty">暂无举报。</p>';
+        reportsList.innerHTML = '<p class="empty">暂无匹配举报。</p>';
         return;
       }
-      const esc = escapeHtml;
-      const typeLabels = { report: "违法举报", complaint: "内容投诉" };
-      reportsList.innerHTML = items.map((item, index) => `
-        <div class="review-admin-item" data-report-index="${index}">
-          <div class="course-meta">
-            <span class="pill">${esc(typeLabels[item.type] || item.type)}</span>
-            <span class="pill">${esc(item.status || "pending")}</span>
-            ${item.handled_by ? `<span class="pill">处理人 ${esc(item.handled_by)} · ${esc(item.handled_at || "")}</span>` : ""}
-          </div>
-          <h3 style="margin: 10px 0 4px;">${esc(item.title)}</h3>
-          ${item.report_url || item.report_target ? `<p class="muted" style="font-size:0.85em;">被举报对象：${esc(item.report_target || "")} ${esc(item.report_url || "")}</p>` : ""}
-          <p>${esc(item.content)}</p>
-          <small class="muted">${esc(item.createdAt || "")} · 提交账号 user_id=${esc(item.user_id ?? "-")}</small>
-          <div class="filter-row" style="margin-top: 10px;" data-ops="${index}">
-            <select class="searchbar report-status-select" style="max-width: 150px;">
-              <option value="pending" ${item.status === "pending" ? "selected" : ""}>待审核</option>
-              <option value="processing" ${item.status === "processing" ? "selected" : ""}>处理中</option>
-              <option value="completed" ${item.status === "completed" ? "selected" : ""}>已处理</option>
-              <option value="rejected" ${item.status === "rejected" ? "selected" : ""}>不成立</option>
-              <option value="parked" ${item.status === "parked" ? "selected" : ""}>搁置</option>
-            </select>
-            <button class="button save-report" type="button">保存处置</button>
-            <span class="muted report-save-status"></span>
-          </div>
-        </div>
-      `).join("");
-      for (const row of reportsList.querySelectorAll("[data-ops]")) {
-        const item = items[Number(row.dataset.ops)];
-        row.querySelector(".save-report").addEventListener("click", async () => {
-          const status = row.querySelector(".report-status-select").value;
-          const statusEl = row.querySelector(".report-save-status");
-          statusEl.textContent = "保存中...";
-          item.status = status;
-          item.handled_by = sessionState?.username || "admin";
-          item.handled_at = new Date().toISOString();
-          item.updatedAt = item.handled_at;
-          try {
-            const data = await api("/feedback", { method: "POST", body: JSON.stringify({ data: feedbackState, expectedRevision: contentRevisions.get("feedback") }) });
-            feedbackState = data.data;
-            contentRevisions.set("feedback", data.revision);
-            statusEl.textContent = "已保存";
-            renderReportsAdmin();
-          } catch (error) {
-            statusEl.textContent = error.message;
-          }
-        });
+      reportsAdminPage = Math.min(reportsAdminPage, Math.max(1, Math.ceil(items.length / adminPageSize)));
+      for (const item of items.slice((reportsAdminPage - 1) * adminPageSize, reportsAdminPage * adminPageSize)) {
+        reportsList.append(renderModerationRow("feedback", item));
       }
+      appendPagination(reportsList, items.length, reportsAdminPage, (page: number) => {
+        reportsAdminPage = page;
+        renderReportsAdmin();
+      });
+      mountMarkdownEditors(reportsList);
     }
 
     async function loadPrivacyAdmin() {
@@ -2542,10 +2598,11 @@ async function loadMpUsersAdmin() {
       return wrap;
     }
 
-    let markdownEditors = [];
+    let markdownEditors: { editor: Vditor; node: MarkdownEditorNode }[] = [];
+    let markdownLabelSequence = 0;
 
-    function destroyMarkdownEditors(root = null) {
-      const remaining = [];
+    function destroyMarkdownEditors(root: Element | null = null) {
+      const remaining: typeof markdownEditors = [];
       for (const entry of markdownEditors) {
         const node = entry?.node;
         const stale = !node?.isConnected || (root && root.contains(node));
@@ -2567,19 +2624,22 @@ async function loadMpUsersAdmin() {
       wrap.className = "admin-field admin-markdown-field";
       const labelEl = document.createElement("span");
       labelEl.textContent = label;
+      labelEl.id = `admin-markdown-label-${++markdownLabelSequence}`;
       const shell = document.createElement("div");
       shell.className = "markdown-shell";
       const fallback = document.createElement("textarea");
       fallback.className = "markdown-fallback";
       fallback.value = markdownValue;
+      fallback.setAttribute("aria-labelledby", labelEl.id);
       fallback.style.minHeight = `${Number(options.height ?? 320)}px`;
-      const editor = document.createElement("div");
+      const editor = document.createElement("div") as MarkdownEditorNode;
       editor.className = "markdown-editor";
       editor.dataset.markdownEditor = "true";
       editor.dataset.markdownValue = markdownValue;
       editor.dataset.markdownHeight = String(options.height ?? 320);
       editor.dataset.markdownPlaceholder = options.placeholder ?? "";
       editor.dataset.markdownMode = options.mode ?? "sv";
+      editor.setAttribute("aria-labelledby", labelEl.id);
       if (options.owner) editor.dataset.contentOwner = options.owner;
       editor.__markdownOnInput = onInput;
       fallback.addEventListener("input", () => onInput(fallback.value, fallback));
@@ -2702,20 +2762,21 @@ async function loadMpUsersAdmin() {
       };
     }
 
-    function mountMarkdownEditors(root, mode = "admin", { destroy = true } = {}) {
+    function mountMarkdownEditors(root: Element | null, mode = "admin", { destroy = true } = {}) {
       if (destroy) destroyMarkdownEditors(root);
-      const editors = Array.from(root?.querySelectorAll?.("[data-markdown-editor]") ?? []);
+      const editors = Array.from(root?.querySelectorAll<MarkdownEditorNode>("[data-markdown-editor]") ?? []);
       for (const node of editors) {
         if (node.dataset.markdownMounted === "1") continue;
         // 折叠/隐藏的编辑表单不预挂载，等展开时再挂，避免搜索过滤时批量重建编辑器
-        if (node.closest("[hidden]")) continue;
+        if (node.closest("[hidden], details:not([open])")) continue;
         const shell = node.closest(".markdown-shell");
-        const fallback = shell?.querySelector(".markdown-fallback");
+        const fallback = shell?.querySelector<HTMLTextAreaElement>(".markdown-fallback");
         const imageSupport = contentImageUploadConfig(node);
         try {
-          let editor;
+          let editor: Vditor | undefined;
+          let ready = false;
           editor = new Vditor(node, {
-            mode: node.dataset.markdownMode || "sv",
+            mode: (node.dataset.markdownMode || "sv") as ReturnType<Vditor["getCurrentMode"]>,
             value: node.dataset.markdownValue ?? "",
             height: Number(node.dataset.markdownHeight || 320),
             placeholder: node.dataset.markdownPlaceholder || "",
@@ -2727,23 +2788,28 @@ async function loadMpUsersAdmin() {
               actions: ["desktop", "tablet", "mobile"],
               markdown: {
                 breaks: true,
-              },
+              } as IMarkdownConfig & { breaks: boolean },
             },
             after() {
-              const initialValue = node.dataset.markdownValue ?? "";
+              if (!node.isConnected) { editor?.destroy?.(); return; }
+              const initialValue = fallback?.value ?? node.dataset.markdownValue ?? "";
               node.__markdownEditorRef = editor;
               editor?.setValue?.(initialValue);
               if (fallback) fallback.value = initialValue;
+              ready = true;
+              for (const editable of node.querySelectorAll("[contenteditable]")) editable.setAttribute("aria-labelledby", node.getAttribute("aria-labelledby") || "");
+              if (node.closest('[data-moderation-readonly="true"]') || node.closest("fieldset:disabled")) editor?.disabled?.();
               enhanceVditorToolbar(node);
               shell?.classList.add("is-mounted");
               requestAnimationFrame(() => {
-                node.querySelector(".vditor-toolbar button")?.blur?.();
+                node.querySelector<HTMLButtonElement>(".vditor-toolbar button")?.blur?.();
                 // 只收回本编辑器内部的焦点，避免正在输入的搜索框被抢焦点
                 const active = document.activeElement;
                 if (active instanceof HTMLElement && shell?.contains(active)) active.blur();
               });
             },
-            input(value) {
+            input(value: string) {
+              if (!ready || !node.isConnected) return;
               if (fallback) fallback.value = value;
               node.__markdownOnInput?.(value);
             },
@@ -2889,20 +2955,393 @@ async function loadMpUsersAdmin() {
       container.append(pager);
     }
 
-    async function saveReviewState(message = "已保存") {
-      refreshPendingCounts();
-      reviewAdminStatus.textContent = "保存中...";
-      const data = await api("/reviews", {
-        method: "POST",
-        body: JSON.stringify({ data: reviewState, expectedRevision: reviewRevision }),
-      });
-      reviewState = data.data;
-      reviewRevision = data.revision;
-      reviewAdminStatus.textContent = message;
-      renderReviewAdmin();
+    const handlingOptions: [string, string][] = [["open", "待处理"], ["processing", "处理中"], ["completed", "已完成"], ["rejected", "不予处理 / 不成立"], ["parked", "搁置"]];
+    const handlingLabels = Object.fromEntries(handlingOptions);
+    const publicationLabels: Record<string, string> = { pending: "公开待审", approved: "公开已批准", rejected: "公开已拒绝" };
+    const moderationFieldLabels: Record<string, string> = { handlingStatus: "处理进度", hidden: "隐藏", publicationDecision: "公开决定", reply: "回复内容", replyVisibility: "回复可见范围", title: "页面标题", announcement: "公告", rules: "规则设置" };
+    const publicationDecisionLabels: Record<string, string> = { approve: "批准公开", reject: "拒绝公开", revoke: "撤销批准" };
+    const typeLabels: Record<string, string> = { bug: "Bug", feature: "功能改进", content: "内容问题", report: "违法举报", complaint: "内容投诉" };
+
+    function moderationWritable(kind: ModerationKind) {
+      return hasPerm(kind === "reviews" ? "content.edit" : "content.moderate");
     }
 
-    function renderReviewAdminSidebar(groups, allReviews) {
+    function savedModerationItems(kind: ModerationKind): ModerationRecord[] {
+      const items = kind === "reviews" ? reviewState?.reviews : feedbackState?.items;
+      return (items ?? []).map((item) => moderationDrafts[kind].read(item.id).saved);
+    }
+
+    function permanentlyPrivate(item: ModerationRecord) {
+      return item.private === true || ["report", "complaint"].includes(item.type || "");
+    }
+
+    function publicationSummary(item: ModerationRecord) {
+      if (permanentlyPrivate(item)) return "始终私密";
+      if (item.publicationBlocked) return `禁止公开：${item.publicationBlockedReason === "LEGACY_PRIVACY_UNCONFIRMED" ? "历史隐私来源未确认" : item.publicationBlockedReason || "需要核查"}`;
+      if (item.hidden) return "已隐藏，公众不可见";
+      if (item.publicEligible === true) return "公众可见";
+      return `${publicationLabels[item.publicationState || ""] || "公开状态待核查"}，公众不可见`;
+    }
+
+    function moderationProvenance(item: ModerationRecord) {
+      const sources: Record<string, string> = { automatic_rules: "按配置规则自动决定", automatic: "按配置规则自动决定", admin_decision: "管理员明确决定", manual: "管理员明确决定", legacy_visibility_import: "历史可见性导入（不代表历史人工批准）", legacy_feedback_visibility_import: "保留历史公开状态", submission_pending: "新提交待公开审核", legacy_unconfirmed: "历史公开决定未确认" };
+      const parts = [];
+      if (item.decisionSource) parts.push(sources[item.decisionSource] || `决定来源：${item.decisionSource}`);
+      if (item.reviewedBy) parts.push(`决定人 ${item.reviewedBy} · ${beijingDateTime(item.reviewedAt)}`);
+      if (item.ruleHash) {
+        parts.push(`规则版本 ${item.ruleHash}`);
+        parts.push(`规则要求人工审核：${item.ruleSnapshot?.moderationRequired ? "是" : "否"}；关键词过滤：${item.ruleSnapshot?.keywordFilter?.enabled ? "开启" : "关闭"}`);
+        if (item.ruleConfiguredAt) parts.push(`规则配置 ${item.ruleConfiguredBy || "历史配置导入"} · ${beijingDateTime(item.ruleConfiguredAt)}`);
+      }
+      if (item.flagged) parts.push(`规则命中：${item.flagged}`);
+      for (const [actor, time, label] of [["handledBy", "handledAt", "处理"], ["repliedBy", "repliedAt", "回复"], ["updatedBy", "updatedAt", "更新"]]) {
+        if (item[actor]) parts.push(`${label}人 ${item[actor]} · ${beijingDateTime(item[time])}`);
+      }
+      return parts.join("\n");
+    }
+
+    function replaceSavedModerationItem(kind: ModerationKind, item: ModerationRecord) {
+      const document = (kind === "reviews" ? reviewState : feedbackState)!;
+      const key = kind === "reviews" ? "reviews" : "items";
+      document[key] = (document[key] ?? []).map((existing) => String(existing.id) === String(item.id) ? item : existing);
+    }
+
+    function rerenderModeration(kind: ModerationKind, { settings = false } = {}) {
+      if (kind === "reviews") renderReviewAdmin({ rebuildRules: settings });
+      else {
+        renderFeedbackAdmin({ rebuildRules: settings });
+        if (feedbackState) renderReportsAdmin();
+      }
+    }
+
+    function refreshModerationRow(row: HTMLElement, kind: ModerationKind, id: string) {
+      const draft = moderationDrafts[kind].read(id);
+      row.dataset.dirty = String(draft.dirty);
+      row.setAttribute("aria-busy", String(draft.saving));
+      row.querySelector<HTMLFieldSetElement>(".moderation-editor-fields")!.disabled = draft.saving || Boolean(draft.conflict) || !moderationWritable(kind);
+      const save = row.querySelector<HTMLButtonElement>(".moderation-save")!;
+      save.disabled = !moderationWritable(kind) || draft.saving || !draft.dirty || Boolean(draft.conflict) || String(draft.value.reply || "").length > 2000;
+      save.textContent = draft.saving ? "保存本条中…" : "保存本条";
+      row.querySelector<HTMLButtonElement>(".moderation-cancel")!.disabled = draft.saving || (!draft.dirty && !draft.conflict);
+      row.querySelector<HTMLButtonElement>(".moderation-cancel")!.textContent = draft.conflict ? "丢弃草稿并加载服务器当前" : "取消本条草稿";
+      row.querySelector<HTMLElement>(".moderation-row-status")!.textContent = draft.saving ? "正在保存本条…" : draft.error || draft.message || (draft.dirty ? "本条有未保存改动" : "本条没有未保存改动");
+      row.querySelector<HTMLElement>(".moderation-draft-decision")!.textContent = draft.changes.publicationDecision ? `待保存的公开决定：${publicationDecisionLabels[String(draft.changes.publicationDecision)]}` : "公开决定未修改";
+      const count = row.querySelector(".moderation-reply-count");
+      if (count) count.textContent = `${String(draft.value.reply || "").length} / 2000 字${String(draft.value.reply || "").length > 2000 ? "；回复过长，请缩减后保存" : ""}`;
+      for (const button of row.querySelectorAll<HTMLButtonElement>("[data-publication-decision]")) {
+        const selected = draft.changes.publicationDecision === button.dataset.publicationDecision;
+        button.setAttribute("aria-pressed", String(selected));
+        button.classList.toggle("secondary", !selected);
+      }
+      for (const entry of markdownEditors) {
+        if (!row.contains(entry.node)) continue;
+        if (draft.saving || draft.conflict || !moderationWritable(kind)) entry.editor?.disabled?.();
+        else entry.editor?.enable?.();
+      }
+      refreshModerationDraftNotice();
+    }
+
+    function refreshVisibleModerationRows(kind: ModerationKind, id: string) {
+      for (const row of document.querySelectorAll<HTMLElement>(".moderation-row")) {
+        if (row.dataset.moderationKind === kind && row.dataset.moderationId === String(id)) refreshModerationRow(row, kind, id);
+      }
+    }
+
+    function conflictValue(field: string, value: unknown) {
+      if (field === "publicationDecision") return publicationDecisionLabels[String(value)] || "未修改";
+      if (field === "handlingStatus") return handlingLabels[String(value)] || String(value ?? "");
+      if (field === "hidden") return value ? "已隐藏" : "未隐藏";
+      if (field === "replyVisibility") return value === "public" ? "公众可见（需公开条件成立）" : "仅提交者";
+      return typeof value === "object" ? JSON.stringify(value, null, 2) : String(value ?? "（空）");
+    }
+
+    function renderModerationConflict(root: HTMLElement | null, kind: ModerationKind, { settings = false } = {}) {
+      if (!root) return;
+      const store = settings ? moderationSettingsDrafts[kind] : moderationDrafts[kind];
+      const id = settings ? "settings" : root.closest<HTMLElement>(".moderation-row")!.dataset.moderationId!;
+      const draft = store.read(id);
+      root.innerHTML = "";
+      root.hidden = !draft.conflict;
+      if (!draft.conflict) return;
+      const heading = document.createElement("strong");
+      heading.textContent = "服务器已有其他改动，本次未覆盖。请选择各字段使用哪个值。";
+      root.append(heading);
+      const choices: Record<string, string> = {};
+      for (const [field, mine] of Object.entries(draft.changes)) {
+        const wrap = document.createElement("div");
+        wrap.className = "moderation-conflict-field";
+        const label = moderationFieldLabels[field] || field;
+        const serverValue = field === "publicationDecision" ? draft.conflict.item.publicationState : draft.conflict.item[field];
+        const beforeValue = field === "publicationDecision" ? draft.saved.publicationState : draft.saved[field];
+        const title = document.createElement("strong");
+        title.textContent = label;
+        const values = document.createElement("div");
+        values.className = "moderation-conflict-values";
+        const conflictValues: [string, unknown][] = [["编辑前", beforeValue], ["服务器当前", serverValue], ["我的草稿", mine]];
+        for (const [name, value] of conflictValues) {
+          const cell = document.createElement("div");
+          const cellLabel = document.createElement("small");
+          cellLabel.textContent = name;
+          const content = document.createElement("pre");
+          content.textContent = field === "publicationDecision" && name !== "我的草稿" ? publicationLabels[String(value)] || String(value || "") : conflictValue(field, value);
+          cell.append(cellLabel, content);
+          values.append(cell);
+        }
+        const choice = selectField(`${label}冲突处理`, "", [["", "请选择处理方式"], ["mine", "保留我的草稿"], ["server", "使用服务器当前值"]], (value: string) => { choices[field] = value; });
+        wrap.append(title, values, choice);
+        root.append(wrap);
+      }
+      const current = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "查看服务器当前完整记录";
+      const json = document.createElement("pre");
+      json.textContent = JSON.stringify(draft.conflict.item, null, 2);
+      current.append(summary, json);
+      const actions = document.createElement("div");
+      actions.className = "filter-row";
+      const resolve = document.createElement("button");
+      resolve.type = "button";
+      resolve.className = "button secondary";
+      resolve.textContent = "按选择加载最新版本";
+      const message = document.createElement("p");
+      message.setAttribute("role", "status");
+      resolve.addEventListener("click", () => {
+        try {
+          store.resolve(id, choices);
+          if (!settings) replaceSavedModerationItem(kind, store.read(id).saved);
+          rerenderModeration(kind, { settings });
+        } catch (error) { message.textContent = error instanceof Error ? error.message : String(error); }
+      });
+      const drop = document.createElement("button");
+      drop.type = "button";
+      drop.className = "button secondary";
+      drop.textContent = "丢弃本条草稿并加载最新";
+      drop.addEventListener("click", () => {
+        store.cancel(id);
+        if (!settings) replaceSavedModerationItem(kind, store.read(id).saved);
+        rerenderModeration(kind, { settings });
+      });
+      actions.append(resolve, drop);
+      root.append(current, actions, message);
+    }
+
+    async function saveModerationItem(kind: ModerationKind, id: string) {
+      const store = moderationDrafts[kind];
+      try {
+        const payload = store.begin(id);
+        refreshVisibleModerationRows(kind, id);
+        const data = await api(`/${kind}/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload), signal: AbortSignal.timeout(20000) });
+        if (!data.data || String(data.data.id) !== String(id)) throw new Error("服务器未返回本条保存结果，草稿已保留，请核对后重试。");
+        const item = { ...data.data, publicEligible: data.publicEligible === true };
+        store.succeed(id, item, data.itemRevision);
+        replaceSavedModerationItem(kind, item);
+        refreshPendingCounts();
+      } catch (error) {
+        const requestError = error instanceof Error ? error as ModerationRequestError : null;
+        const response = requestError?.responseData;
+        store.fail(id, requestError?.name === "TimeoutError" ? "保存超时；草稿已保留，请核对后重试。" : error, response?.currentItem && response?.currentItemRevision ? { item: response.currentItem, revision: response.currentItemRevision } : null);
+      }
+      rerenderModeration(kind);
+    }
+
+    function renderModerationRow(kind: ModerationKind, saved: ModerationRecord) {
+      const store = moderationDrafts[kind];
+      const draft = store.read(saved.id);
+      const value = draft.value;
+      const privateItem = permanentlyPrivate(saved);
+      const row = document.createElement("article");
+      row.className = "review-admin-item moderation-row";
+      row.dataset.moderationKind = kind;
+      row.dataset.moderationId = String(saved.id);
+      const account = saved.user_id != null ? `提交账号 user_id=${saved.user_id}` : "无账号关联（匿名提交）";
+      row.innerHTML = `
+        <div class="course-meta">
+          ${kind === "feedback" ? `<span class="pill">原始类型：${escapeHtml(typeLabels[saved.type || ""] || saved.type || "反馈")}</span><span class="pill">处理进度：${escapeHtml(handlingLabels[saved.handlingStatus || ""] || "待处理")}</span>` : `<span class="pill">${escapeHtml(saved.courseTitle || "未命名课程")}</span><span class="pill">${escapeHtml(saved.teacher || "未填写老师")}</span><span class="pill">评分 ${escapeHtml(saved.rating ?? "未填写")}</span>`}
+          <span class="pill">${escapeHtml(publicationSummary(saved))}</span>
+        </div>
+        <h3>${escapeHtml(kind === "feedback" ? saved.title || "无标题" : "用户评价原文")}</h3>
+        ${saved.resourceRef ? `<p class="muted">关联资源：${escapeHtml(saved.resourceRef)}</p>` : ""}
+        ${saved.report_url || saved.report_target || saved.reportUrl || saved.reportTarget ? `<p class="muted">举报对象：${escapeHtml(saved.report_target || saved.reportTarget || "")} ${escapeHtml(saved.report_url || saved.reportUrl || "")}</p>` : ""}
+        <p class="moderation-original">${escapeHtml(saved.content || "")}</p>
+        <p class="muted">${escapeHtml(account)} · 提交时间 ${escapeHtml(beijingDateTime(saved.createdAt))}${kind === "feedback" ? `<br />联系方式：${escapeHtml(saved.contact || "未提供")}` : ""}</p>
+        ${saved.reply ? `<div class="moderation-saved-reply"><strong>已保存回复 · ${saved.replyVisibility === "public" && !privateItem ? "设为公众可见（需条目公开条件成立）" : "仅提交者"}</strong><p class="moderation-original">${escapeHtml(saved.reply)}</p></div>` : ""}
+        <p class="moderation-provenance muted">${escapeHtml(moderationProvenance(saved))}</p>
+      `;
+      if (saved.ruleSnapshot) {
+        const rules = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "查看本次规则决定的快照（只读）";
+        const snapshot = document.createElement("pre");
+        snapshot.className = "moderation-rule-snapshot";
+        snapshot.textContent = JSON.stringify(saved.ruleSnapshot, null, 2);
+        rules.append(summary, snapshot);
+        row.append(rules);
+      }
+      const editor = document.createElement("details");
+      editor.className = "moderation-editor";
+      editor.open = moderationEditorsOpen[kind].has(saved.id) || draft.dirty || Boolean(draft.conflict);
+      const summary = document.createElement("summary");
+      summary.textContent = kind === "feedback" ? "处置与回复（单条草稿）" : "公开与隐藏（单条草稿）";
+      const fields = document.createElement("fieldset");
+      fields.className = "admin-form moderation-editor-fields";
+      const legend = document.createElement("legend");
+      legend.textContent = "原文与提交归属只读，以下改动需保存本条";
+      fields.append(legend);
+      const change = (field: string, next: unknown) => { store.change(saved.id, field, next); refreshVisibleModerationRows(kind, saved.id); };
+      if (kind === "feedback") fields.append(selectField("处理进度（与公开决定独立）", value.handlingStatus || "open", handlingOptions, (next: string) => change("handlingStatus", next)));
+      fields.append(checkboxField("隐藏（隐藏或取消隐藏不改变公开批准）", value.hidden === true, (next: boolean) => change("hidden", next)));
+      const decisions = document.createElement("div");
+      decisions.className = "filter-row";
+      if (!privateItem) {
+        for (const [decision, label] of Object.entries(publicationDecisionLabels)) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "button secondary";
+          button.dataset.publicationDecision = decision;
+          button.textContent = `${label}（待保存）`;
+          button.disabled = decision === "approve" && saved.publicationBlocked === true;
+          button.addEventListener("click", () => change("publicationDecision", decision));
+          decisions.append(button);
+        }
+      }
+      const draftDecision = document.createElement("p");
+      draftDecision.className = "moderation-draft-decision muted";
+      draftDecision.setAttribute("role", "status");
+      fields.append(decisions, draftDecision);
+      if (kind === "feedback") {
+        const hint = document.createElement("p");
+        hint.className = "field-hint";
+        hint.textContent = privateItem ? "本条始终私密，回复仅提交者可见。" : "回复不会改变处理进度或批准公开。公开回复只有在本条批准、未隐藏且通过服务端公开检查时可见。";
+        if (saved.user_id == null) hint.textContent += " 本条无账号关联，无法通过「我的反馈」向提交者送达；不要承诺站内回复可达。";
+        fields.append(hint);
+        const reply = markdownField("管理员回复（最多 2000 字；支持 Markdown）", value.reply || "", (next: string) => change("reply", next), { height: 200 });
+        const count = document.createElement("small");
+        count.className = "moderation-reply-count";
+        reply.append(count);
+        fields.append(reply);
+        const clear = document.createElement("button");
+        clear.type = "button";
+        clear.className = "button secondary";
+        clear.textContent = "清空回复（待保存）";
+        clear.addEventListener("click", () => {
+          change("reply", "");
+          reply.querySelector<HTMLTextAreaElement>("textarea")!.value = "";
+          const node = reply.querySelector<MarkdownEditorNode>("[data-markdown-editor]")!;
+          node.dataset.markdownValue = "";
+          node.__markdownEditorRef?.setValue?.("");
+        });
+        fields.append(clear);
+        if (!privateItem) fields.append(selectField("回复可见范围", value.replyVisibility || "submitter", [["submitter", "仅提交者"], ["public", "公众可见（需公开条件成立）"]], (next: string) => change("replyVisibility", next)));
+      }
+      const actions = document.createElement("div");
+      actions.className = "filter-row";
+      const save = document.createElement("button");
+      save.type = "button";
+      save.className = "button moderation-save";
+      save.addEventListener("click", () => saveModerationItem(kind, saved.id));
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "button secondary moderation-cancel";
+      cancel.textContent = "取消本条草稿";
+      cancel.addEventListener("click", () => {
+        store.cancel(saved.id);
+        replaceSavedModerationItem(kind, store.read(saved.id).saved);
+        rerenderModeration(kind);
+      });
+      const status = document.createElement("span");
+      status.className = "muted moderation-row-status";
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      actions.append(save, cancel, status);
+      const conflict = document.createElement("div");
+      conflict.className = "moderation-conflict";
+      editor.append(summary, fields, actions, conflict);
+      editor.addEventListener("toggle", () => {
+        if (editor.open) { moderationEditorsOpen[kind].add(saved.id); mountMarkdownEditors(editor, "admin", { destroy: false }); }
+        else moderationEditorsOpen[kind].delete(saved.id);
+      });
+      row.append(editor);
+      refreshModerationRow(row, kind, saved.id);
+      renderModerationConflict(conflict, kind);
+      return row;
+    }
+
+    function refreshModerationSettingsControls(kind: ModerationKind) {
+      if (!(kind === "reviews" ? reviewState : feedbackState)) return;
+      const store = moderationSettingsDrafts[kind];
+      const draft = store.read("settings");
+      const save = document.querySelector<HTMLButtonElement>(kind === "reviews" ? "#save-reviews" : "#save-feedback")!;
+      const cancel = document.querySelector<HTMLButtonElement>(kind === "reviews" ? "#cancel-review-settings" : "#cancel-feedback-settings")!;
+      save.disabled = !moderationWritable(kind) || draft.saving || !draft.dirty || Boolean(draft.conflict);
+      cancel.disabled = draft.saving || (!draft.dirty && !draft.conflict);
+      cancel.textContent = draft.conflict ? "丢弃设置草稿并加载服务器当前" : "取消设置草稿";
+      const status = kind === "reviews" ? reviewAdminStatus : feedbackAdminStatus;
+      status.textContent = draft.saving ? "正在保存设置…" : draft.error || draft.message || (draft.dirty ? "设置有未保存改动（与条目独立）" : `设置已加载 · 版本 ${draft.revision.slice(0, 12)}`);
+      const provenance = draft.saved.rulesProvenance;
+      document.querySelector<HTMLElement>(`#${kind === "reviews" ? "review" : "feedback"}-settings-provenance`)!.textContent = provenance ? `已保存规则版本 ${provenance.hash}\n${provenance.source === "admin_settings" ? `配置人 ${provenance.configuredBy || "未提供"}` : "历史规则配置导入（无历史管理员批准证据）"} · ${beijingDateTime(provenance.configuredAt)}` : "";
+      const roots = kind === "reviews" ? [reviewRulesEditor] : [feedbackSettingsEditor, feedbackRulesEditor];
+      for (const root of roots) {
+        root.setAttribute("aria-busy", String(draft.saving));
+        root.dataset.moderationReadonly = String(draft.saving || Boolean(draft.conflict) || !moderationWritable(kind));
+        for (const input of root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea")) input.disabled = draft.saving || Boolean(draft.conflict) || !moderationWritable(kind);
+        for (const entry of markdownEditors) {
+          if (!root.contains(entry.node)) continue;
+          if (moderationWritable(kind) && !draft.saving && !draft.conflict) entry.editor?.enable?.();
+          else entry.editor?.disabled?.();
+        }
+      }
+      renderModerationConflict(document.querySelector<HTMLElement>(`#${kind === "reviews" ? "review" : "feedback"}-settings-conflict`), kind, { settings: true });
+      refreshModerationDraftNotice();
+    }
+
+    function changeModerationSetting(kind: ModerationKind, field: string, value: unknown) {
+      moderationSettingsDrafts[kind].change("settings", field, value);
+      refreshModerationSettingsControls(kind);
+    }
+
+    async function saveModerationSettings(kind: ModerationKind) {
+      const store = moderationSettingsDrafts[kind];
+      try {
+        const payload = store.begin("settings");
+        refreshModerationSettingsControls(kind);
+        const data = await api(`/${kind}/settings`, { method: "PATCH", body: JSON.stringify(payload), signal: AbortSignal.timeout(20000) });
+        if (!data.data?.rules) throw new Error("服务器未返回设置保存结果，草稿已保留，请核对后重试。");
+        store.succeed("settings", { ...data.data, rulesProvenance: data.rulesProvenance, id: "settings" }, data.settingsRevision, "已保存设置；条目草稿保持独立。" );
+        const document = (kind === "reviews" ? reviewState : feedbackState)!;
+        for (const field of kind === "reviews" ? ["rules"] : ["title", "announcement", "rules"]) if (Object.hasOwn(data.data, field)) document[field] = data.data[field];
+      } catch (error) {
+        const requestError = error instanceof Error ? error as ModerationRequestError : null;
+        const response = requestError?.responseData;
+        store.fail("settings", requestError?.name === "TimeoutError" ? "保存超时；设置草稿已保留，请核对后重试。" : error, response?.currentSettings && response?.currentSettingsRevision ? { item: { ...response.currentSettings, id: "settings" }, revision: response.currentSettingsRevision } : null);
+      }
+      rerenderModeration(kind, { settings: true });
+    }
+
+    function hasModerationUnsaved() {
+      return Object.values(moderationDrafts).some((store) => store.hasUnsaved()) || Object.values(moderationSettingsDrafts).some((store) => store.hasUnsaved());
+    }
+
+    function refreshModerationDraftNotice() {
+      const notice = document.querySelector<HTMLElement>("#moderation-drafts-notice")!;
+      notice.hidden = !hasModerationUnsaved();
+      notice.textContent = "有未保存的处置或设置草稿。切换后台页面、筛选或重新加载列表会保留草稿；关闭页面将丢失。";
+    }
+
+    function confirmModerationDeparture() {
+      if (Object.values(moderationDrafts).some((store) => store.isSaving()) || Object.values(moderationSettingsDrafts).some((store) => store.isSaving())) {
+        alert("有正在保存的条目或设置，请等待结果后再退出。");
+        return false;
+      }
+      return !hasModerationUnsaved() || confirm("有未保存的处置或设置草稿。离开会丢失这些草稿，仍要离开吗？");
+    }
+
+    window.addEventListener("beforeunload", (event) => {
+      if (moderationDepartureConfirmed || !hasModerationUnsaved()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+
+    function renderReviewAdminSidebar(groups: ModerationGroup[], allReviews: ModerationRecord[]) {
       reviewAdminSidebar.innerHTML = "";
       const totalPending = groups.reduce((sum, entry) => sum + entry.pending, 0);
       const allButton = document.createElement("button");
@@ -2934,432 +3373,106 @@ async function loadMpUsersAdmin() {
       }
     }
 
-    function ensureReviewDatalists(manifestTitleIndex) {
-      let titlesList = document.querySelector("#manifest-course-titles");
-      if (!titlesList) {
-        titlesList = document.createElement("datalist");
-        titlesList.id = "manifest-course-titles";
-        document.body.append(titlesList);
-      }
-      titlesList.innerHTML = [...manifestTitleIndex.keys()]
-        .sort((a, b) => a.localeCompare(b, "zh-CN"))
-        .map((title) => `<option value="${escapeHtml(title)}"></option>`)
-        .join("");
-      let teachersList = document.querySelector("#review-teacher-options");
-      if (!teachersList) {
-        teachersList = document.createElement("datalist");
-        teachersList.id = "review-teacher-options";
-        document.body.append(teachersList);
-      }
-      const teachers = new Set((reviewState?.reviews ?? []).map((review) => String(review.teacher || "").trim()).filter(Boolean));
-      teachersList.innerHTML = [...teachers].sort((a, b) => a.localeCompare(b, "zh-CN"))
-        .map((teacher) => `<option value="${escapeHtml(teacher)}"></option>`)
-        .join("");
-    }
-
     function renderReviewAdmin({ rebuildRules = true } = {}) {
       if (!reviewState) return;
-      const rules = reviewState.rules ??= {};
-      // 搜索/翻页等过滤操作不重建规则编辑器，避免输入过程被编辑器重建打断
+      const settings = moderationSettingsDrafts.reviews.read("settings");
+      const rules: ModerationRules = settings.value.rules ?? {};
+      const changeRules = () => changeModerationSetting("reviews", "rules", rules);
       if (rebuildRules) {
+        destroyMarkdownEditors(reviewRulesEditor);
         reviewRulesEditor.innerHTML = "";
-      reviewRulesEditor.append(
-        checkboxField("开放用户提交", rules.submissionOpen, (value) => { rules.submissionOpen = value; }),
-        checkboxField("提交后需要审核", rules.moderationRequired, (value) => { rules.moderationRequired = value; }),
-        checkboxField("启用 Turnstile（预留）", rules.turnstileEnabled, (value) => { rules.turnstileEnabled = value; }),
-        numberField("每小时提交上限", rules.hourlyLimit ?? 3, (value) => { rules.hourlyLimit = value; }),
-        numberField("每日提交上限", rules.dailyLimit ?? 10, (value) => { rules.dailyLimit = value; }),
-        numberField("评价最少字数", rules.minLength ?? 12, (value) => { rules.minLength = value; }),
-        checkboxField("允许自定义课程名（关闭后只能从课程库/手册目录选课）", (rules.submissionOptions ??= {}).allowCustomCourse === true, (value) => { rules.submissionOptions.allowCustomCourse = value; }),
-        checkboxField("允许自定义教师名（关闭后只能从手册教师列表选）", (rules.submissionOptions ??= {}).allowCustomTeacher !== false, (value) => { rules.submissionOptions.allowCustomTeacher = value; }),
-        markdownField("评价公告栏（支持 Markdown，可插图）", rules.announcement ?? "", (value) => { rules.announcement = value; }, { owner: "reviews" }),
-        markdownField("规则备注", rules.notes ?? "", (value) => { rules.notes = value; }, { height: 150 })
-      );
-
-      const keywordFilter = rules.keywordFilter ??= { enabled: false, words: [] };
-      const keywordWrap = document.createElement("div");
-      keywordWrap.className = "admin-form";
-      keywordWrap.style.marginTop = "12px";
-      const keywordToggle = checkboxField("启用关键词过滤（命中联系方式/敏感词的评价强制待审）", keywordFilter.enabled === true, (value) => { keywordFilter.enabled = value; });
-      keywordToggle.style.gridColumn = "1 / -1";
-      const wordsField = document.createElement("label");
-      wordsField.className = "admin-field";
-      wordsField.style.gridColumn = "1 / -1";
-      wordsField.innerHTML = `<span>自定义敏感词（每行一个，选填）</span><textarea rows="4" placeholder="例如：\n代写\n刷分">${escapeHtml((keywordFilter.words || []).join("\n"))}</textarea>`;
-      wordsField.querySelector("textarea").addEventListener("input", (event) => {
-        keywordFilter.words = event.target.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 200);
-      });
-      keywordWrap.append(keywordToggle, wordsField);
-      reviewRulesEditor.append(keywordWrap);
+        const hint = document.createElement("p");
+        hint.className = "field-hint";
+        hint.textContent = "保留配置规则自动公开：开启人工审核或命中已启用关键词规则时待审，否则自动公开。修改规则只影响规则设置，不保存列表中的草稿。";
+        reviewRulesEditor.append(hint,
+          checkboxField("开放用户提交", rules.submissionOpen !== false, (value: boolean) => { rules.submissionOpen = value; changeRules(); }),
+          checkboxField("提交后需要人工审核", rules.moderationRequired === true, (value: boolean) => { rules.moderationRequired = value; changeRules(); }),
+          checkboxField("启用 Turnstile（预留）", rules.turnstileEnabled === true, (value: boolean) => { rules.turnstileEnabled = value; changeRules(); }),
+          numberField("每小时提交上限", rules.hourlyLimit ?? 3, (value: number) => { rules.hourlyLimit = value; changeRules(); }),
+          numberField("每日提交上限", rules.dailyLimit ?? 10, (value: number) => { rules.dailyLimit = value; changeRules(); }),
+          numberField("评价最少字数", rules.minLength ?? 12, (value: number) => { rules.minLength = value; changeRules(); }),
+          checkboxField("允许自定义课程名", rules.submissionOptions?.allowCustomCourse === true, (value: boolean) => { (rules.submissionOptions ??= {}).allowCustomCourse = value; changeRules(); }),
+          checkboxField("允许自定义教师名", rules.submissionOptions?.allowCustomTeacher !== false, (value: boolean) => { (rules.submissionOptions ??= {}).allowCustomTeacher = value; changeRules(); }),
+          markdownField("评价公告栏（支持 Markdown，可插图）", rules.announcement ?? "", (value: string) => { rules.announcement = value; changeRules(); }, { owner: "reviews" }),
+          markdownField("规则备注", rules.notes ?? "", (value: string) => { rules.notes = value; changeRules(); }, { height: 150 })
+        );
+        const keywordFilter = rules.keywordFilter ?? { enabled: false, words: [] };
+        reviewRulesEditor.append(
+          checkboxField("启用关键词过滤（命中联系方式或敏感词时待审）", keywordFilter.enabled === true, (value: boolean) => { keywordFilter.enabled = value; rules.keywordFilter = keywordFilter; changeRules(); }),
+          field("自定义敏感词（每行一个）", (keywordFilter.words || []).join("\n"), (value: string) => { keywordFilter.words = value.split(/\r?\n/).map((line: string) => line.trim()).filter(Boolean); rules.keywordFilter = keywordFilter; changeRules(); }, true)
+        );
       }
-
+      const allReviews = savedModerationItems("reviews");
       const keyword = reviewAdminSearch.value.trim().toLowerCase();
-      const statusFilter = reviewStatusFilter.value;
+      const status = reviewStatusFilter.value;
       const sidebarKeyword = reviewAdminSidebarSearch.value.trim().toLowerCase();
-      const groupKeyOf = (review) => `${review.courseTitle || "未命名课程"} · ${review.teacher || "未填写老师"}`;
-      // 与服务端 normalizeReviewKeyPart 一致：trim + 截断，用于评价名 -> 课程库的绑定解析
-      const reviewTitleKey = (value) => String(value ?? "").trim().slice(0, 120);
-      const manifestTitleIndex = new Map();
-      for (const course of state?.courses || []) {
-        const key = reviewTitleKey(course.title);
-        if (key && !manifestTitleIndex.has(key)) manifestTitleIndex.set(key, course);
-      }
-      ensureReviewDatalists(manifestTitleIndex);
-      const matchesStatus = (review) =>
-        statusFilter === "all" ||
-        (statusFilter === "hidden" && review.hidden) ||
-        (statusFilter === "visible" && !review.hidden) ||
-        statusFilter === String(review.status || "pending");
-
-      const groups = new Map();
-      for (const review of reviewState.reviews ?? []) {
+      const groupKeyOf = (review: ModerationRecord) => `${review.courseTitle || "未命名课程"} · ${review.teacher || "未填写老师"}`;
+      const groups = new Map<string, ModerationGroup>();
+      for (const review of allReviews) {
         const key = groupKeyOf(review);
-        const entry = groups.get(key) || { key, total: 0, pending: 0 };
-        entry.total += 1;
-        if (String(review.status || "pending") === "pending" && !review.hidden) entry.pending += 1;
-        groups.set(key, entry);
+        const group = groups.get(key) || { key, total: 0, pending: 0 };
+        group.total += 1;
+        if (review.publicationState === "pending" && !review.hidden) group.pending += 1;
+        groups.set(key, group);
       }
       if (reviewAdminSelected && !groups.has(reviewAdminSelected)) reviewAdminSelected = "";
-
-      renderReviewAdminSidebar(
-        [...groups.values()]
-          .filter((entry) => !sidebarKeyword || entry.key.toLowerCase().includes(sidebarKeyword))
-          .sort((a, b) => (b.pending - a.pending) || (b.total - a.total)),
-        reviewState.reviews ?? [],
-      );
-
-      const reviews = (reviewState.reviews ?? []).filter((review) => {
-        const text = `${review.courseTitle} ${review.teacher} ${review.content}`.toLowerCase();
-        return (!reviewAdminSelected || groupKeyOf(review) === reviewAdminSelected) && matchesStatus(review) && (!keyword || text.includes(keyword));
+      renderReviewAdminSidebar([...groups.values()].filter((group) => !sidebarKeyword || group.key.toLowerCase().includes(sidebarKeyword)).sort((a, b) => (b.pending - a.pending) || (b.total - a.total)), allReviews);
+      const reviews = allReviews.filter((review) => {
+        const matchesStatus = status === "all" || (status === "hidden" && review.hidden) || (status === "visible" && review.publicEligible === true) || status === review.publicationState;
+        const text = `${review.courseTitle} ${review.teacher} ${review.content} ${review.user_id ?? ""}`.toLowerCase();
+        return (!reviewAdminSelected || groupKeyOf(review) === reviewAdminSelected) && matchesStatus && (!keyword || text.includes(keyword));
       });
-
+      destroyMarkdownEditors(reviewAdminList);
       reviewAdminList.innerHTML = "";
-      if (!reviews.length) {
-        reviewAdminList.innerHTML = `<p class="empty">暂无匹配评价。</p>`;
-        mountMarkdownEditors(document.querySelector("#review-admin-panel"));
-        return;
+      if (!reviews.length) reviewAdminList.innerHTML = '<p class="empty">暂无匹配评价。</p>';
+      else {
+        reviewAdminPage = Math.min(reviewAdminPage, Math.max(1, Math.ceil(reviews.length / adminPageSize)));
+        for (const review of reviews.slice((reviewAdminPage - 1) * adminPageSize, reviewAdminPage * adminPageSize)) reviewAdminList.append(renderModerationRow("reviews", review));
+        appendPagination(reviewAdminList, reviews.length, reviewAdminPage, (page: number) => { reviewAdminPage = page; renderReviewAdmin({ rebuildRules: false }); });
       }
-      const reviewPages = Math.max(1, Math.ceil(reviews.length / adminPageSize));
-      reviewAdminPage = Math.min(reviewAdminPage, reviewPages);
-      const pageReviews = reviews.slice((reviewAdminPage - 1) * adminPageSize, reviewAdminPage * adminPageSize);
-
-      for (const review of pageReviews) {
-        const boundCourse = manifestTitleIndex.get(reviewTitleKey(review.courseTitle)) || null;
-        const item = document.createElement("div");
-        item.className = "review-admin-item";
-        item.innerHTML = `
-          <div class="course-meta">
-            <span class="pill">${escapeHtml(review.status || "pending")}</span>
-            <span class="pill">${escapeHtml(review.hidden ? "已隐藏" : "显示中")}</span>
-            <span class="pill">${escapeHtml(review.courseTitle || "")}</span>
-            <span class="pill">${escapeHtml(review.teacher || "")}</span>
-            <span class="pill">${"★".repeat(Number(review.rating || 0))}</span>
-            ${review.user_id ? '<span class="pill">已绑定用户</span>' : ""}
-            <span class="pill" title="${boundCourse ? escapeHtml(`${boundCourse.term} · ${boundCourse.group}`) : "评价课程名与课程库标题不一致（精确匹配），公开端不挂在任何课程下"}">${boundCourse ? `绑定课程：${escapeHtml(boundCourse.title)}` : "未绑定课程"}</span>
-          </div>
-          <p>${escapeHtml(review.content || "")}</p>
-          <small class="muted">${escapeHtml(review.createdAt || "")}</small>
-        `;
-        const editForm = document.createElement("div");
-        editForm.className = "admin-form admin-inline-editor";
-        const courseField = field("课程（从课程库选择即可绑定）", review.courseTitle ?? "", (value) => {
-          review.courseTitle = value.trim();
-          review.updatedAt = new Date().toISOString();
-        });
-        const courseInput = courseField.querySelector("input");
-        courseInput?.setAttribute("list", "manifest-course-titles");
-        const bindingHint = document.createElement("small");
-        bindingHint.className = "muted";
-        bindingHint.textContent = boundCourse ? `当前绑定：${boundCourse.term} · ${boundCourse.group} · ${boundCourse.title}` : "当前未绑定课程：课程名与课程库标题不一致。";
-        bindingHint.style.display = "block";
-        courseInput?.addEventListener("input", () => {
-          const hit = manifestTitleIndex.get(reviewTitleKey(courseInput.value));
-          bindingHint.textContent = hit ? `将绑定到：${hit.term} · ${hit.group} · ${hit.title}` : "未匹配到课程库课程（保存后公开端不挂课程）。";
-        });
-        courseField.append(bindingHint);
-        editForm.append(
-          courseField,
-          field("老师", review.teacher ?? "", (value) => {
-            review.teacher = value.trim();
-            review.updatedAt = new Date().toISOString();
-          }),
-          selectField("评分", String(review.rating ?? 5), [["5", "5 分"], ["4", "4 分"], ["3", "3 分"], ["2", "2 分"], ["1", "1 分"]], (value) => {
-            review.rating = Number(value);
-            review.updatedAt = new Date().toISOString();
-          }),
-          markdownField("评价内容", review.content ?? "", (value) => {
-            review.content = value;
-            review.updatedAt = new Date().toISOString();
-          })
-        );
-        editForm.hidden = true;
-        const actions = document.createElement("div");
-        actions.className = "filter-row";
-        const selector = document.createElement("label");
-        selector.className = "perm-check";
-        selector.innerHTML = `<input type="checkbox" data-review-id="${escapeHtml(review.id)}" ${reviewAdminSelection.has(review.id) ? "checked" : ""} /> 选择`;
-        selector.querySelector("input").addEventListener("change", (event) => {
-          if (event.target.checked) reviewAdminSelection.add(review.id);
-          else reviewAdminSelection.delete(review.id);
-        });
-        actions.append(selector);
-        const edit = document.createElement("button");
-        edit.type = "button";
-        edit.className = "button secondary";
-        edit.textContent = "编辑";
-        edit.addEventListener("click", () => {
-          editForm.hidden = !editForm.hidden;
-          edit.textContent = editForm.hidden ? "编辑" : "收起编辑";
-          if (!editForm.hidden) mountMarkdownEditors(editForm);
-        });
-        const approve = document.createElement("button");
-        approve.type = "button";
-        approve.className = "button secondary";
-        approve.textContent = "通过";
-        approve.addEventListener("click", async () => {
-          review.status = "approved";
-          review.hidden = false;
-          review.updatedAt = new Date().toISOString();
-          await saveReviewState("已通过并公开");
-        });
-        const pending = document.createElement("button");
-        pending.type = "button";
-        pending.className = "button secondary";
-        pending.textContent = "待审";
-        pending.addEventListener("click", async () => {
-          review.status = "pending";
-          review.updatedAt = new Date().toISOString();
-          await saveReviewState("已设为待审");
-        });
-        const hide = document.createElement("button");
-        hide.type = "button";
-        hide.className = "button secondary";
-        hide.textContent = review.hidden ? "取消隐藏" : "隐藏";
-        hide.addEventListener("click", async () => {
-          review.hidden = !review.hidden;
-          review.updatedAt = new Date().toISOString();
-          await saveReviewState(review.hidden ? "已隐藏" : "已取消隐藏");
-        });
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "button secondary";
-        remove.textContent = "删除";
-        remove.addEventListener("click", async () => {
-          if (!confirm("删除这条评价？")) return;
-          reviewState.reviews = (reviewState.reviews ?? []).filter((item) => item.id !== review.id);
-          await saveReviewState("已删除");
-        });
-        actions.append(edit, approve, pending, hide, remove);
-        item.append(editForm, actions);
-        reviewAdminList.append(item);
-      }
-      appendPagination(reviewAdminList, reviews.length, reviewAdminPage, (page) => {
-        reviewAdminPage = page;
-        renderReviewAdmin();
-      });
-      mountMarkdownEditors(document.querySelector("#review-admin-panel"));
-    }
-
-    async function saveFeedbackState(message = "已保存") {
-      refreshPendingCounts();
-      feedbackAdminStatus.textContent = "保存中...";
-      const data = await api("/feedback", {
-        method: "POST",
-        body: JSON.stringify({ data: feedbackState, expectedRevision: contentRevisions.get("feedback") }),
-      });
-      feedbackState = data.data;
-      contentRevisions.set("feedback", data.revision);
-      feedbackAdminStatus.textContent = statusWithWarnings(message, data);
-      renderFeedbackAdmin();
+      mountMarkdownEditors(reviewAdminPanel, "admin", { destroy: false });
+      refreshModerationSettingsControls("reviews");
     }
 
     function renderFeedbackAdmin({ rebuildRules = true } = {}) {
       if (!feedbackState) return;
-      feedbackState.rules ??= {};
+      const settings = moderationSettingsDrafts.feedback.read("settings");
+      const rules: ModerationRules = settings.value.rules ?? {};
+      const changeRules = () => changeModerationSetting("feedback", "rules", rules);
       if (rebuildRules) {
+        destroyMarkdownEditors(feedbackSettingsEditor);
+        destroyMarkdownEditors(feedbackRulesEditor);
         feedbackSettingsEditor.innerHTML = "";
         feedbackSettingsEditor.append(
-          field("反馈页标题", feedbackState.title ?? "问题与建议", (value) => {
-            feedbackState.title = value;
-          }),
-          markdownField("反馈页公告（支持 Markdown，可插图）", feedbackState.announcement ?? "", (value) => {
-            feedbackState.announcement = value;
-          }, { owner: "feedback" })
+          field("反馈页标题", settings.value.title ?? "问题与建议", (value: string) => changeModerationSetting("feedback", "title", value)),
+          markdownField("反馈页公告（支持 Markdown，可插图）", settings.value.announcement ?? "", (value: string) => changeModerationSetting("feedback", "announcement", value), { owner: "feedback" })
         );
         feedbackRulesEditor.innerHTML = "";
-      feedbackRulesEditor.append(
-        checkboxField("开放用户提交", feedbackState.rules.submissionOpen !== false, (value) => {
-          feedbackState.rules.submissionOpen = value;
-        }),
-        numberField("每小时提交上限", feedbackState.rules.hourlyLimit ?? 3, (value) => {
-          feedbackState.rules.hourlyLimit = value;
-        }),
-        numberField("每日提交上限", feedbackState.rules.dailyLimit ?? 15, (value) => {
-          feedbackState.rules.dailyLimit = value;
-        }),
-        numberField("反馈最少字数", feedbackState.rules.minLength ?? 5, (value) => {
-          feedbackState.rules.minLength = value;
-        }),
-        markdownField("规则备注", feedbackState.rules.notes ?? "", (value) => {
-          feedbackState.rules.notes = value;
-        }, { height: 150 })
-      );
+        feedbackRulesEditor.append(
+          checkboxField("开放普通反馈提交（投诉举报独立受理）", rules.submissionOpen !== false, (value: boolean) => { rules.submissionOpen = value; changeRules(); }),
+          numberField("每小时提交上限", rules.hourlyLimit ?? 3, (value: number) => { rules.hourlyLimit = value; changeRules(); }),
+          numberField("每日提交上限", rules.dailyLimit ?? 15, (value: number) => { rules.dailyLimit = value; changeRules(); }),
+          numberField("反馈最少字数", rules.minLength ?? 5, (value: number) => { rules.minLength = value; changeRules(); }),
+          markdownField("规则备注", rules.notes ?? "", (value: string) => { rules.notes = value; changeRules(); }, { height: 150 })
+        );
       }
       const keyword = feedbackAdminSearch.value.trim().toLowerCase();
-      const statusFilter = feedbackStatusFilter.value;
-      const items = (feedbackState.items ?? []).filter((item) => {
-        const text = `${item.title} ${item.content} ${item.contact} ${item.type} ${item.status}`.toLowerCase();
-        const matchesStatus =
-          statusFilter === "all" ||
-          (statusFilter === "hidden" && item.hidden) ||
-          (statusFilter !== "hidden" && !item.hidden && String(item.status || "open") === statusFilter);
+      const status = feedbackStatusFilter.value;
+      const items = savedModerationItems("feedback").filter((item) => {
+        const text = `${item.title} ${item.content} ${item.contact} ${item.type} ${item.user_id ?? ""}`.toLowerCase();
+        const matchesStatus = status === "all" || (status === "hidden" && item.hidden) || (status.startsWith("public-") && item.publicationState === status.slice(7)) || status === item.handlingStatus;
         return matchesStatus && (!keyword || text.includes(keyword));
       });
-
+      destroyMarkdownEditors(feedbackAdminList);
       feedbackAdminList.innerHTML = "";
-      if (!items.length) {
-        feedbackAdminList.innerHTML = `<p class="empty">暂无匹配反馈。</p>`;
-        mountMarkdownEditors(document.querySelector("#feedback-admin-panel"));
-        return;
+      if (!items.length) feedbackAdminList.innerHTML = '<p class="empty">暂无匹配反馈。</p>';
+      else {
+        feedbackAdminPage = Math.min(feedbackAdminPage, Math.max(1, Math.ceil(items.length / adminPageSize)));
+        for (const item of items.slice((feedbackAdminPage - 1) * adminPageSize, feedbackAdminPage * adminPageSize)) feedbackAdminList.append(renderModerationRow("feedback", item));
+        appendPagination(feedbackAdminList, items.length, feedbackAdminPage, (page: number) => { feedbackAdminPage = page; renderFeedbackAdmin({ rebuildRules: false }); });
       }
-      const feedbackPages = Math.max(1, Math.ceil(items.length / adminPageSize));
-      feedbackAdminPage = Math.min(feedbackAdminPage, feedbackPages);
-      const pageItems = items.slice((feedbackAdminPage - 1) * adminPageSize, feedbackAdminPage * adminPageSize);
-
-      const statusOptions = [
-        ["pending", "待审核"],
-        ["processing", "处理中"],
-        ["approved", "已公开"],
-        ["completed", "已完成"],
-        ["rejected", "驳回"],
-        ["parked", "搁置"],
-        ["open", "开放(旧)"],
-        ["hidden", "隐藏"],
-      ];
-      const statusLabels = Object.fromEntries(statusOptions);
-      const typeLabels = { bug: "Bug", feature: "功能改进", content: "内容问题", report: "违法举报", complaint: "内容投诉" };
-
-      for (const item of pageItems) {
-        const wrap = document.createElement("div");
-        wrap.className = "review-admin-item";
-        wrap.innerHTML = `
-          <div class="course-meta">
-            <span class="pill">${escapeHtml(typeLabels[item.type] || item.type || "feedback")}</span>
-            <span class="pill">${escapeHtml(statusLabels[item.status] || item.status || "open")}</span>
-            <span class="pill">${escapeHtml(item.hidden ? "已隐藏" : "公开显示")}</span>
-          </div>
-          <h3 style="margin: 12px 0 0;">${escapeHtml(item.title || "")}</h3>
-          ${item.resourceRef ? `<p class="muted" style="font-size:0.85em;">关联资源：${escapeHtml(item.resourceRef)}</p>` : ""}
-          ${item.report_url || item.report_target ? `<p class="muted" style="font-size:0.85em;">举报对象：${escapeHtml(item.report_target || "")} ${escapeHtml(item.report_url || "")}</p>` : ""}
-          <p>${escapeHtml(item.content || "")}</p>
-          ${item.reply ? `<div class="review-admin-item" style="margin:8px 0;background:var(--surface-soft,#f1f5f9);"><div class="course-meta"><span class="pill">已回复</span></div><p>${escapeHtml(item.reply)}</p><small class="muted">${escapeHtml(item.repliedAt || "")}</small></div>` : ""}
-          <small class="muted">${escapeHtml(item.contact || "无联系方式")} · ${escapeHtml(item.createdAt || "")}${item.handled_by ? ` · 处理人 ${escapeHtml(item.handled_by)} ${escapeHtml(item.handled_at || "")}` : ""}</small>
-        `;
-
-        const editForm = document.createElement("div");
-        editForm.className = "admin-form admin-inline-editor";
-        const markHandled = () => {
-          item.handled_by = sessionState?.username || "admin";
-          item.handled_at = new Date().toISOString();
-          item.updatedAt = item.handled_at;
-        };
-        editForm.append(
-          selectField("类型", item.type ?? "bug", [["bug", "Bug"], ["feature", "功能改进"], ["content", "内容问题"], ["report", "违法举报"], ["complaint", "内容投诉"]], (value) => {
-            item.type = value;
-            markHandled();
-          }),
-          selectField("状态（举报类永不公开展示）", item.status ?? "pending", [["pending", "待审核"], ["processing", "处理中"], ["approved", "通过并公开"], ["completed", "已完成"], ["rejected", "驳回"], ["parked", "搁置"]], (value) => {
-            item.status = value;
-            if (item.type === "report" || item.type === "complaint") item.hidden = true;
-            markHandled();
-          }),
-          field("标题", item.title ?? "", (value) => {
-            item.title = value;
-            markHandled();
-          }),
-          markdownField("反馈内容", item.content ?? "", (value) => {
-            item.content = value;
-            markHandled();
-          }),
-          field("联系方式", item.contact ?? "", (value) => {
-            item.contact = value;
-            markHandled();
-          }),
-          markdownField("回复用户（登录提交者在小程序“我的反馈”可见；清空则删除回复）", item.reply ?? "", (value) => {
-            item.reply = value;
-            item.repliedAt = value ? new Date().toISOString() : "";
-            if (value && (item.status === "pending" || item.status === "open")) item.status = "completed";
-            markHandled();
-          })
-        );
-        editForm.hidden = true;
-
-        const actions = document.createElement("div");
-        actions.className = "filter-row";
-        const selector = document.createElement("label");
-        selector.className = "perm-check";
-        selector.innerHTML = `<input type="checkbox" data-feedback-id="${escapeHtml(item.id)}" ${feedbackAdminSelection.has(item.id) ? "checked" : ""} /> 选择`;
-        selector.querySelector("input").addEventListener("change", (event) => {
-          if (event.target.checked) feedbackAdminSelection.add(item.id);
-          else feedbackAdminSelection.delete(item.id);
-        });
-        actions.append(selector);
-        const edit = document.createElement("button");
-        edit.type = "button";
-        edit.className = "button secondary";
-        edit.textContent = "编辑";
-        edit.addEventListener("click", () => {
-          editForm.hidden = !editForm.hidden;
-          edit.textContent = editForm.hidden ? "编辑" : "收起编辑";
-          if (!editForm.hidden) mountMarkdownEditors(editForm);
-        });
-        const select = document.createElement("select");
-        select.className = "searchbar";
-        select.style.maxWidth = "180px";
-        for (const [value, label] of statusOptions) {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = label;
-          option.selected = (item.status || "open") === value;
-          select.append(option);
-        }
-        select.addEventListener("change", async () => {
-          item.status = select.value;
-          item.hidden = select.value === "hidden";
-          item.updatedAt = new Date().toISOString();
-          await saveFeedbackState("已更新状态");
-        });
-
-        const hide = document.createElement("button");
-        hide.type = "button";
-        hide.className = "button secondary";
-        hide.textContent = item.hidden ? "取消隐藏" : "隐藏";
-        hide.addEventListener("click", async () => {
-          item.hidden = !item.hidden;
-          if (item.hidden) item.status = "hidden";
-          else if (item.status === "hidden") item.status = "open";
-          item.updatedAt = new Date().toISOString();
-          await saveFeedbackState(item.hidden ? "已隐藏" : "已取消隐藏");
-        });
-
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "button secondary";
-        remove.textContent = "删除";
-        remove.addEventListener("click", async () => {
-          if (!confirm("删除这条反馈？")) return;
-          feedbackState.items = (feedbackState.items ?? []).filter((entry) => entry.id !== item.id);
-          await saveFeedbackState("已删除");
-        });
-        actions.append(edit, select, hide, remove);
-        wrap.append(editForm, actions);
-        feedbackAdminList.append(wrap);
-      }
-      appendPagination(feedbackAdminList, items.length, feedbackAdminPage, (page) => {
-        feedbackAdminPage = page;
-        renderFeedbackAdmin();
-      });
-      mountMarkdownEditors(document.querySelector("#feedback-admin-panel"));
+      mountMarkdownEditors(feedbackAdminPanel, "admin", { destroy: false });
+      refreshModerationSettingsControls("feedback");
     }
 
     function renderLinksAdmin() {
@@ -4569,12 +4682,16 @@ async function loadMpUsersAdmin() {
     });
 
     document.querySelector("#logout").addEventListener("click", async () => {
+      if (!confirmModerationDeparture()) return;
       await api("/logout", { method: "POST", body: "{}" });
+      moderationDepartureConfirmed = true;
       window.location.reload();
     });
 
     document.querySelector("#logout-reviews").addEventListener("click", async () => {
+      if (!confirmModerationDeparture()) return;
       await api("/logout", { method: "POST", body: "{}" });
+      moderationDepartureConfirmed = true;
       window.location.reload();
     });
 
@@ -5009,7 +5126,7 @@ async function loadMpUsersAdmin() {
         }
         aiAdminPanel.hidden = tab !== "ai";
         // 面板在 hidden 状态下渲染过的 Markdown 字段（如经举报页签后台加载的反馈数据）此时补挂载
-        const adminPanelsByTab = {
+        const adminPanelsByTab: Record<string, Element | null> = {
           resources: resourceAdminPanel, reviews: reviewAdminPanel, participate: participateAdminPanel,
           feedback: feedbackAdminPanel, links: linksAdminPanel, home: homeAdminPanel, footer: footerAdminPanel,
           editorSettings: editorSettingsAdminPanel, stats: statsAdminPanel, about: aboutAdminPanel,
@@ -5116,6 +5233,8 @@ async function loadMpUsersAdmin() {
           privacyAdminStatus.textContent = "加载中...";
           try { await loadPrivacyAdmin(); privacyAdminStatus.textContent = ""; } catch (error) { privacyAdminStatus.textContent = error.message; }
         }
+        if (tab === "reviews" && reviewState) renderReviewAdmin({ rebuildRules: false });
+        if (tab === "feedback" && feedbackState) renderFeedbackAdmin({ rebuildRules: false });
         if (tab === "reports") {
           renderReportsAdmin();
         }
@@ -5185,166 +5304,33 @@ async function loadMpUsersAdmin() {
     bindAdminTabButtons();
 
     document.querySelector("#reload-reviews").addEventListener("click", async () => {
-      reviewAdminStatus.textContent = "加载中...";
+      reviewAdminStatus.textContent = "加载中…（保留所有未保存草稿）";
       try {
         await loadReviewsAdmin();
-        reviewAdminStatus.textContent = "已重新加载";
-      } catch (error) {
-        reviewAdminStatus.textContent = error.message;
-      }
+        refreshModerationSettingsControls("reviews");
+      } catch (error) { reviewAdminStatus.textContent = error instanceof Error ? error.message : String(error); }
     });
-
-    document.querySelector("#save-reviews").addEventListener("click", async () => {
-      reviewAdminStatus.textContent = "保存中...";
-      try {
-        const data = await api("/reviews", {
-          method: "POST",
-          body: JSON.stringify({ data: reviewState, expectedRevision: reviewRevision }),
-        });
-        reviewState = data.data;
-        reviewRevision = data.revision;
-        renderReviewAdmin();
-        reviewAdminStatus.textContent = "已保存";
-      } catch (error) {
-        reviewAdminStatus.textContent = error.message;
-      }
-    });
-
-    reviewAdminSearch.addEventListener("input", () => {
-      reviewAdminPage = 1;
-      renderReviewAdmin({ rebuildRules: false });
-    });
-    reviewStatusFilter.addEventListener("change", () => {
-      reviewAdminPage = 1;
-      renderReviewAdmin({ rebuildRules: false });
-    });
-    reviewAdminSidebarSearch.addEventListener("input", () => {
-      renderReviewAdmin({ rebuildRules: false });
-    });
-    document.querySelector("#review-select-all").addEventListener("change", (event) => {
-      const checked = event.target.checked;
-      for (const box of reviewAdminList.querySelectorAll("input[data-review-id]")) {
-        box.checked = checked;
-        if (checked) reviewAdminSelection.add(box.dataset.reviewId);
-        else reviewAdminSelection.delete(box.dataset.reviewId);
-      }
-    });
-    async function runReviewBatch(mode) {
-      if (!reviewAdminSelection.size) {
-        document.querySelector("#review-batch-status").textContent = "请先勾选要操作的评价。";
-        return;
-      }
-      const count = reviewAdminSelection.size;
-      for (const review of reviewState.reviews ?? []) {
-        if (!reviewAdminSelection.has(review.id)) continue;
-        if (mode === "approve") {
-          review.status = "approved";
-          review.hidden = false;
-        } else {
-          review.hidden = true;
-        }
-        review.updatedAt = new Date().toISOString();
-      }
-      reviewAdminSelection.clear();
-      document.querySelector("#review-select-all").checked = false;
-      await saveReviewState(mode === "approve" ? `已批量通过 ${count} 条` : `已批量隐藏 ${count} 条`);
-      renderReviewAdmin();
-    }
-    document.querySelector("#review-batch-approve").addEventListener("click", () => runReviewBatch("approve"));
-    document.querySelector("#review-batch-hide").addEventListener("click", () => runReviewBatch("hide"));
-
-    const reviewMergePanel = document.querySelector("#review-merge-panel");
-    const reviewMergeCourse = document.querySelector("#review-merge-course");
-    const reviewMergeTeacher = document.querySelector("#review-merge-teacher");
-    const reviewMergeStatus = document.querySelector("#review-merge-status");
-    document.querySelector("#review-batch-merge").addEventListener("click", () => {
-      if (!reviewAdminSelection.size) {
-        document.querySelector("#review-batch-status").textContent = "请先勾选要归并的评价。";
-        return;
-      }
-      const [coursePart = "", teacherPart = ""] = (reviewAdminSelected || "").split(" · ");
-      if (reviewAdminSelected && !reviewMergeCourse.value) reviewMergeCourse.value = coursePart;
-      if (reviewAdminSelected && !reviewMergeTeacher.value) reviewMergeTeacher.value = teacherPart;
-      reviewMergeStatus.textContent = `将归并 ${reviewAdminSelection.size} 条评价。`;
-      reviewMergePanel.hidden = false;
-      reviewMergeCourse.focus();
-    });
-    document.querySelector("#review-merge-cancel").addEventListener("click", () => {
-      reviewMergePanel.hidden = true;
-      reviewMergeStatus.textContent = "";
-    });
-    document.querySelector("#review-merge-confirm").addEventListener("click", async () => {
-      const targetCourse = String(reviewMergeCourse.value || "").trim();
-      const targetTeacher = String(reviewMergeTeacher.value || "").trim();
-      if (!targetCourse || !targetTeacher) {
-        reviewMergeStatus.textContent = "请填写目标课程名和老师。";
-        return;
-      }
-      const count = reviewAdminSelection.size;
-      for (const review of reviewState.reviews ?? []) {
-        if (!reviewAdminSelection.has(review.id)) continue;
-        review.courseTitle = targetCourse;
-        review.teacher = targetTeacher;
-        review.updatedAt = new Date().toISOString();
-      }
-      reviewAdminSelection.clear();
-      document.querySelector("#review-select-all").checked = false;
-      reviewMergePanel.hidden = true;
-      reviewMergeStatus.textContent = "";
-      await saveReviewState(`已归并 ${count} 条评价到「${targetCourse} · ${targetTeacher}」`);
+    document.querySelector("#save-reviews").addEventListener("click", () => saveModerationSettings("reviews"));
+    document.querySelector("#cancel-review-settings").addEventListener("click", () => {
+      moderationSettingsDrafts.reviews.cancel("settings");
       renderReviewAdmin();
     });
-    feedbackAdminSearch.addEventListener("input", () => {
-      feedbackAdminPage = 1;
-      renderFeedbackAdmin({ rebuildRules: false });
-    });
-    feedbackStatusFilter.addEventListener("change", () => {
-      feedbackAdminPage = 1;
-      renderFeedbackAdmin({ rebuildRules: false });
-    });
-
-    document.querySelector("#feedback-select-all").addEventListener("change", (event) => {
-      const checked = event.target.checked;
-      for (const box of feedbackAdminList.querySelectorAll("input[data-feedback-id]")) {
-        box.checked = checked;
-        if (checked) feedbackAdminSelection.add(box.dataset.feedbackId);
-        else feedbackAdminSelection.delete(box.dataset.feedbackId);
-      }
-    });
-    async function runFeedbackBatch(mode) {
-      const statusEl = document.querySelector("#feedback-batch-status");
-      if (!feedbackAdminSelection.size) {
-        statusEl.textContent = "请先勾选要操作的反馈。";
-        return;
-      }
-      const count = feedbackAdminSelection.size;
-      for (const item of feedbackState.items ?? []) {
-        if (!feedbackAdminSelection.has(item.id)) continue;
-        if (mode === "complete") {
-          item.status = "completed";
-          item.hidden = false;
-        } else {
-          item.hidden = true;
-          item.status = "hidden";
-        }
-        item.updatedAt = new Date().toISOString();
-      }
-      feedbackAdminSelection.clear();
-      document.querySelector("#feedback-select-all").checked = false;
-      await saveFeedbackState(mode === "complete" ? `已批量完成 ${count} 条` : `已批量隐藏 ${count} 条`);
-      renderFeedbackAdmin();
-    }
-    document.querySelector("#feedback-batch-complete").addEventListener("click", () => runFeedbackBatch("complete"));
-    document.querySelector("#feedback-batch-hide").addEventListener("click", () => runFeedbackBatch("hide"));
-
+    reviewAdminSearch.addEventListener("input", () => { reviewAdminPage = 1; renderReviewAdmin({ rebuildRules: false }); });
+    reviewStatusFilter.addEventListener("change", () => { reviewAdminPage = 1; renderReviewAdmin({ rebuildRules: false }); });
+    reviewAdminSidebarSearch.addEventListener("input", () => renderReviewAdmin({ rebuildRules: false }));
+    feedbackAdminSearch.addEventListener("input", () => { feedbackAdminPage = 1; renderFeedbackAdmin({ rebuildRules: false }); });
+    feedbackStatusFilter.addEventListener("change", () => { feedbackAdminPage = 1; renderFeedbackAdmin({ rebuildRules: false }); });
     document.querySelector("#reload-feedback").addEventListener("click", async () => {
-      feedbackAdminStatus.textContent = "加载中...";
+      feedbackAdminStatus.textContent = "加载中…（保留所有未保存草稿）";
       try {
         await loadFeedbackAdmin();
-        feedbackAdminStatus.textContent = "已重新加载";
-      } catch (error) {
-        feedbackAdminStatus.textContent = error.message;
-      }
+        renderReportsAdmin();
+        refreshModerationSettingsControls("feedback");
+      } catch (error) { feedbackAdminStatus.textContent = error instanceof Error ? error.message : String(error); }
+    });
+    document.querySelector("#cancel-feedback-settings").addEventListener("click", () => {
+      moderationSettingsDrafts.feedback.cancel("settings");
+      renderFeedbackAdmin();
     });
 
     document.querySelectorAll(".clean-images").forEach((button) => {
@@ -5368,13 +5354,7 @@ async function loadMpUsersAdmin() {
       });
     });
 
-    document.querySelector("#save-feedback").addEventListener("click", async () => {
-      try {
-        await saveFeedbackState("已保存");
-      } catch (error) {
-        feedbackAdminStatus.textContent = error.message;
-      }
-    });
+    document.querySelector("#save-feedback").addEventListener("click", () => saveModerationSettings("feedback"));
 
     document.querySelector("#reload-links").addEventListener("click", async () => {
       linksAdminStatus.textContent = "加载中...";
@@ -5441,8 +5421,8 @@ async function loadMpUsersAdmin() {
       try { await loadPrivacyAdmin(); privacyAdminStatus.textContent = ""; } catch (error) { privacyAdminStatus.textContent = error.message; }
     });
     for (const selector of ["#reports-search", "#reports-status-filter"]) {
-      document.querySelector(selector)?.addEventListener("input", () => renderReportsAdmin());
-      document.querySelector(selector)?.addEventListener("change", () => renderReportsAdmin());
+      document.querySelector(selector)?.addEventListener("input", () => { reportsAdminPage = 1; renderReportsAdmin(); });
+      document.querySelector(selector)?.addEventListener("change", () => { reportsAdminPage = 1; renderReportsAdmin(); });
     }
     document.querySelector("#law-query-run").addEventListener("click", () => runLawQuery());
     document.querySelector("#law-export-run").addEventListener("click", () => runLawQuery({ exportJson: true }));
@@ -5574,4 +5554,141 @@ async function loadMpUsersAdmin() {
     restoreWorkbench();
     checkSession();
   </script>
+  <style>
+    .admin-content :global(.moderation-row),
+    .admin-content :global(.moderation-editor),
+    .admin-content :global(.moderation-editor-fields),
+    .admin-content :global(.moderation-conflict),
+    .admin-content :global(.moderation-conflict-field) {
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+    .admin-content :global(.moderation-row h3) {
+      margin: 12px 0 0;
+    }
+    .admin-content :global(.moderation-row .pill) {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .admin-content :global(.moderation-original),
+    .admin-content :global(.moderation-provenance),
+    .admin-content :global(.moderation-rule-snapshot),
+    .admin-content :global(.moderation-row-status) {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .admin-content :global(.moderation-provenance) {
+      font-size: 0.82rem;
+      line-height: 1.65;
+    }
+    .admin-content :global(.moderation-saved-reply) {
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--surface-soft);
+      border-radius: var(--radius);
+    }
+    .admin-content :global(.moderation-editor) {
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      padding-top: 12px;
+    }
+    .admin-content :global(.moderation-editor summary) {
+      cursor: pointer;
+      font-weight: 700;
+      padding: 6px 0;
+    }
+    .admin-content :global(.moderation-editor-fields) {
+      border: 0;
+      margin: 12px 0;
+      padding: 0;
+    }
+    .admin-content :global(.moderation-editor-fields legend) {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+      padding: 0;
+      max-width: 100%;
+    }
+    .admin-content :global(.moderation-row[data-dirty="true"]) {
+      border-color: var(--primary);
+    }
+    .admin-content :global(.moderation-conflict:not([hidden])) {
+      margin-top: 14px;
+      padding: 12px;
+      border: 1px solid var(--primary);
+      border-radius: var(--radius);
+      display: grid;
+      gap: 12px;
+      background: var(--surface-soft);
+    }
+    .admin-content :global(.moderation-conflict-field) {
+      display: grid;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 12px;
+    }
+    .admin-content :global(.moderation-conflict-values) {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .admin-content :global(.moderation-conflict-values > div) {
+      min-width: 0;
+    }
+    .admin-content :global(.moderation-conflict pre) {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-width: 100%;
+      margin: 4px 0;
+      font: inherit;
+      font-size: 0.82rem;
+    }
+    .admin-content :global([data-moderation-readonly="true"] .vditor-toolbar) {
+      pointer-events: none;
+    }
+    #review-admin-panel :global(.admin-form),
+    #feedback-admin-panel :global(.admin-form),
+    #reports-admin-panel :global(.admin-form),
+    #review-admin-panel :global(.markdown-shell),
+    #feedback-admin-panel :global(.markdown-shell),
+    #reports-admin-panel :global(.markdown-shell),
+    #review-admin-panel :global(.admin-field),
+    #feedback-admin-panel :global(.admin-field),
+    #reports-admin-panel :global(.admin-field) {
+      min-width: 0;
+    }
+    #review-admin-panel :global(.button),
+    #feedback-admin-panel :global(.button),
+    #reports-admin-panel :global(.button) {
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    #review-admin-panel :global(.filter-row .searchbar),
+    #feedback-admin-panel :global(.filter-row .searchbar),
+    #reports-admin-panel :global(.filter-row .searchbar) {
+      min-width: 0;
+      max-width: 100%;
+    }
+    @media (max-width: 600px) {
+      .admin-content :global(.moderation-conflict-values) {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .admin-content :global(.moderation-row) {
+        padding: 12px;
+      }
+      #review-admin-panel :global(.filter-row .searchbar),
+      #feedback-admin-panel :global(.filter-row .searchbar),
+      #reports-admin-panel :global(.filter-row .searchbar) {
+        flex-basis: 100%;
+      }
+      #review-admin-panel :global(.vditor-toolbar),
+      #feedback-admin-panel :global(.vditor-toolbar),
+      #reports-admin-panel :global(.vditor-toolbar) {
+        overflow-x: auto;
+        max-width: 100%;
+      }
+    }
+  </style>
 </Layout>

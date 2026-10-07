@@ -4,6 +4,7 @@ import { normalizeRecords as normalizeDonateRecords } from "./donate-records.mjs
 import { PublicApiError } from "./public-api-errors.mjs";
 import { createDefaultLearningCompassService } from "./learning-compass-service.mjs";
 import { SnapshotCache } from "./snapshot-cache.mjs";
+import { normalizeReviewsDocument } from "./moderation-model.mjs";
 import {
   buildReviewGroups,
   isVisibleCourseMetaTag,
@@ -97,7 +98,7 @@ export class PublicApiService {
 
   #loadSnapshot({ viewerId = null } = {}) {
     const manifest = this.readManifest();
-    const reviewData = this.readReviews();
+    const reviewData = normalizeReviewsDocument(this.readReviews());
     if (!manifest || !Array.isArray(manifest.courses)) throw new Error("Runtime course data is unavailable.");
     const groups = buildReviewGroups(manifest, reviewData, this.courseCatalog, { viewerId });
     return { manifest, reviewData, groups };
@@ -111,6 +112,10 @@ export class PublicApiService {
     const data = structuredClone(viewerId ? { manifest: cached.manifest, reviewData: cached.reviewData } : cached);
     if (viewerId) data.groups = structuredClone(buildReviewGroups(data.manifest, data.reviewData, this.courseCatalog, { viewerId }));
     return { ...data, learningCompass: this.learningCompass };
+  }
+
+  invalidateSnapshot() {
+    this.#snapshotCache?.invalidate();
   }
 
   health() {
@@ -513,8 +518,8 @@ export class PublicApiService {
 
   getMyFeedback(userId, { page = 1, pageSize = 20 } = {}) {
     const feedback = this.readFeedback();
-    const safePage = Math.max(1, Number(page) || 1);
-    const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
+    const safePage = positiveInteger(page, 1);
+    const safePageSize = positiveInteger(pageSize, 20, { max: 100 });
     const items = (feedback.items || [])
       .filter((item) => Number(item.user_id) === Number(userId))
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
@@ -522,6 +527,7 @@ export class PublicApiService {
       items: items.slice((safePage - 1) * safePageSize, safePage * safePageSize).map((item) => ({
         id: item.id, title: item.title, content: item.content, type: item.type,
         status: String(item.status || "open"), hidden: item.hidden === true,
+        handlingStatus: item.handlingStatus || "open", publicationState: item.publicationState || "pending", private: item.private === true,
         resourceRef: item.resourceRef || "", createdAt: item.createdAt || "", updatedAt: item.updatedAt || "",
         reply: String(item.reply || ""), repliedAt: item.repliedAt || "",
       })),
@@ -599,6 +605,6 @@ export class PublicApiService {
     }
     // Keep the public response stable while giving the audit layer the stored ID.
     context?.onSubmitted?.({ reviewId: result.reviewId || "", pending: result.pending });
-    return { submitted: true, pending: result.pending };
+    return { submitted: Boolean(result.reviewId), accepted: Boolean(result.reviewId), pending: result.pending };
   }
 }

@@ -2,6 +2,10 @@
 
 本文档以当前仓库中的 `server/public-api-router.mjs`、`server/admin-server.mjs`、服务层、DTO 和网页调用代码为准，面向小程序、网站前端和后台维护人员。
 
+2026-10-07本批仅收尾S3候选并更新草稿PR #3，不合并、不部署；维护者已明确报告S3未部署。下述S3契约描述当前源码，不能作为生产已生效的回执。部署边界与只读预览见[部署说明](DEPLOYMENT.md)。
+
+当前候选固定版本以随包`RELEASE.json`及校验清单为准。10-07本地`npm ci`重试成功，`TMPDIR=/private/tmp npm test`为396/396（0失败、0跳过），API文档130条一致、夹具检查及14页夹具构建通过；完整及`--omit=dev`依赖审计均0告警，新增依赖边界验证3/3通过且独立复核无阻塞。边界覆盖source-map非法offset拒绝/正常映射与Astro远程图片TTL/304/no-store，不代表`cache` 4.3上游`max-stale`争议已修复；magicast内联旧source-map仅在`astro add`路径，本轮未改。新浏览器验收因自动审批拒绝（网络流断开）尚未执行，既有浏览器证据保留为历史记录；新生产预览及上线也未完成。
+
 - 生产站点基址：`https://nkustudy.top`
 - 小程序公共 API 基址：`https://nkustudy.top/api/v1`
 - 资源下载域名：`https://resources.nkustudy.top`
@@ -18,7 +22,7 @@
 | `GET` | `/api/v1/home` | 公开 | 小程序首页数据 |
 | `GET` | `/api/v1/search-index` | 公开 | 完整、版本化的四类搜索快照 |
 | `GET` | `/api/v1/catalog` | 公开 | 选课手册课程目录（课程+教师，支持 q 搜索与分页） |
-| `GET` | `/api/v1/search-data` | 公开、ETag 缓存 | 前端本地搜索精简数据（课程库/目录池/评价组名称与老师） |
+| `GET` | `/api/v1/search-data` | 公开、no-store | 前端本地搜索精简数据（课程库/目录池/评价组名称与老师） |
 | `GET` | `/api/v1/about` | 公开、ETag 缓存 | 关于页内容（标题+markdown 正文，与网页关于页同源） |
 | `GET` | `/api/v1/donate` | 公开、ETag 缓存 | 捐助页内容（标题/markdown 正文/预设金额/支付是否可用） |
 | `POST` | `/api/v1/donate/pay` | Bearer Token | 小程序捐助支付下单（可带 nickname/remark；未配置商户时 503） |
@@ -29,6 +33,12 @@
 | `GET` | `/api/v1/guides/:guideId` | 公开 | 指南详情：sections/sources/variants |
 | `GET` | `/api/v1/guides/:guideId/variants/:variantId` | 公开 | 按需读取转专业学院变体原文 |
 | `POST` | `/api/v1/guide-assistant/answers` | 登录 | 学习指南针 AI 问答（检索+引用+拒答） |
+| `GET` | `/admin-api/feedback/:id` | `content.read` | 读取单条原文、权威状态和 itemRevision |
+| `PATCH` | `/admin-api/feedback/:id` | `content.moderate` | 单条 CAS 处置，原文和归属不可修改 |
+| `PATCH` | `/admin-api/feedback/settings` | `content.moderate` | 独立 settingsRevision 设置保存 |
+| `GET` | `/admin-api/reviews/:id` | `content.read` | 读取单条原文、权威状态和 itemRevision |
+| `PATCH` | `/admin-api/reviews/:id` | `content.edit` | 单条 CAS 处置，原文和归属不可修改 |
+| `PATCH` | `/admin-api/reviews/settings` | `content.edit` | 独立 settingsRevision 设置保存 |
 | `POST` | `/admin-api/catalog/courses` | `content.edit` | 评价管理"往目录池加课程"（校验+去重） |
 | `POST` | `/admin-api/catalog/import-courses` | `content.edit` | 从目录池批量建课程壳（幂等，附 dry_run） |
 | `GET` | `/admin-api/ai-settings` | `ai.manage` | 读取 AI 问答配置（Key 掩码） |
@@ -62,11 +72,12 @@
 | `POST` | `/api/v1/me/web-password/change` | Bearer Token | 修改网页登录密码（需验证当前密码） |
 | `POST` | `/api/v1/me/delete-account` | Bearer Token | 注销账号（删绑定关系、保留内容；封禁账号需联系管理员） |
 | `GET` | `/api/v1/me/feedback` | Bearer Token | 我的反馈列表（含审核状态） |
-| `POST` | `/api/v1/reviews` | 公开、限流 | 小程序提交评价 |
+| `POST` | `/api/v1/reviews` | 登录且手机号已验证、限流 | 小程序提交评价 |
 | `GET` | `/review-api/reviews` | 公开 | 网站读取已通过评价及规则 |
-| `POST` | `/review-api/submit` | 公开、限流 | 网站提交评价 |
+| `POST` | `/review-api/submit` | 登录且手机号已验证、限流 | 网站提交评价 |
 | `GET` | `/feedback-api/feedback` | 公开 | 网站读取公开反馈及规则 |
-| `POST` | `/feedback-api/submit` | 公开、限流 | 网站提交反馈 |
+| `POST` | `/feedback-api/submit` | 普通反馈需认证；举报匿名可用、限流 | 网站提交反馈 |
+| `POST` | `/feedback-api/report` | 匿名可用、有凭证则验证、限流 | 持久受理始终私密的投诉举报 |
 | `GET` | `/visit-api/stats` | 公开 | 读取公开访问统计 |
 | `POST` | `/visit-api/hit` | 公开、限流 | 记录访问 |（网站固定路径白名单；另接受 `/mp/<页面名>` 供小程序上报，归入「小程序」类统计。访客记录按 IP+UA 哈希 30 分钟去重，`/admin-api/visit-stats` 面向管理员返回最近访客 IP；公开接口只暴露汇总数字） |
 | `GET` | `/editor-settings` | 公开 | 读取公开编辑器工具栏配置 |
@@ -109,9 +120,9 @@
 | `GET` | `/admin-api/links` | Cookie（需相应权限） | 读取友链页和 revision |
 | `POST` | `/admin-api/links` | Cookie（需相应权限） | 发布友链页 |
 | `GET` | `/admin-api/feedback` | Cookie（需相应权限） | 读取完整反馈数据和 revision |
-| `POST` | `/admin-api/feedback` | Cookie（需相应权限） | 发布反馈数据 |
+| `POST` | `/admin-api/feedback` | Cookie（需相应权限） | 旧客户端兼容：仅单条处置或仅设置，拒绝整库增删及隐式批准 |
 | `GET` | `/admin-api/reviews` | Cookie（需相应权限） | 读取完整评价数据和 revision |
-| `POST` | `/admin-api/reviews` | Cookie（需相应权限） | 以 CAS 更新评价及审核状态 |
+| `POST` | `/admin-api/reviews` | Cookie（需相应权限） | 旧客户端兼容：仅单条处置或仅设置，拒绝整库增删及隐式批准 |
 | `GET` | `/admin-api/session` | Cookie（需相应权限） | 检查管理会话 |
 | `GET` | `/admin-api/manifest` | Cookie（需相应权限） | 读取完整课程树和 revision |
 | `GET` | `/admin-api/manifest-verify` | Cookie（需相应权限） | 校对清单：与 R2 只读比对，产出移动/缺失/新增/空发现报告 |
@@ -188,8 +199,9 @@
 
 公开服务在进程内复用 manifest/reviews 快照与匿名评价分组：每次访问检查文件指纹，原子替换或数据改变立即失效，最长 3 秒强制重读。读取失败不会返回旧成功快照；健康检查始终重读。登录用户的 `viewer_reaction` 单独生成，不能复用其他用户的值。此缓存不改变下述 HTTP 缓存约定，也不改变管理端写入、审核和发布回滚流程。
 
-- `/api/v1` 中除 health 外的 GET 成功响应带 `ETag`，并使用 `Cache-Control: public, max-age=60, stale-while-revalidate=300`。携带匹配的 `If-None-Match` 会返回 `304`、无正文。
-- `/api/v1/health`、所有 POST、所有旧公开/管理接口均为 `Cache-Control: no-store`。
+- 含评价派生内容的 `/api/v1/home`、`courses`（含详情）、`review-groups`（含详情）、`search-index`、`search-data` 使用 `Cache-Control: no-store`，不生成 `ETag`，不因旧 `If-None-Match` 返回 `304`，使隐藏或撤销后下一次读取使用当前公开状态。
+- 其余可缓存公共 GET（如 guides/catalog/about）成功响应带 `ETag`，并使用 `Cache-Control: public, max-age=60, stale-while-revalidate=300`。携带匹配的 `If-None-Match` 会返回 `304`、无正文。
+- `/api/v1/health`、身份/本人及订单状态读取、所有 POST、所有旧公开/管理接口均为 `Cache-Control: no-store`。
 - Node 路由当前**不设置** `Access-Control-Allow-Origin`，也没有 `OPTIONS` 预检路由。浏览器代码应与站点同源；微信小程序不使用浏览器 CORS，但必须在微信公众平台配置合法 request 域名。
 
 ### 公共 v1 响应与错误
@@ -551,8 +563,8 @@ curl -sS -X PUT 'https://nkustudy.top/api/v1/reviews/<REVIEW_ID>/reaction'   -H 
 ```
 
 - `course_id` 必须存在；`teacher` 最多 80 字符；`rating` 必须为 1–5 的整数；`body` 最多 2000 字符且长度不小于当前服务端 `rules.minLength`；tags 去重后最多 12 个、每项最多 40 字符。
-- `website` 是反机器人蜜罐字段，应留空。非空时服务端返回成功但不写评价。
-- 成功 `200`：`{ "code":0, "data": { "submitted":true, "pending":true } }`；是否待审核由网站的同一份评价规则决定。
+- `website` 是反机器人蜜罐字段，应留空。非空时返回 `200` 但不写评价，`submitted/accepted` 均为 `false`；客户端不能把它展示为已受理。
+- 持久提交成功 `200`：`{ "code":0, "data": { "submitted":true, "accepted":true, "pending":true } }`；`pending` 由网站的同一份评价规则决定，符合自动公开规则时为 `false`。
 - 限流：先按 IP 统计尝试，每分钟 30 次、全局每分钟 1000 次；有效提交再按规则的 `hourlyLimit`、`dailyLimit` 持久化限流，默认分别为 3、10。
 - 小程序和网站共用同一评价写入服务、审核队列和 `reviews.json`，不会产生第二套评价数据。
 
@@ -602,7 +614,7 @@ curl -sS https://nkustudy.top/review-api/submit \
 }
 ```
 
-只返回未隐藏条目；每项移除 `ipHash`、`userAgent`、`contact`。
+仅返回具有有效服务器公开依据、非私密、非 blocked、未隐藏的条目。公开依据包含S3管理员明确决定，以及按用户2026-10-06决定导入的v1既有公开反馈；历史导入范围和来源记录见下文S3单条处置。`handlingStatus` 与 `publicationState` 分开；新投稿处理完成、回复、取消隐藏都不产生公开资格。公开 DTO 永不含账号归属、IP、UA、联系方式、举报引用或内部来源字段；`reply/repliedAt` 仅在 `replyVisibility=public` 且条目可公开时返回。既有公开回复由迁移保留；缺失的历史回复时间不补造。
 
 ```bash
 curl -sS https://nkustudy.top/feedback-api/feedback
@@ -634,7 +646,15 @@ curl -sS https://nkustudy.top/feedback-api/feedback
 
 请求：`{type?, title, content, contact?, website?}`。`type` 最多 40 字符，空值默认为 `bug`；标题最多 120 字符；正文最多 2000 字符且达到规则最短长度；联系方式最多 120 字符。`website` 为蜜罐，应留空。
 
-成功：`{ "ok":true }`。主要错误：`400` 校验/JSON、`403` 提交关闭、`429` 限流、`413` 正文超限。尝试限流为每 IP 每分钟 30、全局每分钟 1000；有效提交默认每小时 3、每天 15，可由后台规则调整。
+普通投稿须登录且手机号已验证。成功仅在原子持久化后返回 `{ok:true,accepted:true,private:false,receiptId,replyAvailable:true}`。蜜罐或关闭的指南反馈返回 `accepted:false`，不能当作已存储。主要错误：`400` 校验/JSON、`401` 未登录、`403` 未认证/封禁/提交关闭、`429` 限流、`413` 正文超限。尝试限流为每 IP 每分钟 30、全局每分钟 1000；普通有效提交默认每小时 3、每天 15，可由后台规则调整。
+
+新普通反馈受理后为`publicationState=pending`、`replyVisibility=submitter`，须管理员显式批准才可公开。历史公开保留只用于v1迁移，不使新投稿自动公开；客户端不能通过旧`status`、来源字段、处理完成或回复绕过S3规则。
+
+### `POST /feedback-api/report`
+
+请求 `{title,content,contact?,reportUrl?,reportTarget?,resourceRef?,website?}`，服务器强制 report/private，不能通过客户端字段公开。无需登录；如提供登录凭证则必须有效，不降级为匿名。正文至少 5 字，不受普通反馈提交开关、最短长度或指南反馈开关影响。报告独立配额为每 IP 每小时 3、每天 15，旧 `/feedback-api/submit` 的 `type=report|complaint` 复用同一服务与配额。
+
+成功 `{ok:true,accepted:true,private:true,receiptId,replyAvailable}`；只有关联账号时 `replyAvailable=true`，表示可在本人列表查看已保存回复，不表示通知已发送。没有凭裸回执 ID 查询私密内容的公开接口。
 
 ```bash
 curl -sS https://nkustudy.top/feedback-api/submit \
@@ -817,7 +837,8 @@ curl -sS -b admin.cookies https://nkustudy.top/admin-api/sync-r2-all \
 | `/admin-api/about` | `{title,content}`，分别最多 120/6000 字符 |
 | `/admin-api/participate` | `{title,content}`，分别最多 120/8000 字符 |
 | `/admin-api/links` | `{title,intro,mutualTitle,recommendedTitle,siteInfoTitle,siteInfo:{name,url,description},links:[{id,type,name,url,description,hidden}]}`；type 仅 `mutual`/`recommended` |
-| `/admin-api/feedback` | 完整反馈 store：`{version,updated,title,announcement,rules,items}` |
+
+`/admin-api/feedback` 的 GET 仍返回完整反馈 store，但 S3 的单条处置与纯设置保存采用下节协议：单条处置持久化后使公开快照失效，不执行 Astro 构建；反馈设置保存仍触发构建发布。旧整份 POST 仅作为受限制的兼容入口，不能按上述通用内容发布协议增删、重排或批量修改反馈。
 
 主要错误：缺/过期 revision 分别为 `400`/`409`；构建失败会回滚内容并可能返回 `rolledBack:true`；发布状态不明确时可能 `503`。静态目录已切换但 fsync 或旧 release 清理降级时，成功响应保持原有字段并附加 `warnings: string[]`；管理页面会显示这些警告，调用方也应记录并安排运维核查。示例：
 
@@ -828,11 +849,25 @@ curl -sS -b admin.cookies https://nkustudy.top/admin-api/about \
   --data '{"data":{"title":"NKUStudy","content":"关于内容"},"expectedRevision":"<REVISION>"}'
 ```
 
-### `GET/POST /admin-api/reviews`
+### S3 评价与反馈单条处置
 
-GET 返回 `{ok:true,data,revision}`，其中 `data` 是完整 `{version,updated,rules,reviews}`，包含审核所需的 pending/hidden 和内部审计字段，故只允许管理 Cookie 使用。
+`GET /admin-api/reviews`、`GET /admin-api/feedback` 返回 `{ok:true,data,revision,itemRevisions,settingsRevision}`。`GET /admin-api/{reviews|feedback}/:id` 返回 `{ok:true,data:item,itemRevision,publicEligible}`。`publicEligible` 是服务器推导的只读字段。
 
-POST 请求 `{data,expectedRevision}`。服务端只合并 `data.rules`，并在 `data.reviews` 为数组时整表替换评价数组；使用同文件 CAS，防止覆盖同时到达的公开投稿。成功 `{ok:true,data,revision}`，缺 revision `400`，冲突 `409`。
+`PATCH /admin-api/feedback/:id` 请求 `{expectedItemRevision,changes}`。仅允许 `handlingStatus`（open/processing/completed/rejected/parked）、`hidden`、`publicationDecision`（approve/reject/revoke）、`reply`（最多 2000 JS 字符，可清空）、`replyVisibility`（submitter/public）。评价 PATCH 仅允许 `hidden/publicationDecision`。原文、类型、ID、归属和所有管理员/时间字段不接受客户端修改。冲突 `409 ITEM_CONFLICT` 返回 `currentItem/currentItemRevision`；成功返回新 item/revision/publicEligible。revision 不受别条、设置或有帮助计数影响。
+
+单条处置以最新显式决定控制公开资格：隐藏、拒绝或撤销可使历史导入内容退出公开出口；取消隐藏不恢复已撤销的资格。修改回复默认转为`submitter`，显式`replyVisibility=public`须条目当时通过公共gate，否则`400 PUBLIC_REPLY_NOT_ALLOWED`。`publicationBlocked`或已知私密/举报条目不能批准公开（`400 PUBLICATION_BLOCKED`），客户端也不能修改导入来源或解除block。
+
+`PATCH /admin-api/feedback/settings` 请求 `{expectedSettingsRevision,changes:{title?,announcement?,rules?}}`；reviews/settings 仅允许 rules。反馈设置保留静态构建、发布证明和回滚事务，条目处置不触发构建。成功 `{ok:true,data:settings,settingsRevision,rulesProvenance}`；冲突 `409 SETTINGS_CONFLICT` 返回 currentSettings/currentSettingsRevision。
+
+新评价保留既有 `moderationRequired` 与 `keywordFilter.enabled` 语义：人工开关启用或已启用的关键词检测命中则 pending，否则自动 approved。自动决定记录实际规则快照/hash、配置来源、服务器时间及系统来源；规则变更与显式人工决定记录真实管理员。旧已公开评价继续通过`legacy_visibility_import`保留可见性，`reviewedBy=system`与`reviewedAt`表示迁移导入，不是历史人工审批回填。
+
+按2026-10-06用户决定，尚未迁移的v1反馈中，旧公开接口实际可见的普通反馈保持公开：原始`status`精确为`approved`/`completed`，未隐藏、未私密、无举报来源且无显式`publicationBlocked`。迁移保留`legacyStatus`，将公开状态设为approved、`privacySource=verified_legacy_feedback_origin`，独立记录`legacyVisibilitySource=legacy_feedback_visibility_import`及`legacyVisibilityImportedAt`；初始`decisionSource=legacy_feedback_visibility_import`，不生成历史`reviewedBy/reviewedAt`。已有公开回复文本与既有时间原样保留，`replyVisibility=public`；缺失时间不补造。服务器后续明确批准时才记录真实`reviewedBy/reviewedAt`与`admin_decision`，并保留独立导入来源。
+
+旧未公开、私密或举报反馈不因本次导入公开；已知投诉举报永久私密。已有schema v2条目不再根据旧`status`或`handlingStatus`导入资格，原v2 blocked条目不会自动解封，PATCH不能修改私密或来源边界。新普通反馈仍待管理员显式批准，回复与处理状态均不授予新的公开资格。
+
+旧两个 POST `{data,expectedRevision}` 仍做整份版本核对，但只适配“一条允许的处置变化”或“仅设置变化”；拒绝增删 ID、原文修改、多条/混合保存和旧 status 隐式批准。UI 已全部使用单条 PATCH；当前没有批量处置、合并或条目删除接口。反馈写需要 content.moderate，评价写需要 content.edit；GET 延续 content.read，依法查询/导出所有有效管理员可用的既有边界不变。
+
+含 UGC 派生结果的 home/courses/review-groups/search-index/search-data 及旧公开列表均 `Cache-Control:no-store`，不复用 304；写入成功主动清快照。部署须同时核对 CDN 缓存规则并清除旧缓存，不能用本机测试声称已经召回浏览器或第三方留存的旧副本。
 
 ### `GET/POST /admin-api/editor-settings`
 

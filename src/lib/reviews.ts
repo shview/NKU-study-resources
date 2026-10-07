@@ -1,4 +1,5 @@
 import { readBuildData } from "./runtime-data";
+import { isReviewPublicEligible } from "../../server/moderation-model.mjs";
 
 export type Review = {
   id: string;
@@ -43,7 +44,7 @@ export function reviewPath(key: string) {
 }
 
 export function approvedReviews(items: Review[] = reviews) {
-  return items.filter((review) => ["approved", "通过"].includes(String(review.status || "").trim()) && !review.hidden);
+  return items.filter(isReviewPublicEligible);
 }
 
 export function ratingCounts(items: Review[]) {

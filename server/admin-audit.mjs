@@ -16,13 +16,13 @@ export function contentChanges(previous, next, key) {
   const changes = [];
   for (const id of new Set([...before.keys(), ...after.keys()])) {
     const a = before.get(id), b = after.get(id);
-    const known = new Set(['id','status','hidden','private','blocked','title','content','type','contact','user_id','reply','rating','tags','teacher','courseTitle','updatedBy','updatedAt','repliedBy','repliedAt','handledBy','handledAt','reviewedBy','reviewedAt','createdAt','reportUrl','reportTarget']);
+    const known = new Set(['id','status','hidden','private','blocked','title','content','type','contact','user_id','reply','rating','tags','teacher','courseTitle','updatedBy','updatedAt','repliedBy','repliedAt','handledBy','handledAt','reviewedBy','reviewedAt','createdAt','reportUrl','reportTarget','handlingStatus','publicationState','publicationBlocked','replyVisibility','decisionSource','ruleHash','ruleSnapshot','rulesProvenance']);
     const rawFields = [...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])].filter(name => JSON.stringify(a?.[name]) !== JSON.stringify(b?.[name]));
     const fields = [...new Set(rawFields.map(name => known.has(name) ? name : 'other_fields'))];
     if (!fields.length) continue;
     const states = {};
-    for (const name of ['status', 'hidden', 'private', 'blocked']) {
-      const safe = value => typeof value === 'boolean' || ['pending', 'approved', 'rejected', 'open', 'completed', 'processing'].includes(value) ? value : null;
+    for (const name of ['status', 'handlingStatus', 'publicationState', 'hidden', 'private', 'blocked', 'publicationBlocked', 'replyVisibility', 'decisionSource']) {
+      const safe = value => typeof value === 'boolean' || ['pending', 'approved', 'rejected', 'open', 'completed', 'processing', 'parked', 'submitter', 'public', 'manual', 'automatic', 'legacy_visibility_import'].includes(value) ? value : null;
       if (fields.includes(name)) states[name] = { before: safe(a?.[name]), after: safe(b?.[name]) };
     }
     changes.push({ id, operation: !b ? 'delete' : !a ? 'create' : 'update', fields, states });
@@ -36,6 +36,7 @@ export function stampContentActor(incoming, previous, key, username, now = new D
   next[key] = (next[key] || []).map(row => {
     const old = before.get(String(row.id));
     const value = { ...row };
+    for (const field of ['handled_by','handled_at','updated_by','updated_at','replied_by','replied_at','reviewed_by','reviewed_at']) delete value[field];
     for (const field of ['updatedBy', 'updatedAt', 'repliedBy', 'repliedAt', 'handledBy', 'handledAt', 'reviewedBy', 'reviewedAt']) {
       if (old && Object.hasOwn(old, field)) value[field] = old[field]; else delete value[field];
     }

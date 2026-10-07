@@ -24,6 +24,10 @@ export class SnapshotCache {
     this.now = now;
   }
 
+  invalidate() {
+    this.#entry = null;
+  }
+
   get({ force = false } = {}) {
     try {
       let version = this.readVersion();

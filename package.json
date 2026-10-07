@@ -31,7 +31,7 @@
     "better-sqlite3": "^12.11.1",
     "busboy": "^1.6.0",
     "jszip": "^3.10.1",
-    "markdown-it": "^14.3.0",
+    "markdown-it": "^14.3.2",
     "sharp": "0.35.5",
     "typescript": "^5.9.3",
     "vditor": "^3.11.2"

@@ -22,6 +22,12 @@ test('S2 administrator HTTP audit, local I/O recovery, consistent private backup
   await fs.writeFile(path.join(app, 'package.json'), JSON.stringify({ type: 'module', scripts: { 'check:content': 'node fixture-build.mjs check', build: 'node fixture-build.mjs build' } }));
   await fs.writeFile(path.join(app, 'fixture-build.mjs'), "import fs from 'node:fs'; if(process.argv[2]==='build'){fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/index.html','<h1>synthetic S2 acceptance</h1>');}");
   for (const name of ['about','feedback','footer','guides','home','links','manifest','participate','reviews']) await fs.copyFile(path.join(root, 'src/data/fixtures', `${name}.json`), path.join(dataDir, `${name}.json`));
+  for (const [kind, key, item] of [
+    ['reviews','reviews',{ id:'s2-review',courseTitle:'synthetic',teacher:'synthetic',content:'private original content',status:'pending',hidden:false }],
+    ['feedback','items',{ id:'s2-complaint',title:'private complaint title',content:'private complaint body',type:'report',private:true,status:'pending',hidden:false }],
+  ]) {
+    const file = path.join(dataDir, `${kind}.json`); const data = JSON.parse(await fs.readFile(file)); data[key] = [item]; await fs.writeFile(file, JSON.stringify(data));
+  }
   await fs.writeFile(path.join(dataDir, 'notify-settings.json'), '{"enabled":false}');
   await fs.writeFile(path.join(dataDir, 'backup-settings.json'), '{"autoEnabled":false,"r2DataBackup":false,"webdavEnabled":false}');
   const reserve = http.createServer(); await new Promise(resolve => reserve.listen(0, '127.0.0.1', resolve));
@@ -82,27 +88,28 @@ test('S2 administrator HTTP audit, local I/O recovery, consistent private backup
     assert.equal(db.prepare('SELECT COUNT(*) n FROM law_enforcement_logs').get().n, 7);
   });
 
-  await t.test('review and complaint changes stamp the real actor and audit IDs, fields, states, failures and deletions', async () => {
-    const sample = { id: 's2-review', courseTitle: 'synthetic', teacher: 'synthetic', content: 'private original content', status: 'pending', hidden: false };
-    const complaints = { id: 's2-complaint', title: 'private complaint title', content: 'private complaint body', type: 'report', private: true, status: 'pending', hidden: false };
-    for (const [kind, key, initial] of [['reviews','reviews',sample],['feedback','items',complaints]]) {
-      let current = (await request(`/admin-api/${kind}`, { cookie })).value;
-      current.data[key] = [initial];
-      const saved = await request(`/admin-api/${kind}`, { method: 'POST', cookie, body: { data: current.data, expectedRevision: current.revision } });
-      assert.ok(saved.rows.some(row => row.target === `${kind === 'reviews' ? 'review' : 'feedback'}:${initial.id}`));
-      current = (await request(`/admin-api/${kind}`, { cookie })).value;
-      current.data[key][0] = { ...current.data[key][0], status: 'approved', hidden: true, reply: 'private reply text', handledBy: 'forged-actor', handledAt: '1900', repliedBy: 'forged-actor', repliedAt: '1900' };
-      await request(`/admin-api/${kind}`, { method: 'POST', cookie, body: { data: current.data, expectedRevision: current.revision } });
-      const readback = (await request(`/admin-api/${kind}`, { cookie })).value;
-      assert.equal(readback.data[key][0].handledBy, 'Shview'); assert.equal(readback.data[key][0].repliedBy, 'Shview'); assert.notEqual(readback.data[key][0].handledAt, '1900');
-      current.data[key][0].hidden = false;
-      await request(`/admin-api/${kind}`, { method: 'POST', cookie, body: { data: current.data, expectedRevision: current.revision }, status: 409 });
+  await t.test('review and complaint changes stamp the real actor and audit IDs, fields, states and rejected tampering', async () => {
+    for (const [kind,key,id] of [['reviews','reviews','s2-review'],['feedback','items','s2-complaint']]) {
+      const current = (await request(`/admin-api/${kind}`, { cookie })).value;
+      const endpoint = `/admin-api/${kind}/${id}`;
+      const revision = current.itemRevisions[id];
+      const changes = kind === 'reviews' ? { publicationDecision:'approve',hidden:true } : { handlingStatus:'completed',reply:'private reply text',hidden:true };
+      const saved = await request(endpoint, { method:'PATCH',cookie,body:{expectedItemRevision:revision,changes} });
+      assert.ok(saved.rows.some(row => row.target === `${kind === 'reviews' ? 'review' : 'feedback'}:${id}`));
+      assert.equal(saved.value.data.updatedBy, 'Shview');
+      if (kind === 'feedback') assert.equal(saved.value.data.handledBy, 'Shview');
+      if (kind === 'feedback') assert.equal(saved.value.data.repliedBy, 'Shview');
+      else assert.equal(saved.value.data.reviewedBy, 'Shview');
+      await request(endpoint, { method:'PATCH',cookie,body:{expectedItemRevision:revision,changes:{hidden:false}},status:409 });
+      await request(endpoint, { method:'PATCH',cookie,body:{expectedItemRevision:saved.value.itemRevision,changes:{handledBy:'forged-actor'}},status:400 });
+      const readback = (await request(`/admin-api/${kind}`, {cookie})).value;
       readback.data[key] = [];
-      await request(`/admin-api/${kind}`, { method: 'POST', cookie, body: { data: readback.data, expectedRevision: readback.revision } });
-      const rows = db.prepare('SELECT * FROM admin_audit_log WHERE target=?').all(`${kind === 'reviews' ? 'review' : 'feedback'}:${initial.id}`);
-      assert.ok(rows.some(row => row.action === 'content.delete' && row.status === 200));
-      assert.ok(rows.some(row => row.action === 'content.update' && row.status === 409));
-      const log = JSON.stringify(rows); for (const value of [initial.content, 'private reply text', 'forged-actor']) assert.equal(log.includes(value), false);
+      await request(`/admin-api/${kind}`, {method:'POST',cookie,body:{data:readback.data,expectedRevision:readback.revision},status:400});
+      const rows = db.prepare('SELECT * FROM admin_audit_log WHERE target=?').all(`${kind === 'reviews' ? 'review' : 'feedback'}:${id}`);
+      assert.ok(rows.some(row => row.action === 'content.update' && row.status === 200));
+      assert.ok(rows.some(row => row.status === 409));
+      const log = JSON.stringify(rows);
+      for (const value of ['private original content','private complaint body','private reply text','forged-actor']) assert.equal(log.includes(value), false);
     }
     const blocked = await request(`/admin-api/mp-users/${userId}/blocked`, { method: 'POST', cookie, body: { blocked: true } });
     assert.equal(blocked.rows[0].target, `user:${userId}`); assert.deepEqual(JSON.parse(blocked.rows[0].detail).blocked, { before: false, after: true });

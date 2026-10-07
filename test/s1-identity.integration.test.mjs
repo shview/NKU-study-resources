@@ -179,7 +179,7 @@ for (const notNull of [false, true]) test(`S1 real HTTP identity acceptance: leg
   db.prepare("UPDATE mp_auth_tokens SET expires_at=? WHERE token_hash=?").run(expiry, aTokenHash);
   for (const [route, body] of writes) await request(route, { headers: { ...cookieA, authorization: "Bearer invalid" }, body, expected: 401 });
   assert.ok((await readJson("reviews")).reviews.every((review) => review.user_id === aId && review.status === "pending"));
-  assert.ok((await readJson("feedback")).items.every((item) => item.user_id === aId && item.status === "pending"));
+  assert.ok((await readJson("feedback")).items.every((item) => item.user_id === aId && item.handlingStatus === "open" && item.publicationState === "pending"));
   await request("/api/v1/favorites", { body: { course_id: courses[0].id, user_id: bId }, headers: cookieA });
   for (const suffix of ["", "/feedback", "/reviews", "/favorites"]) {
     await request(`/api/v1/me${suffix}`, { expected: 401 });
@@ -247,7 +247,7 @@ for (const notNull of [false, true]) test(`S1 real HTTP identity acceptance: leg
   assert.equal(adminRead.value.data.items.filter((item) => item.private).length, 5);
   const changes = adminRead.value.data;
   for (const item of changes.items) { if (item.private) { delete item.private; item.type = "bug"; item.status = "approved"; item.hidden = false; } }
-  await request("/admin-api/feedback", { body: { data: changes, expectedRevision: adminRead.value.revision }, headers: { ...adminHeaders, cookie: admin.cookie } });
+  await request("/admin-api/feedback", { body: { data: changes, expectedRevision: adminRead.value.revision }, headers: { ...adminHeaders, cookie: admin.cookie }, expected: 400 });
   const publicFeedback = (await request("/feedback-api/feedback")).value;
   assert.equal(publicFeedback.items.length, 0); safeDto(publicFeedback);
   assert.equal((await readJson("feedback")).items.filter((item) => item.private).length, 5);

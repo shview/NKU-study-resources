@@ -313,7 +313,8 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
   assert.equal(feedbackResponse.status, 200);
   assert.equal((await feedbackResponse.json()).ok, true);
   const feedbackAfterSubmit = await (await fetch(`http://127.0.0.1:${port}/admin-api/feedback`, { headers: { cookie } })).json();
-  assert.equal(feedbackAfterSubmit.data.items[0].status, "pending", "反馈默认待审核不公开展示");
+  assert.equal(feedbackAfterSubmit.data.items[0].publicationState, "pending", "反馈默认待批准不公开展示");
+  assert.equal(feedbackAfterSubmit.data.items[0].handlingStatus, "open");
   const staleReviews = await fetch(`http://127.0.0.1:${port}/admin-api/reviews`, {
     method: "POST",
     headers: adminHeaders({ "content-type": "application/json", cookie }),
@@ -536,7 +537,7 @@ test("legacy public write routes start with isolated DATA_DIR and persist submis
     }),
   });
   assert.equal(publicReviewResponse.status, 200);
-  assert.deepEqual(await publicReviewResponse.json(), { code: 0, data: { submitted: true, pending: true } });
+  assert.deepEqual(await publicReviewResponse.json(), { code: 0, data: { submitted: true, accepted: true, pending: true } });
 
   const visitStatsResponse = await fetch(`http://127.0.0.1:${port}/visit-api/stats`);
   assert.equal(visitStatsResponse.status, 200);

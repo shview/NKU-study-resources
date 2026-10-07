@@ -95,17 +95,24 @@ export async function runPublicApiSmoke() {
       assert.equal(await cached.text(), "", `${route}: 304 response must be empty`);
       return response;
     };
+    const moderatedGet = async (route) => {
+      const response = await request(route, { headers: { 'if-none-match': '"obsolete-ugc-cache"' } });
+      assert.equal(response.status, 200, `${route}: moderated data must not return 304`);
+      assert.equal(response.cache, 'no-store', `${route}: moderated data must not be cached`);
+      assert.equal(response.etag, null, `${route}: moderated data must not expose a reusable ETag`);
+      return response;
+    };
     const health = await waitForHealth(`${base}/api/v1/health`, child);
     assert.equal(health.code, 0, "Health response contract failed");
     assert.equal(health.data?.status, "ok", "Health response contract failed");
-    const courses = (await cachedGet("/api/v1/courses?page=1&page_size=20")).body;
+    const courses = (await moderatedGet("/api/v1/courses?page=1&page_size=20")).body;
     assert.equal(courses.code, 0, "Course response contract failed");
     assert.equal(courses.data?.items?.length, 1, "Course response contract failed");
-    const reviewGroups = await request("/api/v1/review-groups");
+    const reviewGroups = await moderatedGet("/api/v1/review-groups");
     assert.equal(reviewGroups.status, 200, "Review group response contract failed");
     assert.equal(reviewGroups.body.code, 0, "Review group response contract failed");
     assert.ok(Array.isArray(reviewGroups.body.data?.items), "Review group response contract failed");
-    const searchIndex = (await cachedGet("/api/v1/search-index")).body;
+    const searchIndex = (await moderatedGet("/api/v1/search-index")).body;
     assert.equal(searchIndex.code, 0, "Search index response contract failed");
     await cachedGet("/api/v1/guides?page=1&page_size=5");
     const guides = await verifyGuideApi({ request, snapshot, sourceContent, searchIndex: searchIndex.data });
