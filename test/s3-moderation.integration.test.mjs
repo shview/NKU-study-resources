@@ -13,6 +13,12 @@ const password = 'synthetic-S2-admin-password';
 test('S3 moderation HTTP contracts, private reports, scoped conflicts and public revocation', { timeout: 120000 }, async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'nku-s3-moderation-'));
   const app = path.join(dir, 'app'), dataDir = path.join(dir, 'data'), dbPath = path.join(dir, 'state.sqlite');
+  const oldPublicFeedback = Array.from({ length: 8 }, (_, index) => ({
+    id: `legacy-public-${index}`, type: 'bug', title: `historical public ${index}`,
+    content: `HISTORICAL_PUBLIC_BODY_${index}`, status: index < 4 ? 'approved' : 'completed',
+    reply: `HISTORICAL_PUBLIC_REPLY_${index}`, repliedAt: '2026-09-01T01:00:00.000Z',
+    hidden: false, private: false, contact: 'PRIVATE_CONTACT_MUST_STAY_PRIVATE',
+  }));
   await fs.mkdir(app); await fs.mkdir(dataDir);
   await fs.cp(path.join(root, 'server'), path.join(app, 'server'), { recursive: true });
   await fs.symlink(path.join(root, 'node_modules'), path.join(app, 'node_modules'));
@@ -25,7 +31,10 @@ test('S3 moderation HTTP contracts, private reports, scoped conflicts and public
     ['reviews','reviews',{ id:'legacy-review',courseTitle:'synthetic',teacher:'synthetic',content:'private original content',status:'approved',hidden:false }],
     ['feedback','items',{ id:'legacy-report',title:'private complaint title',content:'private complaint body',type:'report',private:true,status:'pending',hidden:false }],
   ]) {
-    const file = path.join(dataDir, `${kind}.json`); const data = JSON.parse(await fs.readFile(file)); data[key] = [item]; if(kind === 'feedback') data[key].push({id:'legacy-unknown',title:'old approved',content:'legacy-private-origin-unknown',type:'bug',status:'approved'}); if(kind === 'reviews') data.rules = {...data.rules,submissionOpen:true,minLength:5,hourlyLimit:100,dailyLimit:100,submissionOptions:{allowCustomCourse:true,allowCustomTeacher:true}}; await fs.writeFile(file, JSON.stringify(data));
+    const file = path.join(dataDir, `${kind}.json`); const data = JSON.parse(await fs.readFile(file)); data[key] = [item];
+    if(kind === 'feedback') data[key].push({id:'legacy-unknown',title:'old pending',content:'legacy-private-origin-unknown',type:'bug',status:'pending'}, ...oldPublicFeedback);
+    if(kind === 'reviews') data.rules = {...data.rules,submissionOpen:true,minLength:5,hourlyLimit:100,dailyLimit:100,submissionOptions:{allowCustomCourse:true,allowCustomTeacher:true}};
+    await fs.writeFile(file, JSON.stringify(data));
   }
   await fs.writeFile(path.join(dataDir, 'notify-settings.json'), '{"enabled":false,"guide_feedback_enabled":false}');
   await fs.writeFile(path.join(dataDir, 'backup-settings.json'), '{"autoEnabled":false,"r2DataBackup":false,"webdavEnabled":false}');
@@ -75,11 +84,36 @@ test('S3 moderation HTTP contracts, private reports, scoped conflicts and public
   assert.equal(legacy.data.reviews[0].decisionSource,'legacy_visibility_import');
   assert.equal(legacy.data.reviews[0].publicationState,'approved');
   assert.equal((await request('/review-api/reviews')).value.reviews.length,1);
-  assert.equal((await request('/feedback-api/feedback')).value.items.length,0);
+  assert.equal((await request('/feedback-api/feedback')).value.items.length,8);
   await patch('feedback','legacy-unknown',{publicationDecision:'approve'},undefined,400);
   const beforeRestart = await fs.readFile(path.join(dataDir,'feedback.json'),'utf8');
   await stop(); await start();
   assert.equal(await fs.readFile(path.join(dataDir,'feedback.json'),'utf8'),beforeRestart,'migration is idempotent');
+
+  await t.test('eight historical public feedback rows and replies survive migration; later revocation survives restart', async () => {
+    const publicRows = (await request('/feedback-api/feedback')).value.items;
+    const stored = (await read('feedback')).data.items;
+    for (const original of oldPublicFeedback) {
+      const visible = publicRows.find(item => item.id === original.id);
+      for (const key of ['title', 'content', 'reply', 'repliedAt']) assert.equal(visible[key], original[key]);
+      assert.equal(visible.contact, undefined);
+      const row = stored.find(item => item.id === original.id);
+      assert.equal(row.decisionSource, 'legacy_feedback_visibility_import');
+      assert.equal(row.reviewedBy, undefined, 'do not manufacture historical administrator approval');
+      assert.equal(row.reviewedAt, undefined);
+      assert.equal(row.replyVisibility, 'public');
+    }
+    await patch('feedback', 'legacy-public-0', { hidden: true });
+    await patch('feedback', 'legacy-public-1', { publicationDecision: 'revoke' });
+    await patch('feedback', 'legacy-public-1', { handlingStatus: 'completed', hidden: false });
+    await stop(); await start();
+    const afterRestart = (await request('/feedback-api/feedback')).value.items;
+    assert.equal(afterRestart.length, 6);
+    assert.equal(afterRestart.some(item => ['legacy-public-0', 'legacy-public-1'].includes(item.id)), false);
+    assert.equal((await read('feedback')).data.items.find(item => item.id === 'legacy-public-1').publicationState, 'pending');
+    // Isolate later submission assertions from these synthetic history rows.
+    for (let index = 2; index < 8; index += 1) await patch('feedback', `legacy-public-${index}`, { hidden: true });
+  });
 
   await t.test('anonymous report and legacy aliases persist privately despite normal and guide switches; invalid credentials fail', async () => {
     await settings('feedback',{rules:{submissionOpen:false,minLength:1900}});
@@ -104,14 +138,25 @@ test('S3 moderation HTTP contracts, private reports, scoped conflicts and public
     const publicText = JSON.stringify((await request('/feedback-api/feedback')).value);
     for(const text of ['PRIVATE_REPORT_SENTINEL','OWNER_REPLY_SENTINEL','CONTACT_SENTINEL','private-reference']) assert.equal(publicText.includes(text),false);
     await request(`/admin-api/feedback/${own.value.receiptId}`,{cookie:A.cookie,status:401});
+    await request(`/admin-api/feedback/${own.value.receiptId}`,{status:401});
+    await stop(); await start();
+    const restoredOwn = (await request('/api/v1/me/feedback',{cookie:A.cookie})).value.data.items.find(item=>item.id===own.value.receiptId);
+    assert.equal(restoredOwn.reply,'OWNER_REPLY_SENTINEL');
+    assert.equal((await request('/api/v1/me/feedback',{cookie:B.cookie})).value.data.total,0);
+    const restoredAdmin = (await request(`/admin-api/feedback/${own.value.receiptId}`,{cookie})).value.data;
+    assert.equal(restoredAdmin.private,true);
+    assert.equal(restoredAdmin.handlingStatus,'completed');
+    assert.equal(JSON.stringify((await request('/feedback-api/feedback')).value).includes('OWNER_REPLY_SENTINEL'),false);
   });
 
   await t.test('single-item CAS separates completed, reply and publication; settings and another row do not conflict',async()=>{
     await settings('feedback',{rules:{submissionOpen:true,minLength:5,hourlyLimit:100,dailyLimit:100}});
-    const first = await request('/feedback-api/submit',{method:'POST',cookie:A.cookie,body:{title:'normal A',content:'NORMAL_A_SENTINEL',type:'bug'}});
+    const first = await request('/feedback-api/submit',{method:'POST',cookie:A.cookie,body:{title:'normal A',content:'NORMAL_A_SENTINEL',type:'bug',schemaVersion:1,status:'approved',publicationState:'approved',decisionSource:'legacy_feedback_visibility_import',privacySource:'verified_legacy_feedback_origin',legacyVisibilitySource:'old-public',replyVisibility:'public'}});
     const second = await request('/feedback-api/submit',{method:'POST',cookie:A.cookie,body:{title:'normal B',content:'NORMAL_B_SENTINEL',type:'feature'}});
     const a=first.value.receiptId,b=second.value.receiptId;
     const initial=await read('feedback');
+    assert.equal(initial.data.items.find(item=>item.id===a).publicationState,'pending','new client data cannot claim historical visibility');
+    assert.equal(initial.data.items.find(item=>item.id===a).decisionSource,'submission_pending');
     await settings('feedback',{title:'Updated settings'});
     const saved=await patch('feedback',a,{handlingStatus:'completed',reply:'submitter reply'},initial.itemRevisions[a]);
     await patch('feedback',b,{handlingStatus:'processing'},initial.itemRevisions[b]);

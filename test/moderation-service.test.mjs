@@ -55,7 +55,7 @@ test("single-item update persists only allowed changes with real metadata and re
 test("privacy, report aliases and uncertain legacy feedback cannot be approved or given public replies", async (t) => {
   const f = await fixture(t, { data: { rules: {}, items: [
     item("private", { private: true }), item("report", { type: "report" }), item("alias", { reportUrl: "https://example.invalid" }),
-    { id: "legacy", title: "旧普通", content: "正文", status: "approved", private: false, reply: "旧回复" },
+    { id: "legacy", title: "旧隐藏", content: "正文", status: "approved", hidden: true, private: false, reply: "旧回复" },
   ] } });
   const base = await f.service.read();
   for (const id of ["private", "report", "alias", "legacy"]) {
@@ -66,6 +66,74 @@ test("privacy, report aliases and uncertain legacy feedback cannot be approved o
     assert.equal(result.data.publicationState, "pending");
   }
   assert.ok((await f.read()).items.every((row) => !isFeedbackPublicEligible(row)));
+});
+
+test("historical public feedback keeps its existing reply while later decisions survive service restart", async (t) => {
+  const repliedAt = "2026-08-28T00:00:00Z";
+  const original = { id: "old", title: "旧公开反馈", content: "不可改变的历史正文", type: "feature", status: "completed", reply: "已公开的历史回复", repliedAt };
+  const f = await fixture(t, { data: { items: [original] } });
+  let current = await f.service.get("old");
+  assert.equal(current.publicEligible, true);
+  assert.equal(current.data.replyVisibility, "public");
+  assert.equal(current.data.reply, original.reply);
+  assert.equal(current.data.repliedAt, original.repliedAt);
+  assert.equal(current.data.reviewedBy, undefined);
+  assert.equal(current.data.reviewedAt, undefined);
+  const migratedAt = current.data.legacyVisibilityImportedAt;
+
+  current = await f.service.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { hidden: true } }, actor);
+  assert.equal(current.publicEligible, false);
+  assert.equal(current.data.replyVisibility, "submitter");
+  const restarted = new ModerationService({ store: f.store, filePath: f.filePath, nowIso: () => "2027-01-01T00:00:00Z" });
+  current = await restarted.get("old");
+  assert.equal(current.publicEligible, false, "restart cannot undo a later hide");
+  assert.equal(current.data.hidden, true);
+  assert.equal(current.data.legacyVisibilityImportedAt, migratedAt);
+
+  current = await restarted.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { hidden: false, replyVisibility: "public" } }, actor);
+  assert.equal(current.publicEligible, true, "an explicit unhide can use the retained historical publication");
+  current = await restarted.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { publicationDecision: "revoke" } }, actor);
+  assert.equal(current.publicEligible, false);
+  assert.equal(current.data.publicationState, "pending");
+  assert.equal(current.data.reviewedBy, actor);
+  assert.equal(current.data.replyVisibility, "submitter");
+  current = await f.service.get("old");
+  assert.equal(current.publicEligible, false, "restart cannot restore revoked historical visibility from completed/legacyStatus");
+  assert.equal(current.data.handlingStatus, "completed");
+  assert.equal(current.data.legacyStatus, "completed");
+  current = await f.service.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { handlingStatus: "completed", reply: "撤销后的新回复" } }, actor);
+  assert.equal(current.publicEligible, false);
+  assert.equal(current.data.publicationState, "pending");
+  await assert.rejects(f.service.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { replyVisibility: "public" } }, actor), { code: "PUBLIC_REPLY_NOT_ALLOWED" });
+
+  current = await f.service.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { publicationDecision: "approve", replyVisibility: "public" } }, actor);
+  assert.equal(current.publicEligible, true, "a real later administrator approval accepts verified historical origin");
+  assert.equal(current.data.decisionSource, "admin_decision");
+  assert.equal(current.data.reviewedBy, actor);
+  assert.equal(current.data.reviewedAt, now);
+  assert.equal(current.data.legacyVisibilitySource, "legacy_feedback_visibility_import");
+  assert.equal(current.data.legacyVisibilityImportedAt, migratedAt);
+  assert.equal(current.data.id, original.id);
+  assert.equal(current.data.content, original.content);
+  current = await f.service.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { publicationDecision: "reject" } }, actor);
+  assert.equal((await restarted.get("old")).publicEligible, false, "restart cannot undo a later rejection");
+  assert.equal(current.data.publicationState, "rejected");
+});
+
+test("editing an imported public reply requires an explicit public choice for the replacement", async (t) => {
+  const f = await fixture(t, { data: { items: [{ id: "old", title: "旧公开", content: "原文", status: "approved", reply: "旧回复" }] } });
+  let current = await f.service.get("old");
+  assert.equal(current.publicEligible, true);
+  current = await f.service.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { handlingStatus: "completed" } }, actor);
+  assert.equal(current.publicEligible, true);
+  assert.equal(current.data.replyVisibility, "public");
+  assert.equal(current.data.reviewedBy, undefined, "handling a historically public item does not invent an approval");
+  current = await f.service.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { reply: "新回复默认仅本人" } }, actor);
+  assert.equal(current.publicEligible, true);
+  assert.equal(current.data.replyVisibility, "submitter");
+  current = await f.service.patchItem("old", { expectedItemRevision: current.itemRevision, changes: { reply: "明确公开的新回复", replyVisibility: "public" } }, actor);
+  assert.equal(current.data.replyVisibility, "public");
+  assert.equal(current.data.repliedBy, actor);
 });
 
 test("reply limits reject 2001 intact, clear explicitly, and only eligible items allow public reply", async (t) => {
@@ -89,7 +157,7 @@ test("PATCH rejects immutable content, every server actor alias and direct publi
   const f = await fixture(t);
   const before = await f.read();
   const base = await f.service.get("a");
-  for (const [field, value] of Object.entries({ id: "different", content: "new", title: "new", type: "other", contact: "new", private: false, user_id: 9, createdAt: now, ipHash: "new", userAgent: "new", publicationState: "approved", reviewedBy: "forged", reviewed_by: "forged", repliedAt: now, replied_at: now, updated_by: "forged", publicationBlocked: false, privacySource: "server_feedback_submission" })) {
+  for (const [field, value] of Object.entries({ id: "different", content: "new", title: "new", type: "other", contact: "new", private: false, user_id: 9, createdAt: now, ipHash: "new", userAgent: "new", publicationState: "approved", reviewedBy: "forged", reviewed_by: "forged", repliedAt: now, replied_at: now, updated_by: "forged", publicationBlocked: false, privacySource: "server_feedback_submission", legacyStatus: "completed", legacyVisibilitySource: "legacy_feedback_visibility_import", legacyVisibilityImportedAt: now, decisionSource: "legacy_feedback_visibility_import" })) {
     await assert.rejects(f.service.patchItem("a", { expectedItemRevision: base.itemRevision, changes: { [field]: value } }, actor), { code: "IMMUTABLE_FIELD" }, field);
   }
   await assert.rejects(f.service.patchItem("a", { expectedItemRevision: base.itemRevision, changes: {}, updated_by: "forged" }, actor), { code: "IMMUTABLE_FIELD" });

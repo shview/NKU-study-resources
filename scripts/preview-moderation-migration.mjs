@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { moderationHash, normalizeModerationDocument, isFeedbackPublicEligible, isReviewPublicEligible } from '../server/moderation-model.mjs';
+import { moderationHash, normalizeModerationDocument, isFeedbackPublicEligible, isReviewPublicEligible, isLegacyFeedbackPublicEligible } from '../server/moderation-model.mjs';
 
 // Read-only deployment preflight. Never prints rows, identities, replies or contact details.
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -99,10 +99,26 @@ function main(args) {
       private: rows.filter(item => item.private === true).length,
       publicationBlocked: rows.filter(item => item.publicationBlocked === true).length,
       publicEligible: rows.filter(publicGate).length,
-      importedLegacyVisibility: rows.filter(item => item.decisionSource === 'legacy_visibility_import').length,
+      importedLegacyVisibility: rows.filter(item => ['legacy_visibility_import', 'legacy_feedback_visibility_import'].includes(item.decisionSource)).length,
       pending: rows.filter(item => item.publicationState === 'pending').length,
       alreadyMigrated: current.schemaVersion === 2 && moderationHash(current) === moderationHash(next),
     };
+    if (kind === 'feedback') {
+      const oldPublic = (current.items || []).filter(isLegacyFeedbackPublicEligible);
+      const byId = new Map(rows.map(item => [item.id, item]));
+      const samePublicContent = original => {
+        const migrated = byId.get(original.id);
+        return isFeedbackPublicEligible(migrated)
+          && ['title', 'content', 'reply', 'repliedAt'].every(key => original[key] === migrated[key]);
+      };
+      const oldPublicReplies = oldPublic.filter(item => typeof item.reply === 'string' && item.reply.length > 0);
+      Object.assign(output.files[kind], {
+        legacyPublicBefore: oldPublic.length,
+        legacyPublicPreserved: oldPublic.filter(samePublicContent).length,
+        legacyPublicRepliesBefore: oldPublicReplies.length,
+        legacyPublicRepliesPreserved: oldPublicReplies.filter(item => samePublicContent(item) && byId.get(item.id).replyVisibility === 'public').length,
+      });
+    }
   }
   console.log(JSON.stringify(output, null, 2));
 }

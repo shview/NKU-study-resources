@@ -2,6 +2,10 @@
 
 本文档以当前仓库中的 `server/public-api-router.mjs`、`server/admin-server.mjs`、服务层、DTO 和网页调用代码为准，面向小程序、网站前端和后台维护人员。
 
+2026-10-07本批仅收尾S3候选并更新草稿PR #3，不合并、不部署；维护者已明确报告S3未部署。下述S3契约描述当前源码，不能作为生产已生效的回执。部署边界与只读预览见[部署说明](DEPLOYMENT.md)。
+
+当前候选固定版本以随包`RELEASE.json`及校验清单为准。10-07本地`npm ci`重试成功，`TMPDIR=/private/tmp npm test`为396/396（0失败、0跳过），API文档130条一致、夹具检查及14页夹具构建通过；完整及`--omit=dev`依赖审计均0告警，新增依赖边界验证3/3通过且独立复核无阻塞。边界覆盖source-map非法offset拒绝/正常映射与Astro远程图片TTL/304/no-store，不代表`cache` 4.3上游`max-stale`争议已修复；magicast内联旧source-map仅在`astro add`路径，本轮未改。新浏览器验收因自动审批拒绝（网络流断开）尚未执行，既有浏览器证据保留为历史记录；新生产预览及上线也未完成。
+
 - 生产站点基址：`https://nkustudy.top`
 - 小程序公共 API 基址：`https://nkustudy.top/api/v1`
 - 资源下载域名：`https://resources.nkustudy.top`
@@ -610,7 +614,7 @@ curl -sS https://nkustudy.top/review-api/submit \
 }
 ```
 
-仅返回具有有效服务器批准依据、非私密、非 blocked、未隐藏的条目。`handlingStatus` 与 `publicationState` 分开；处理完成、回复、取消隐藏都不产生公开批准。公开 DTO 永不含账号归属、IP、UA、联系方式或举报引用；`reply/repliedAt` 仅在 `replyVisibility=public` 且条目可公开时返回。
+仅返回具有有效服务器公开依据、非私密、非 blocked、未隐藏的条目。公开依据包含S3管理员明确决定，以及按用户2026-10-06决定导入的v1既有公开反馈；历史导入范围和来源记录见下文S3单条处置。`handlingStatus` 与 `publicationState` 分开；新投稿处理完成、回复、取消隐藏都不产生公开资格。公开 DTO 永不含账号归属、IP、UA、联系方式、举报引用或内部来源字段；`reply/repliedAt` 仅在 `replyVisibility=public` 且条目可公开时返回。既有公开回复由迁移保留；缺失的历史回复时间不补造。
 
 ```bash
 curl -sS https://nkustudy.top/feedback-api/feedback
@@ -643,6 +647,8 @@ curl -sS https://nkustudy.top/feedback-api/feedback
 请求：`{type?, title, content, contact?, website?}`。`type` 最多 40 字符，空值默认为 `bug`；标题最多 120 字符；正文最多 2000 字符且达到规则最短长度；联系方式最多 120 字符。`website` 为蜜罐，应留空。
 
 普通投稿须登录且手机号已验证。成功仅在原子持久化后返回 `{ok:true,accepted:true,private:false,receiptId,replyAvailable:true}`。蜜罐或关闭的指南反馈返回 `accepted:false`，不能当作已存储。主要错误：`400` 校验/JSON、`401` 未登录、`403` 未认证/封禁/提交关闭、`429` 限流、`413` 正文超限。尝试限流为每 IP 每分钟 30、全局每分钟 1000；普通有效提交默认每小时 3、每天 15，可由后台规则调整。
+
+新普通反馈受理后为`publicationState=pending`、`replyVisibility=submitter`，须管理员显式批准才可公开。历史公开保留只用于v1迁移，不使新投稿自动公开；客户端不能通过旧`status`、来源字段、处理完成或回复绕过S3规则。
 
 ### `POST /feedback-api/report`
 
@@ -849,11 +855,17 @@ curl -sS -b admin.cookies https://nkustudy.top/admin-api/about \
 
 `PATCH /admin-api/feedback/:id` 请求 `{expectedItemRevision,changes}`。仅允许 `handlingStatus`（open/processing/completed/rejected/parked）、`hidden`、`publicationDecision`（approve/reject/revoke）、`reply`（最多 2000 JS 字符，可清空）、`replyVisibility`（submitter/public）。评价 PATCH 仅允许 `hidden/publicationDecision`。原文、类型、ID、归属和所有管理员/时间字段不接受客户端修改。冲突 `409 ITEM_CONFLICT` 返回 `currentItem/currentItemRevision`；成功返回新 item/revision/publicEligible。revision 不受别条、设置或有帮助计数影响。
 
+单条处置以最新显式决定控制公开资格：隐藏、拒绝或撤销可使历史导入内容退出公开出口；取消隐藏不恢复已撤销的资格。修改回复默认转为`submitter`，显式`replyVisibility=public`须条目当时通过公共gate，否则`400 PUBLIC_REPLY_NOT_ALLOWED`。`publicationBlocked`或已知私密/举报条目不能批准公开（`400 PUBLICATION_BLOCKED`），客户端也不能修改导入来源或解除block。
+
 `PATCH /admin-api/feedback/settings` 请求 `{expectedSettingsRevision,changes:{title?,announcement?,rules?}}`；reviews/settings 仅允许 rules。反馈设置保留静态构建、发布证明和回滚事务，条目处置不触发构建。成功 `{ok:true,data:settings,settingsRevision,rulesProvenance}`；冲突 `409 SETTINGS_CONFLICT` 返回 currentSettings/currentSettingsRevision。
 
-评价保留既有 `moderationRequired` 与 `keywordFilter.enabled` 语义：人工开关启用或已启用的关键词检测命中则 pending，否则自动 approved。每次决定记录实际规则快照/hash、配置来源、服务器时间和系统来源；规则变更记录真实管理员。旧已公开评价通过 `legacy_visibility_import` 保留既有可见性，不伪造历史人工审批。旧反馈无法仅凭 approved/completed 证明来源，迁移后未知来源 blocked，举报永久私密。
+新评价保留既有 `moderationRequired` 与 `keywordFilter.enabled` 语义：人工开关启用或已启用的关键词检测命中则 pending，否则自动 approved。自动决定记录实际规则快照/hash、配置来源、服务器时间及系统来源；规则变更与显式人工决定记录真实管理员。旧已公开评价继续通过`legacy_visibility_import`保留可见性，`reviewedBy=system`与`reviewedAt`表示迁移导入，不是历史人工审批回填。
 
-旧两个 POST `{data,expectedRevision}` 仍做整份版本核对，但只适配“一条允许的处置变化”或“仅设置变化”；拒绝增删 ID、原文修改、多条/混合保存和旧 status 隐式批准。UI 已全部使用单条 PATCH。反馈写需要 content.moderate，评价写需要 content.edit；GET 延续 content.read，依法查询/导出所有有效管理员可用的既有边界不变。
+按2026-10-06用户决定，尚未迁移的v1反馈中，旧公开接口实际可见的普通反馈保持公开：原始`status`精确为`approved`/`completed`，未隐藏、未私密、无举报来源且无显式`publicationBlocked`。迁移保留`legacyStatus`，将公开状态设为approved、`privacySource=verified_legacy_feedback_origin`，独立记录`legacyVisibilitySource=legacy_feedback_visibility_import`及`legacyVisibilityImportedAt`；初始`decisionSource=legacy_feedback_visibility_import`，不生成历史`reviewedBy/reviewedAt`。已有公开回复文本与既有时间原样保留，`replyVisibility=public`；缺失时间不补造。服务器后续明确批准时才记录真实`reviewedBy/reviewedAt`与`admin_decision`，并保留独立导入来源。
+
+旧未公开、私密或举报反馈不因本次导入公开；已知投诉举报永久私密。已有schema v2条目不再根据旧`status`或`handlingStatus`导入资格，原v2 blocked条目不会自动解封，PATCH不能修改私密或来源边界。新普通反馈仍待管理员显式批准，回复与处理状态均不授予新的公开资格。
+
+旧两个 POST `{data,expectedRevision}` 仍做整份版本核对，但只适配“一条允许的处置变化”或“仅设置变化”；拒绝增删 ID、原文修改、多条/混合保存和旧 status 隐式批准。UI 已全部使用单条 PATCH；当前没有批量处置、合并或条目删除接口。反馈写需要 content.moderate，评价写需要 content.edit；GET 延续 content.read，依法查询/导出所有有效管理员可用的既有边界不变。
 
 含 UGC 派生结果的 home/courses/review-groups/search-index/search-data 及旧公开列表均 `Cache-Control:no-store`，不复用 304；写入成功主动清快照。部署须同时核对 CDN 缓存规则并清除旧缓存，不能用本机测试声称已经召回浏览器或第三方留存的旧副本。
 

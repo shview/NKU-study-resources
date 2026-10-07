@@ -1,23 +1,67 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createRulesProvenance, isFeedbackPublicEligible, isPublicEligible, isReviewPublicEligible,
+  createRulesProvenance, isFeedbackPublicEligible, isLegacyFeedbackPublicEligible, isPublicEligible, isReviewPublicEligible,
   itemRevision, moderationHash, newFeedbackModerationFields, normalizeFeedbackDocument,
   normalizeReviewsDocument, reviewPublicationFields, settingsRevision,
 } from "../server/moderation-model.mjs";
 
 const now = "2026-10-04T10:00:00.000Z";
 
-test("legacy feedback migration preserves evidence and blocks every unreliable historical publication", () => {
+test("legacy public feedback imports existing visibility and replies without inventing administrator approval", () => {
+  const repliedAt = "2026-08-28T00:00:00Z";
+  const original = { version: 1, rules: {}, items: [
+    { id: "approved", title: "旧公开", content: "原文", status: "approved", hidden: false, private: false, contact: "私密联系", user_id: 7, reply: "旧公开回复", repliedAt, repliedBy: "old-server", reviewedBy: "unconfirmed", reviewedAt: repliedAt },
+    { id: "completed", title: "旧完成", content: "原文二", type: "bug", status: "completed", reply: "缺时间的旧回复" },
+  ] };
+  const result = normalizeFeedbackDocument(original, { nowIso: now });
+  for (let index = 0; index < result.items.length; index += 1) {
+    const source = original.items[index];
+    const migrated = result.items[index];
+    assert.equal(isLegacyFeedbackPublicEligible(source), true);
+    assert.equal(isLegacyFeedbackPublicEligible(migrated), false, "v2 rows are not reimported");
+    assert.equal(migrated.id, source.id);
+    assert.equal(migrated.title, source.title);
+    assert.equal(migrated.content, source.content);
+    assert.equal(migrated.reply, source.reply);
+    assert.equal(migrated.repliedAt, source.repliedAt);
+    assert.equal(migrated.legacyStatus, source.status);
+    assert.equal(migrated.publicationState, "approved");
+    assert.equal(migrated.decisionSource, "legacy_feedback_visibility_import");
+    assert.equal(migrated.privacySource, "verified_legacy_feedback_origin");
+    assert.equal(migrated.legacyVisibilitySource, "legacy_feedback_visibility_import");
+    assert.equal(migrated.legacyVisibilityImportedAt, now);
+    assert.equal(migrated.replyVisibility, "public");
+    assert.equal(migrated.reviewedBy, undefined);
+    assert.equal(migrated.reviewedAt, undefined);
+    assert.notEqual(migrated.publicationBlocked, true);
+    assert.equal(isFeedbackPublicEligible(migrated), true);
+    assert.equal(isPublicEligible(migrated), true);
+  }
+  assert.equal(result.items[0].contact, "私密联系");
+  assert.equal(result.items[0].user_id, 7);
+  assert.equal(result.items[0].repliedBy, "old-server");
+  assert.equal(result.items[1].handlingStatus, "completed");
+  assert.deepEqual(normalizeFeedbackDocument(result, { nowIso: "2027-01-01T00:00:00Z" }), result, "restart keeps the original migration time and visibility");
+  assert.equal(original.items[0].schemaVersion, undefined, "migration is pure");
+});
+
+test("legacy hidden, unpublished, private and report feedback never acquire public visibility", () => {
   const original = {
     version: 1, title: "反馈", rules: {}, items: [
       { id: "open", title: "一", content: "原文", status: "open", private: false, contact: "私密联系", user_id: 7, reply: "旧回复", replied_by: "client", replied_at: "forged" },
-      { id: "approved", title: "二", content: "原文", status: "approved", hidden: false, reviewedBy: "old-server" },
+      { id: "approved", title: "二", content: "原文", status: "approved", hidden: true, reviewedBy: "old-server" },
       { id: "completed", title: "三", content: "原文", status: "completed", hidden: true },
       { id: "report", title: "四", content: "投诉原文", type: "report", status: "approved" },
       { id: "complaint", title: "五", content: "投诉原文", type: "complaint", status: "completed" },
       { id: "camel-report", title: "六", content: "投诉原文", type: "other", reportUrl: "https://example.invalid", status: "approved" },
       { id: "snake-report", title: "七", content: "投诉原文", report_target: "举报对象", status: "approved" },
+      { id: "camel-target", content: "投诉原文", reportTarget: "举报对象", status: "completed" },
+      { id: "snake-url", content: "投诉原文", report_url: "https://example.invalid", status: "completed" },
+      { id: "mixed-case-report", content: "投诉原文", type: " Report ", status: "completed" },
+      { id: "private", content: "私密原文", private: true, status: "approved" },
+      ...["pending", "processing", "rejected", "parked", "hidden", " approved ", " completed "].map((status) => ({ id: `status-${status}`, content: "未公开原文", status })),
+      { id: "explicit-block", content: "阻止公开", status: "approved", publicationBlocked: true },
     ],
   };
   const result = normalizeFeedbackDocument(original, { nowIso: now });
@@ -29,8 +73,11 @@ test("legacy feedback migration preserves evidence and blocks every unreliable h
     assert.equal(item.content, original.items[index].content);
     assert.equal(item.publicationState, "pending");
     assert.equal(item.replyVisibility, "submitter");
+    assert.equal(isLegacyFeedbackPublicEligible(original.items[index]), false);
+    assert.equal(item.legacyVisibilitySource, undefined);
+    assert.equal(item.legacyVisibilityImportedAt, undefined);
     assert.equal(isPublicEligible(item), false);
-    if (index < 3) {
+    if (!["report", "complaint", "camel-report", "snake-report", "camel-target", "snake-url", "mixed-case-report", "private"].includes(item.id)) {
       assert.equal(item.publicationBlocked, true);
       assert.equal(item.publicationBlockedReason, "LEGACY_PRIVACY_UNCONFIRMED");
     } else assert.equal(item.private, true);
@@ -44,6 +91,41 @@ test("legacy feedback migration preserves evidence and blocks every unreliable h
   assert.equal(result.items[2].hidden, true);
   assert.deepEqual(normalizeFeedbackDocument(result, { nowIso: "2027-01-01T00:00:00Z" }), result, "second migration does not manufacture new times or origin");
   assert.equal(original.items[0].schemaVersion, undefined, "migration is pure");
+});
+
+test("feedback history requires bound migration provenance and cannot borrow review approval evidence", () => {
+  const imported = normalizeFeedbackDocument({ items: [{ id: "old", content: "原文", status: "completed" }] }, { nowIso: now }).items[0];
+  for (const fields of [
+    { schemaVersion: 1 }, { publicationState: "pending" }, { privacySource: "server_feedback_submission" },
+    { legacyVisibilitySource: "unknown" }, { legacyVisibilityImportedAt: undefined }, { legacyVisibilityImportedAt: "yesterday" },
+    { legacyStatus: "open" }, { legacyStatus: " completed " }, { decisionSource: "unknown" },
+    { private: true }, { hidden: true }, { type: "report" }, { reportTarget: "举报对象" }, { publicationBlocked: true },
+    { courseTitle: "课程", decisionSource: "legacy_visibility_import", legacyStatus: "approved", reviewedBy: "system", reviewedAt: now },
+    { teacher: "教师", legacyVisibilitySource: undefined, decisionSource: "admin_decision", reviewedBy: "admin", reviewedAt: now },
+  ]) {
+    const forged = { ...imported, ...fields };
+    assert.equal(isFeedbackPublicEligible(forged), false, JSON.stringify(fields));
+    assert.equal(isPublicEligible(forged), false, JSON.stringify(fields));
+  }
+  const approved = { ...imported, decisionSource: "admin_decision", reviewedBy: "real-admin", reviewedAt: now };
+  assert.equal(isFeedbackPublicEligible(approved), true, "a later server administrator decision accepts the retained verified origin");
+  assert.equal(isPublicEligible(approved), true);
+});
+
+test("v2 completion, replies and old status aliases never import or restore historical visibility", () => {
+  const fresh = { id: "fresh", title: "新反馈", content: "正文", ...newFeedbackModerationFields({ now }), handlingStatus: "completed", status: "approved", legacyStatus: "approved", reply: "新回复", repliedAt: now };
+  const imported = normalizeFeedbackDocument({ items: [{ id: "old", content: "原文", status: "completed", reply: "旧回复" }] }, { nowIso: now }).items[0];
+  const rows = [
+    fresh,
+    { ...imported, id: "hidden", hidden: true },
+    { ...imported, id: "revoked", publicationState: "pending", decisionSource: "admin_decision", reviewedBy: "admin", reviewedAt: now },
+    { ...imported, id: "rejected", publicationState: "rejected", decisionSource: "admin_decision", reviewedBy: "admin", reviewedAt: now },
+    { ...fresh, id: "already-blocked-v2", privacySource: "legacy_privacy_unconfirmed", publicationBlocked: true, publicationBlockedReason: "LEGACY_PRIVACY_UNCONFIRMED", decisionSource: "legacy_unconfirmed" },
+  ];
+  const document = normalizeFeedbackDocument({ version: 2, items: rows }, { nowIso: "2027-01-01T00:00:00Z" });
+  assert.deepEqual(document.items, rows.map((row) => ({ ...row, status: row.handlingStatus })));
+  assert.ok(document.items.every((row) => !isFeedbackPublicEligible(row)));
+  assert.equal(document.items[0].legacyVisibilitySource, undefined);
 });
 
 test("legacy visible reviews import visibility honestly and keep hidden/text/reactions through two migrations", () => {

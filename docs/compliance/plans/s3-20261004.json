@@ -2,6 +2,41 @@
   "kind": "S3_IMPLEMENTATION_AND_ACCEPTANCE_RECORD",
   "date": "2026-10-04",
   "status": "LOCAL_AUTO_AND_PARTIAL_BROWSER_VERIFIED_PRODUCTION_PENDING",
+  "closeout20261007": {
+    "recordId": "E-20261007-001",
+    "status": "LOCAL_VERIFIED_PRODUCTION_PENDING",
+    "fixedCommit": "以本记录所在提交和交付包RELEASE.json为准，旧8ff88cc回执不代表本候选通过。",
+    "scope": "保留历史公开普通反馈及回复，新投稿遵循S3；更新两个间接依赖。本轮不合并、部署或实施S4/S5/S6。",
+    "verification": {
+      "fullSuite": { "command": "TMPDIR=/private/tmp npm test", "tests": 396, "pass": 396, "fail": 0, "skip": 0 },
+      "apiRoutes": 130,
+      "fixtureBuildPages": 14,
+      "fixtureValidation": "PASS",
+      "dependencyBoundaryTests": { "pass": 3, "fail": 0 },
+      "npmAudit": { "all": 0, "production": 0, "meaning": "当前公告范围计数，不是无漏洞证明。" },
+      "installation": "npm ci首次下载ECONNRESET，重试成功。"
+    },
+    "independentReviews": [
+      "历史迁移来源、私密gate、真实HTTP重启复核未发现阻塞问题。",
+      "锁文件、安装版本、有界输入和正常构建调用复核未发现阻塞问题。"
+    ],
+    "dependencyScope": {
+      "http-cache-semantics": "4.2.0到4.3.0；max-stale公告有上游争议，升级未改变该语义，不声称已实证修复。Astro仅在构建远程图片调用storable/timeToLive。",
+      "source-map-js": "1.2.1到1.2.2；非法offset构造拒绝、正常映射通过。magicast内联旧副本在astro add路径，本补丁未改。",
+      "directDependencies": "package.json未改；Astro7.2.8/sharp0.35.5不变。"
+    },
+    "browserFollowup": {
+      "status": "BLOCKED_AUTOMATIC_APPROVAL_TRANSPORT_FAILURE",
+      "meaning": "本轮新浏览器验收未执行：本机页面自动审批因网络流中断未放行，未判定页面不安全，未绕过；旧证据保留。"
+    },
+    "remaining": [
+      "新候选生产只读预览确认历史反馈及回复before/preserved相等；同源预期8反馈/1477评价保持公开，不重审原文。",
+      "授权维护窗口后停写复核、私密备份、Linux复跑、正式迁移及缓存检查。",
+      "真实微信/手机及矩阵未覆盖组合；批量未实现，真实通知/私密R2暂缓。",
+      "QA-21类型检查1691历史错误仍未关闭；本轮未重跑。"
+    ],
+    "evidenceDirectory": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-closeout-20261007/"
+  },
   "deliveryReadiness20261005": {
     "status": "LOCAL_VERIFIED_PRODUCTION_READONLY_PREVIEW_PENDING",
     "coreCommit": "98304954038735b8e437a43ea2a84f3b48816c94",
@@ -14,12 +49,32 @@
     ],
     "verification": {
       "startupBeforeFix": "六类坏结构均意外启动，真实子进程回归失败；负控制TAP保留。",
-      "startupAfterFixAndS3Contracts": { "tests": 12, "pass": 12, "fail": 0 },
-      "previewCli": { "tests": 25, "pass": 25, "fail": 0 },
-      "fullSuite": { "command": "TMPDIR=/private/tmp npm test", "tests": 386, "pass": 386, "fail": 0, "skip": 0 },
-      "apiDocs": { "registeredMethodPathPairs": 130, "result": "PASS" },
+      "startupAfterFixAndS3Contracts": {
+        "tests": 12,
+        "pass": 12,
+        "fail": 0
+      },
+      "previewCli": {
+        "tests": 25,
+        "pass": 25,
+        "fail": 0
+      },
+      "fullSuite": {
+        "command": "TMPDIR=/private/tmp npm test",
+        "tests": 386,
+        "pass": 386,
+        "fail": 0,
+        "skip": 0
+      },
+      "apiDocs": {
+        "registeredMethodPathPairs": 130,
+        "result": "PASS"
+      },
       "fixtures": "PASS: 1 synthetic course, 0 files",
-      "buildFixtures": { "pages": 14, "result": "PASS_NOT_DEPLOYED" },
+      "buildFixtures": {
+        "pages": 14,
+        "result": "PASS_NOT_DEPLOYED"
+      },
       "syntaxAndWhitespace": "两个修改的mjs均node --check通过；git diff --check通过。",
       "typecheck": "本次未改前端，未重跑；沿用S3核心1691历史错误/新增归一诊断0记录，不表示类型检查通过。"
     },
@@ -160,7 +215,10 @@
       "userAgent",
       "publicationBlocked",
       "publicationBlockedReason",
-      "privacySource"
+      "privacySource",
+      "legacyStatus",
+      "legacyVisibilitySource",
+      "legacyVisibilityImportedAt"
     ],
     "immutableReview": [
       "id",
@@ -174,7 +232,7 @@
       "ipHash",
       "userAgent"
     ],
-    "private": "使用已有private:boolean；新report/complaint由服务器强制true。既有true永不可清除；type原文冻结；公共gate额外排除report/complaint及report相关字段，防止迁移遗漏。未知历史来源由publicationBlocked单独阻止批准，不能直接据现type=false判断可公开。",
+    "private": "新report/complaint及已知私密来源始终私密；v1旧公开普通反馈依C-14继承历史公开状态；其他未知历史来源由publicationBlocked阻止批准，不能只据当前type判断可公开。",
     "handlingStatus": [
       "open",
       "processing",
@@ -201,7 +259,10 @@
       "repliedBy",
       "repliedAt",
       "decisionSource",
-      "privacySource"
+      "privacySource",
+      "legacyStatus",
+      "legacyVisibilitySource",
+      "legacyVisibilityImportedAt"
     ],
     "reviewFields": [
       "publicationState",
@@ -221,16 +282,17 @@
     "replyMaxLength": 2000,
     "lengths": "长度按现有JS .length口径；新入口对超长拒绝并保留用户本地输入，不再悄悄slice后声称完整保存。标题120、正文2000、联系120、URL300、对象120、资源引用200；评论教师80/课程120/标签最多12x40延续现有边界。",
     "approval": "明确publicationDecision=approve/reject/revoke生成admin_decision与真实服务端actor/time；课程评价沿用原moderationRequired及启用keywordFilter，在持久锁内按最新规则决定automatic_rules，记录system、规则hash/快照与配置来源。首次旧规则为legacy_configuration_import；旧approved/通过评价为legacy_visibility_import，不伪造历史管理员。",
-    "gate": "共享gate要求schemaVersion=2、publicationState=approved及validServerApproval、非已知私密/举报、非publicationBlocked、非hidden；反馈另须privacySource为server_feedback_submission或verified_legacy_feedback_origin，且不能借automatic_rules或legacy_visibility_import批准；handlingStatus完全不参与。",
+    "gate": "共享gate要求schemaVersion=2、publicationState=approved及可信服务端决定或v1历史公开导入证据，非私密/举报、非blocked、非hidden。反馈另须可信原始来源，不能借课程评价automatic_rules/legacy_visibility_import；新内容handlingStatus不参与公开决定。",
     "itemRevision": "反馈hash规范化权威单条；评价hash原文+审核字段，排除helpfulBy/helpfulCount与派生DTO/兼容status，避免正常点赞触发无关审核冲突。revision不是鉴权凭证。",
     "settingsRevision": "独立hash规范化title/announcement/rules（评价rules），排除items/reviews和每日updated；与单条revision分开。",
-    "authorityValidation": "读入/迁移/启动统一验证schema与ID唯一性；无效schema或有歧义来源失败或block，不能将旧status回退成批准。未知额外内部字段不进入公共DTO。",
+    "authorityValidation": "读入/启动校验schema与唯一ID；v1历史公开导入需旧公开条件与独立迁移证据，v2旧status/处理完成不授予公开。未知内部字段不进入公共DTO。",
     "decisionSource": [
       "submission_pending",
       "legacy_unconfirmed",
       "admin_decision",
       "automatic_rules",
-      "legacy_visibility_import"
+      "legacy_visibility_import",
+      "legacy_feedback_visibility_import"
     ],
     "privacySource": [
       "server_report_submission",
@@ -243,7 +305,7 @@
       "legacy_configuration_import",
       "admin_settings"
     ],
-    "sourceDefinitions": "上述字段和值以server/moderation-model.mjs为准。verified_legacy_feedback_origin是gate允许的可核实来源，不表示本轮已交付核验或解除block的管理入口。legacy_visibility_import仅导入旧approved/通过课程评价既有可见性，reviewedBy=system、reviewedAt为本次迁移时间，不是历史人审。"
+    "sourceDefinitions": "来源以server/moderation-model.mjs为准。verified_legacy_feedback_origin由v1旧公开普通反馈迁移生成，须legacyStatus与legacyVisibilitySource/ImportedAt一致，无手工解除block入口。legacy_feedback_visibility_import保留旧公开反馈和回复，不伪造reviewedBy/At；legacy_visibility_import保留旧公开评价，system与时间仅说明本次迁移。"
   },
   "apiContracts": [
     {
@@ -385,7 +447,7 @@
     "真实notify保持本轮暂缓；以后如恢复，通知载荷不能携带私密投诉正文、联系或关联URL。此项是未来方案，本任务不连通知。"
   ],
   "migration": {
-    "mode": "本地启动await完成v2原子规范化，合成迁移/重启幂等已验证；生产未部署、未读取真实个人数据。生产须先只读预览影响、保留私密原始备份，在维护窗口执行并验收。",
+    "mode": "本地启动先预检两份来源，再分别持久化v2规范化；非跨文件事务。生产仍S2，旧候选只读预览已回执，新候选须再预览后备份部署。",
     "proposedPaths": [
       "server/moderation-model.mjs",
       "scripts/preview-moderation-migration.mjs"
@@ -394,17 +456,17 @@
       "移除open→approved启动迁移；version=2初始化/迁移必须await完成；失败或不支持schema明确拒绝启动/公共读取，不吞错误。Schema迁移可在维护窗口用dry-run计划、源文件哈希、私密原始备份、maintenance lock、expectedPlanHash、原子写入和私密回执。",
       "保持全部ID、原文、账号归属、联系方式、举报关联及数量，不以删数据规避隐私验收。重复ID/无ID/非法结构报错隔离处理，不自动改ID打破私密历史。",
       "已知私密来源取并集：private===true、type=report/complaint、report_url/report_target（含历史camel别名）、可核实原始提交审计report.submit。设private=true并冻结，处理旧status与批准状态分离。",
-      "无法证明原始privacy来源的旧行publicationBlocked=true、reason=LEGACY_PRIVACY_UNCONFIRMED；仍能管理员处理/本人读取。审核PATCH不能解block或改private，受控来源核验仅凭可复核旧记录；永不提供解除已知私密按钮。",
-      "反馈旧open/pending/completed/approved均不构成可靠公开批准，来源不可靠者待审或block；旧课程评价approved/通过按用户批准的受控迁移保持可见性，decisionSource=legacy_visibility_import并记录迁移时间，不能伪造成历史管理员批准。",
-      "旧处理状态completed/processing/rejected/parked保留对应handlingStatus，其余映射open；旧hidden/status hidden保留hidden=true；legacyStatus仅内部迁移信息，不参与gate。",
-      "旧回复文本保留，replyVisibility默认submitter。旧snake人/时间保留在私密迁移快照/证据，界面不显示为可信actor；不能把导入时间/迁移机器人称为当时审批人。已有可信S2 camel元数据可保留但不据此自动approved。",
+      "v1旧版实际公开且无已知私密/举报/隐藏证据的普通反馈，按C-14保留公开状态；其他未知历史来源保持publicationBlocked。新稿及v2已有blocked/撤销状态不借旧status解封；审核PATCH不可修改来源或private。",
+      "历史普通反馈approved/completed且原来公开时，记录legacy_feedback_visibility_import、verified_legacy_feedback_origin及legacyVisibilitySource/ImportedAt；不写reviewedBy/At，不补造历史审批。历史评价approved/通过继续legacy_visibility_import。",
+      "旧处理状态对应handlingStatus，旧隐藏保持；legacyStatus只与独立迁移证据共同证明旧公开资格，不能单独授权。v2不再从status/handlingStatus重新迁移。",
+      "旧公开反馈已有reply/repliedAt原样保留且replyVisibility=public；旧未公开/私密回复保留submitter。后续改回复仍需显式公开决定。旧snake元数据保存在私密原始备份，不当作可信actor。",
       "迁移重复两次不改ID/原文/新批准/回复/元数据，不重复加时间戳；失败/中断后不能出现部分旧status公开。恢复旧备份须先再次迁移并复用私密/撤销决定记录；禁止直接恢复旧版public gate来回滚。",
       "报告脱敏的数量/待人工批准量/blocked来源量、源目标hash与回执，不将投诉原文、联系或操作秘密写共享报告。"
     ],
     "implementationNotes": [
-      "实际提供preview-moderation-migration.mjs只读CLI（--data-dir绝对路径），输出数量与源/预览hash，不输出行内容；合成v2数据CLI已运行，源/预览hash一致。没有生产数据预览或apply回执；原计划migrate-content-moderation.mjs不是当前已交付文件。",
-      "启动迁移依据private/type/report字段及别名判定已知私密；本轮未实现读取历史report.submit审计并自动解除来源待核验block的流程。",
-      "真实历史来源不明反馈会全部publicationBlocked=true且LEGACY_PRIVACY_UNCONFIRMED；此变化必须在生产预览中核对数量，不能通过审核PATCH清除。旧snake元数据从规范化对象剥离，原证据依赖迁移前私密备份保留，不能声称新对象完整保存旧snake字段。"
+      "preview-moderation-migration.mjs输出脱敏统计/源与预览hash；feedback新增legacyPublicBefore/Preserved及legacyPublicRepliesBefore/Preserved，核对历史公开原文与回复展示保持，不重新审核内容。",
+      "importedLegacyVisibility计两类历史导入来源；上述四项仅统计本次v1导入，已有v2四项0不代表撤下。",
+      "8ff88cc旧预览已收到但不能用于新迁移验收；同源预期反馈8公开、评价1477公开。两份source hash仍需停写后重核。未提供apply锁或跨文件事务。"
     ]
   },
   "publicationExportsAndRevocation": {
@@ -468,7 +530,7 @@
       "filters": "处理、公开和隐藏独立筛选；查询基于已保存base，草稿变化不使条目提前消失。翻页/搜索/切tab保留按id保存的草稿。",
       "settings": "页面title/announcement/rules独立草稿、独立保存设置/取消设置；删除顶部保存全部反馈按钮或改为明确设置保存。",
       "batch": "本轮未交付批量处置或合并；相关按钮有意去掉。单条保存/取消不夹带其他条目或设置草稿。",
-      "history": "publicationBlocked=true展示来源待核验，暂不可公开；无解除永久私密按钮。"
+      "history": "历史公开反馈显示保留历史公开状态；其他publicationBlocked行仍不可公开，无解除永久私密按钮。"
     },
     "adminReports": {
       "membership": "按服务端private原始属性归类（旧type仅兼容辅助），避免只按当前type过滤而漏历史私密记录。",
@@ -575,10 +637,10 @@
         "MOD-04"
       ],
       "method": "服务/迁移+真实HTTP",
-      "steps": "seed旧open/completed/approved但无可靠批准证据；迁移两次并重启；请求旧status写",
-      "expected": "未知批准默认pending；旧status不批准；迁移幂等，无原文/账号/回复数据丢失",
+      "steps": "v1旧公开approved/completed普通反馈和回复迁移两次；真实HTTP隐藏/撤销后重启；新投稿伪造历史来源、v2 blocked对照；8反馈/1477评价合成CLI预览。",
+      "expected": "依C-14保留旧已公开正文和回复；其他旧来源默认不公开；隐藏/撤销不被重启反转，新投稿不能冒充历史。",
       "status": "PASSED_LOCAL",
-      "actual": "旧open/completed/approved反馈待审或来源block；原文/ID/归属/联系/旧回复保留；两次纯迁移和真实HTTP启动重启幂等；旧status不能批准。",
+      "actual": "2026-10-07模型/服务/真实HTTP/CLI通过：8条合成旧公开反馈及回复保持原文/时间/ID，无伪造历史审核人；隐藏/撤销重启仍不可见；v2既有block不解除；新提交伪造迁移字段无效；8/1477只读预览源字节及mtime未变。旧策略验收仅属历史，已由C-14覆盖。新证据见closeout20261007/full-suite.tap。",
       "evidenceFiles": [
         "test/moderation-model.test.mjs",
         "test/moderation-service.test.mjs",
@@ -587,7 +649,7 @@
       "evidenceLogs": [
         "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
       ],
-      "remaining": "真实数据影响预览、私密原始备份和生产恢复另验。"
+      "remaining": "新固定候选生产只读预览、私密备份及生产恢复另验，不重新审核历史原文。"
     },
     {
       "id": "AUTO-03",
@@ -622,7 +684,7 @@
       "steps": "A提交私密投诉并回复；B GET /me/feedback；未登录/普通用户/失效admin请求管理读；有效admin按C-08读取与调取既有路径",
       "expected": "本人A可读允许回复；B/匿名不能读A私密；失效admin拒绝；有效admin读取按既定权限，不拆查询/导出权限",
       "status": "PARTIALLY_VERIFIED_LOCAL",
-      "actual": "真实HTTP本人A读到私密回复、B列表为空；普通用户管理读取401；有效管理员读取；既有law-query/export回归及失效管理员law-query拒绝继续通过。",
+      "actual": "真实HTTP本人A读到私密回复、B列表为空；普通用户管理读取401；有效管理员读取；既有law-query/export回归及失效管理员law-query拒绝继续通过。2026-10-07补证匿名管理读取401；新私密投诉回复后重启，本人回复仍在、B仍空、公众无私密回复。",
       "evidenceFiles": [
         "test/s3-moderation.integration.test.mjs",
         "test/s2-admin-runtime.integration.test.mjs",
@@ -650,7 +712,7 @@
       "evidenceLogs": [
         "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
       ],
-      "remaining": "本S3新增投诉提交后服务重启读回未在该用例单独执行；匿名无裸ID查询由路由/界面核对，完整新投诉处理/回复/重启网页链路待验。"
+      "remaining": "2026-10-07已补登录未认证投诉处置回复后真实HTTP重启及本人/公众隔离；匿名无裸ID查询由路由/界面核对。全部匿名及别名逐一重启、完整网页链路仍未穷举。"
     },
     {
       "id": "AUTO-06",
@@ -1132,7 +1194,7 @@
       "package-lock.json"
     ]
   },
-  "updatedAt": "2026-10-05",
+  "updatedAt": "2026-10-07",
   "currentFactsContext": "2026-10-04实施前源码快照，作为历史问题依据保留；不得据此判断当前实现。当前实现与证据见implementationAcceptance。",
   "acceptanceStatusDefinitions": {
     "PASSED_LOCAL": "该行列出的自动步骤有实际通过证据；只代表本地合成范围。",
@@ -1329,5 +1391,17 @@
     ],
     "fixedCommitEvidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/fix-summary.md",
     "typecheck": "HEAD与最终候选都exit1；按文件+TS code+诊断文字归一后新增0、减少280。当前1691历史错误未修完，不表示类型检查通过。"
+  },
+  "historicalPublicationDecision20261006": {
+    "userDecision": "历史已公开普通反馈、评价和已有公开回复继续保留，不重新内容审核、不批量撤下；新投稿用S3规则。2026-10-07授权收尾并更新PR #3。",
+    "supersedes": "旧版候选8ff88cc的未知旧反馈一律blocked策略；其预览与386/386证据保留为历史，不代表此新候选验收。",
+    "expectedOnSameProductionInput": {
+      "feedbackPublicBefore": 8,
+      "feedbackPublicAfter": 8,
+      "reviewsPublicAfter": 1477
+    },
+    "maintainerPreviewReceipt": "8ff88cc在2026-10-06只读预览exit0，feedback8条blocked、reviews1477公开；同日公开入口实读反馈8条（approved4/completed4）。原生产未改；新候选预览尚待执行。",
+    "newCandidateStatus": "LOCAL_VERIFIED_AWAITING_NEW_PRODUCTION_READONLY_PREVIEW",
+    "limits": "不解除v2已blocked记录，不伪造历史管理员批准，不放开新投稿或已知私密/举报；不实施S4/S5/S6，不发送真实通知或启用私密R2。"
   }
 }

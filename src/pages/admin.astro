@@ -2984,7 +2984,7 @@ async function loadMpUsersAdmin() {
     }
 
     function moderationProvenance(item: ModerationRecord) {
-      const sources: Record<string, string> = { automatic_rules: "按配置规则自动决定", automatic: "按配置规则自动决定", admin_decision: "管理员明确决定", manual: "管理员明确决定", legacy_visibility_import: "历史可见性导入（不代表历史人工批准）", submission_pending: "新提交待公开审核", legacy_unconfirmed: "历史公开决定未确认" };
+      const sources: Record<string, string> = { automatic_rules: "按配置规则自动决定", automatic: "按配置规则自动决定", admin_decision: "管理员明确决定", manual: "管理员明确决定", legacy_visibility_import: "历史可见性导入（不代表历史人工批准）", legacy_feedback_visibility_import: "保留历史公开状态", submission_pending: "新提交待公开审核", legacy_unconfirmed: "历史公开决定未确认" };
       const parts = [];
       if (item.decisionSource) parts.push(sources[item.decisionSource] || `决定来源：${item.decisionSource}`);
       if (item.reviewedBy) parts.push(`决定人 ${item.reviewedBy} · ${beijingDateTime(item.reviewedAt)}`);

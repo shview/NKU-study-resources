@@ -10,6 +10,8 @@ export const LEGACY_ACTOR_ALIASES = Object.freeze(["updated_by", "updated_at", "
 const REACTION_FIELDS = new Set(["helpfulBy", "helpfulCount", "helpful_count", "viewer_reaction", "reactionCount", "reactionCounts", "reactions", "publicEligible"]);
 const REPORT_FIELDS = ["report_url", "report_target", "reportUrl", "reportTarget"];
 const CONFIGURATION_SOURCES = new Set(["legacy_configuration_import", "admin_settings"]);
+const LEGACY_FEEDBACK_VISIBILITY_SOURCE = "legacy_feedback_visibility_import";
+const LEGACY_PUBLIC_FEEDBACK_STATUSES = new Set(["approved", "completed"]);
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -62,6 +64,28 @@ export function knownReportOrigin(item) {
   return item?.private === true
     || ["report", "complaint"].includes(String(item?.type || "").trim().toLowerCase())
     || REPORT_FIELDS.some((key) => String(item?.[key] ?? "").trim() !== "");
+}
+
+/** The pre-S3 feedback endpoint's public rows, with report/privacy evidence taking precedence. */
+export function isLegacyFeedbackPublicEligible(item) {
+  return !!item && [undefined, 1].includes(item.schemaVersion)
+    && LEGACY_PUBLIC_FEEDBACK_STATUSES.has(item.status) && !knownReportOrigin(item)
+    && !item.hidden && item.publicationBlocked !== true;
+}
+
+function validFeedbackOrigin(item) {
+  if (item?.privacySource === "server_feedback_submission") return true;
+  return item?.schemaVersion === MODERATION_SCHEMA_VERSION
+    && item.privacySource === "verified_legacy_feedback_origin"
+    && item.legacyVisibilitySource === LEGACY_FEEDBACK_VISIBILITY_SOURCE
+    && timestamp(item.legacyVisibilityImportedAt)
+    && LEGACY_PUBLIC_FEEDBACK_STATUSES.has(item.legacyStatus);
+}
+
+function validLegacyFeedbackVisibility(item) {
+  return item?.publicationState === "approved"
+    && item.decisionSource === LEGACY_FEEDBACK_VISIBILITY_SOURCE
+    && item.privacySource === "verified_legacy_feedback_origin" && validFeedbackOrigin(item);
 }
 
 export function createRulesProvenance(rules, { nowIso, actor = null, source = actor ? "admin_settings" : "legacy_configuration_import" } = {}) {
@@ -121,27 +145,29 @@ export function newFeedbackModerationFields({ type = "general", now, nowIso, pri
 export function validServerApproval(item) {
   if (item?.schemaVersion !== MODERATION_SCHEMA_VERSION || item.publicationState !== "approved" || !timestamp(item.reviewedAt)) return false;
   if (item.decisionSource === "admin_decision") return typeof item.reviewedBy === "string" && item.reviewedBy.trim() !== "";
+  const isReview = !Object.hasOwn(item, "privacySource") && (Object.hasOwn(item, "courseTitle") || Object.hasOwn(item, "teacher"));
   if (item.decisionSource === "legacy_visibility_import") {
-    return (Object.hasOwn(item, "courseTitle") || Object.hasOwn(item, "teacher"))
+    return isReview
       && ["approved", "通过"].includes(String(item.legacyStatus || "").trim()) && item.reviewedBy === "system";
   }
-  if (item.decisionSource !== "automatic_rules" || item.reviewedBy !== "system" || !(Object.hasOwn(item, "courseTitle") || Object.hasOwn(item, "teacher"))) return false;
+  if (item.decisionSource !== "automatic_rules" || item.reviewedBy !== "system" || !isReview) return false;
   const provenance = { snapshot: item.ruleSnapshot, hash: item.ruleHash, source: item.ruleSource, configuredAt: item.ruleConfiguredAt, configuredBy: item.ruleConfiguredBy };
   if (!validRulesProvenance(provenance) || item.ruleSnapshot?.moderationRequired) return false;
   return item.ruleSnapshot?.keywordFilter?.enabled !== true
     || reviewKeywordMatch(item.content, Array.isArray(item.ruleSnapshot.keywordFilter.words) ? item.ruleSnapshot.keywordFilter.words : []).length === 0;
 }
 
-/** Shared fail-closed public gate. Handling, replies and legacy status are never approval evidence. */
+/** Shared fail-closed gate: server decisions or a verified import of existing public visibility. */
 export function isPublicEligible(item) {
-  const isReview = !!item && (Object.hasOwn(item, "courseTitle") || Object.hasOwn(item, "teacher"));
-  const provenFeedbackOrigin = ['server_feedback_submission', 'verified_legacy_feedback_origin'].includes(item?.privacySource);
-  return !!item && (isReview || provenFeedbackOrigin) && validServerApproval(item) && !knownReportOrigin(item)
+  const isReview = !!item && !Object.hasOwn(item, "privacySource")
+    && (Object.hasOwn(item, "courseTitle") || Object.hasOwn(item, "teacher"));
+  return !!item && (isReview || validFeedbackOrigin(item))
+    && (validServerApproval(item) || validLegacyFeedbackVisibility(item)) && !knownReportOrigin(item)
     && item.publicationBlocked !== true && item.hidden !== true;
 }
 
 export function isFeedbackPublicEligible(item) {
-  return ['server_feedback_submission', 'verified_legacy_feedback_origin'].includes(item?.privacySource)
+  return validFeedbackOrigin(item)
     && item?.decisionSource !== "legacy_visibility_import" && item?.decisionSource !== "automatic_rules" && isPublicEligible(item);
 }
 
@@ -170,6 +196,8 @@ function normalizeItem(raw, kind, now) {
     // S2 actors remain useful for updates/replies, but they never prove an old publication decision.
     delete item.reviewedBy;
     delete item.reviewedAt;
+    delete item.legacyVisibilitySource;
+    delete item.legacyVisibilityImportedAt;
     if (kind === "reviews" && ["approved", "通过"].includes(item.legacyStatus)) {
       Object.assign(item, { publicationState: "approved", decisionSource: "legacy_visibility_import", reviewedBy: "system", reviewedAt: now });
     }
@@ -183,6 +211,15 @@ function normalizeItem(raw, kind, now) {
       if (knownReportOrigin(raw)) {
         item.private = true;
         item.privacySource = "legacy_private_origin";
+      } else if (isLegacyFeedbackPublicEligible(raw)) {
+        Object.assign(item, {
+          publicationState: "approved",
+          decisionSource: LEGACY_FEEDBACK_VISIBILITY_SOURCE,
+          privacySource: "verified_legacy_feedback_origin",
+          legacyVisibilitySource: LEGACY_FEEDBACK_VISIBILITY_SOURCE,
+          legacyVisibilityImportedAt: now,
+          replyVisibility: "public",
+        });
       } else {
         item.publicationBlocked = true;
         item.publicationBlockedReason = "LEGACY_PRIVACY_UNCONFIRMED";
@@ -193,7 +230,7 @@ function normalizeItem(raw, kind, now) {
     if (knownReportOrigin(item)) {
       item.private = true;
       item.replyVisibility = "submitter";
-    } else if (!['server_feedback_submission', 'verified_legacy_feedback_origin'].includes(item.privacySource)) {
+    } else if (!validFeedbackOrigin(item)) {
       item.publicationBlocked = true;
       item.publicationBlockedReason = "LEGACY_PRIVACY_UNCONFIRMED";
       item.privacySource = "legacy_privacy_unconfirmed";

@@ -113,7 +113,7 @@ test('CLI preserves source bytes/mtime, returns expected visibility counts and m
   assert.match(output.hashSemantics.previewSha256, /not a startup persisted-file hash or moderation revision/);
   const startup = await actualStartupNormalizers(output.generatedAt);
   const counts = {
-    feedback: { total: 9, private: 5, publicationBlocked: 3, publicEligible: 1, importedLegacyVisibility: 0, pending: 7, alreadyMigrated: false },
+    feedback: { total: 9, private: 5, publicationBlocked: 2, publicEligible: 2, importedLegacyVisibility: 1, pending: 6, alreadyMigrated: false, legacyPublicBefore: 1, legacyPublicPreserved: 1, legacyPublicRepliesBefore: 1, legacyPublicRepliesPreserved: 1 },
     reviews: { total: 7, private: 1, publicationBlocked: 0, publicEligible: 2, importedLegacyVisibility: 3, pending: 3, alreadyMigrated: false },
   };
   for (const [kind, source] of Object.entries({ feedback, reviews })) {
@@ -136,7 +136,8 @@ test('CLI recognizes fully normalized v2 data, but does not mistake a v2 documen
   const output = JSON.parse(first.stdout);
   assert.equal(output.files.feedback.alreadyMigrated, true);
   assert.equal(output.files.reviews.alreadyMigrated, true);
-  assert.equal(output.files.feedback.publicEligible, 0);
+  assert.equal(output.files.feedback.publicEligible, 1);
+  assert.equal(output.files.feedback.legacyPublicBefore, 0, 'already v2 rows are not a fresh legacy import');
   assert.equal(output.files.reviews.publicEligible, 1);
   assert.deepEqual(await snapshot(directory), before);
   reviews.reviews.push({ id: 'unmigrated-row', teacher: secret, content: secret, status: 'approved' });
@@ -146,6 +147,34 @@ test('CLI recognizes fully normalized v2 data, but does not mistake a v2 documen
   assert.equal(second.status, 0);
   assert.equal(JSON.parse(second.stdout).files.reviews.alreadyMigrated, false);
   assert.deepEqual(await snapshot(directory), mixedBefore);
+});
+
+test('synthetic receipt-scale rehearsal preserves eight old public feedback rows and 1477 reviews', async t => {
+  const feedback = { version: 1, items: Array.from({ length: 8 }, (_, index) => ({
+    id: `historical-${index}`, title: secret, content: secret, type: 'bug',
+    status: index < 4 ? 'approved' : 'completed',
+    ...(index < 4 ? { reply: secret, repliedAt: past } : {}),
+  })) };
+  const reviews = { version: 1, reviews: Array.from({ length: 1477 }, (_, index) => ({
+    id: `review-${index}`, courseTitle: secret, teacher: secret, content: secret, status: 'approved',
+  })) };
+  const directory = await fixture(t, feedback, reviews);
+  const before = await snapshot(directory);
+  const child = run(directory);
+  assert.equal(child.status, 0);
+  const { files } = JSON.parse(child.stdout);
+  assert.equal(files.feedback.total, 8);
+  assert.equal(files.feedback.publicEligible, 8);
+  assert.equal(files.feedback.publicationBlocked, 0);
+  assert.equal(files.feedback.importedLegacyVisibility, 8);
+  assert.equal(files.feedback.legacyPublicBefore, 8);
+  assert.equal(files.feedback.legacyPublicPreserved, 8);
+  assert.equal(files.feedback.legacyPublicRepliesBefore, 4);
+  assert.equal(files.feedback.legacyPublicRepliesPreserved, 4);
+  assert.equal(files.reviews.total, 1477);
+  assert.equal(files.reviews.publicEligible, 1477);
+  assert.equal(files.reviews.importedLegacyVisibility, 1477);
+  assert.deepEqual(await snapshot(directory), before);
 });
 
 test('CLI rejects malformed/unsupported source data without leaking parser snippets or item IDs', async t => {
