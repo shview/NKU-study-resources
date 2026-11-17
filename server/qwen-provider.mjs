@@ -41,6 +41,7 @@ function createQwenClient({ apiKey, baseUrl, model, maxTokens }) {
           stream: false,
         }),
         signal: controller.signal,
+        redirect: "error",
       });
       if (!response.ok) {
         // 读取并记录非敏感错误码（如 invalid_api_key / invalid_model），完整 body 不落日志
@@ -55,6 +56,8 @@ function createQwenClient({ apiKey, baseUrl, model, maxTokens }) {
         throw error;
       }
       const data = await response.json();
+      // A truncated or tool-only completion is not a completed conversation turn.
+      if (data?.choices?.[0]?.finish_reason !== "stop") throw new Error("incomplete provider answer");
       const content = data?.choices?.[0]?.message?.content;
       const text = typeof content === "string" ? content : Array.isArray(content) ? content.map((part) => (part?.type === "text" ? part.text : "")).join("\n") : "";
       if (!text.trim()) throw new Error("qwen returned empty content");

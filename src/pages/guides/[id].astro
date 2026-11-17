@@ -1,0 +1,22 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { markdownToHtml } from '../../lib/markdown';
+import snapshot from '../../../server/data/learning-compass-snapshot.json';
+export function getStaticPaths(){return snapshot.guides.map(guide=>({params:{id:guide.id},props:{guide}}));}
+const {guide}=Astro.props;
+const experience=guide.content_type==='student_experience';
+---
+<Layout title={guide.title} eyebrow="学习指南针">
+<div class="guides-content">
+ <a class="back" href="/guides/">← 返回学习指南针</a>
+ <div class="reader">
+ <aside class="toc"><strong>本篇目录</strong>{guide.sections.map((s,i)=><a href={`#section-${i}`}>{s.title}</a>)}{guide.variants.length>0&&<a href="#colleges">学院方案</a>}<a href="#sources">来源文件</a></aside>
+ <article class="panel guide-article"><p class="meta">{experience?'学生经验 · 生存手册':guide.category_label+' · 学校文件'} · 更新于 {guide.updated_at.slice(0,10)}</p><p class="intro">{guide.summary}</p>
+ <p class="notice">{experience?'本文由同学分享个人经验，仅供学习交流，严禁倒卖。':'本指南由学生整理。'} 具体要求请以学校及学院最新发布的信息为准。</p>
+ {guide.sections.map((s,i)=><section id={`section-${i}`}><h2>{s.title}</h2><div class="markdown-body" set:html={markdownToHtml(s.body.replaceAll("https://nkustudy.top/guide-media/", "/guide-media/"))}/></section>)}
+ {guide.variant_details?.length>0&&<section id="colleges"><h2>学院方案</h2>{guide.variant_details.map(v=><details><summary>{v.title}</summary>{v.sections?.map(s=><div class="markdown-body" set:html={markdownToHtml(s.body.replaceAll("https://nkustudy.top/guide-media/", "/guide-media/"))}/>)}</details>)}</section>}
+ <section id="sources"><h2>来源文件</h2>{guide.sources.map(s=><p><a class="source" href={s.file_url||s.official_page_url||s.url} target="_blank" rel="noopener">{s.title} ↗</a></p>)}</section>
+ </article></div>
+</div>
+</Layout>
+<style>.guides-content{padding:24px}@media(max-width:700px){.guides-content{padding:16px}}.back{display:inline-block;color:var(--primary);margin-bottom:20px}.reader{display:grid;grid-template-columns:200px minmax(0,1fr);gap:24px;align-items:start}.toc{position:sticky;top:20px;display:grid;gap:14px;padding:20px;background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);max-height:80vh;overflow:auto;font-size:14px;line-height:1.6}.toc a{color:var(--muted)}.toc a:hover,.source{color:var(--primary);text-decoration:underline}.guide-article{padding:32px;min-width:0}.meta{font-size:13px;color:var(--muted)}.intro{line-height:1.8}.notice{padding:16px;background:var(--surface-soft);border-left:3px solid var(--primary);font-size:14px;line-height:1.8}.guide-article section{scroll-margin-top:25px}.guide-article h2{font-size:22px;margin-top:32px}.guide-article :global(.markdown-body){line-height:1.9;overflow-wrap:anywhere}.guide-article :global(img){max-width:100%}.guide-article :global(pre){overflow:auto}.guide-article :global(table){display:block;overflow:auto}details{padding:14px 0;border-bottom:1px solid var(--line-soft)}summary{cursor:pointer;font-weight:600}@media(max-width:800px){.reader{grid-template-columns:1fr}.toc{position:static;max-height:220px}.guide-article{padding:20px}}</style>

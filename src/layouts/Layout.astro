@@ -13,6 +13,7 @@ const footerConfig = readBuildData("footer.json");
 const nav = [
   { href: "/", label: "首页", icon: "home" },
   { href: "/courses/", label: "课程", icon: "book" },
+  { href: "/guides/", label: "学习指南针", icon: "compass" },
   { href: "/reviews/", label: "评价", icon: "star" },
   { href: "/participate/", label: "参与", icon: "spark" },
   { href: "/feedback/", label: "反馈", icon: "message" },
@@ -20,6 +21,7 @@ const nav = [
   { href: "/about/", label: "关于", icon: "info" },
 ];
 const icons = {
+  compass: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8Z"/></svg>',
   home: '<svg viewBox="0 0 24 24"><path d="m4 11 8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/></svg>',
   book: '<svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v15H6.5A2.5 2.5 0 0 0 4 21.5v-15Z"/><path d="M8 8h8M8 12h6"/></svg>',
   star: '<svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>',

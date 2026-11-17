@@ -404,6 +404,24 @@ curl -sS https://nkustudy.top/api/v1/home
 - 模型密钥只存在于服务器环境变量（`DASHSCOPE_API_KEY`、可选 `QWEN_BASE_URL`/`QWEN_MODEL`/`QWEN_MAX_TOKENS`）；未配置密钥时稳定返回 `503 AI_UNAVAILABLE`，普通指南不受影响。
 - 主要错误：`400 INVALID_AI_QUESTION`、`401 AUTH_REQUIRED`、`429 RATE_LIMITED`、`503 AI_UNAVAILABLE`。
 
+#### 2026-11-02 本地修复契约（未部署）
+
+- 请求路径、Bearer认证、30秒预算、最多9轮历史及现有限流不变；历史现在严格要求user/assistant交替成对。
+- 响应新增可选 `answer_kind`：`guide_answer`（默认，事实回答必须有来源）、`conversation_summary`（已完成对话节选回顾）、`assistant_info`（固定能力说明）。后两类由服务器识别明确意图后直接生成，不依赖模型和校园知识检索；不将历史助手回答变成新事实。
+- 可选 `follow_up_questions:string[]` 最多3项，每项≤160字，只由本次命中原文的主题/位置生成；缺失、无可靠建议或拒答时客户端隐藏。
+- 用户历史用于补全指代、主题及学院条件；新主题明确切换，不把不同学院/文件年份混为统一规定。只投影已发布且可映射到原件的块，私有元数据不出公共指南DTO。
+- provider结构化拒答或旧 `REFUSE_*` 标志统一为业务拒答，丢弃混合正文/引用/建议；模型返回的来源不予采信。纯文本旧响应仍可兼容，JSON正文由服务端解析后才返回客户端。
+- 非stream provider只接受 `finish_reason:stop` 的完整文本；length、content_filter、tool_calls等按不可用处理，片段不成为已完成上下文。未增加SSE接口。
+- pending请求标识仅在小程序本机保存；现有POST未新增幂等或结果查询字段。离页后手动重试可能发起新的服务端请求，不自动补发或宣称恢复服务器后台任务。
+
+#### 2026-11-03 对标审计修复（本地，未部署）
+
+- 请求/响应字段不增加。按用户消息重建当前主题及条件；同主题显式追问保留学院和年份，新主题清空旧条件，新的明确条件覆盖相应旧值。提示词只使用当前主题历史，并说明本轮采用的年份和目标学院。
+- 当前学院不作为转入目标；多目标或学院版本不清时返回`INSUFFICIENT_EVIDENCE`并要求补充，不调用provider。仅有某一年的依据不能回答其他年份，多年份请求需全部覆盖。
+- 短追问和AI使用规范下的论文追问继续使用相应原文；自然表达的对话回顾由服务器直接生成，普通政策总结仍须检索和来源。
+- provider原始JSON在Unicode归一化前解析；拒绝数组/损坏JSON，保留有效全角引号正文。兼容飞书式资料不足文案，混合拒答统一丢弃普通正文、引用、建议。错误仍走既有预算、最多一次重试及`AI_UNAVAILABLE`映射。
+- 小程序仅在本机增加独立会话ID及pending的`append|replace-last`模式；均不进入POST请求。重新生成使用前9轮以内的已完成历史，客户端收到完整成功/业务拒答后才替换旧末轮。
+
 ### `GET /api/v1/courses`
 
 查询参数：
@@ -950,3 +968,14 @@ npm run check:api-docs
 响应含`logHealth`：user/admin/law各自的`ok,pending,inFlight,error,maintenanceError`。失败持久队列不可删除；自动30秒尝试补写。用户结果`interrupted`和管理员`status:0`表示中断后实际结果需核对；结果不是正常业务失败或成功的断言。
 
 `law-query/law-export`按C-08接受所有有效管理员，结果中的`log_pagination`、`audit_pagination`明确总数，`log_page/log_page_size/audit_page/from/to/action`控制日志范围。一次导出仅包含所选日志页，不能把它当作所有页的完整交付；完整交付界面及流程仍留S4。查询条件中的手机号/openid不在审计里重复存原值，失败条件记服务端HMAC摘要，成功归于已解析的对象ID；失败及拒绝也留痕。
+
+
+### 2026-11-17 生存手册扩展
+
+指南快照新增15篇学生共建手册（含总览），`content_type=student_experience`，总数33。来源保留飞书链接与作者署名，正文6张图片使用 `https://nkustudy.top/guide-media/`。学生经验未加入官方AI检索块。网站 `/guides/` 使用同一快照与7份PDF目录，并提供小程序四主题的本地筛选。正文附件保留原文入口。
+
+同日富文本扩展：学生手册正文 section 可选返回 `render_format: "feishu-html-v1"`、`body_html` 和 `body_outline: [{id,title,level}]`。离线脚本直接从归档 DocxXML 编译白名单 HTML，保留原始段落、标题、嵌套列表、加粗、链接和图片；不经过 Markdown 中转。标题 ID 为 `fs-heading-N`，未知结构或缺少原图映射时停止编译。原 `body` / `body_format` 保留供网站与旧客户端使用。附件链接仍指向原飞书文档，不泄露本地归档路径或访问凭证。生产 15 篇富文本、148 个标题锚点、6 图核验通过；18 篇学校指南及 AI 检索块不变。
+
+### C++ 笔记候选（2026-11-17，未发布）
+
+独立候选沿用 `student_experience` 与 `feishu-html-v1`，63章ID为 `cpp-notes-000` 至 `cpp-notes-062`。保留458个代码块、166张原图、95个嵌入表格及592个有效标题锚点。没有新增API或修改生产快照，原33篇指南与AI检索对比一致。编译、候选合并、预览及发布边界见 `docs/CPP_NOTES_IMPORT.md`；图片需随网站发布到 `/guide-media/cpp-notes/` 后才可对外使用。

@@ -76,6 +76,11 @@ export function createLearningCompassService(snapshot) {
         title: section.title,
         body_format: section.body_format,
         body: section.body,
+        ...(guide.content_type === "student_experience" && section.render_format === "feishu-html-v1" && section.body_html ? {
+          render_format: "feishu-html-v1",
+          body_html: section.body_html,
+          body_outline: (section.body_outline || []).map(({ id, title, level }) => ({ id, title, level })),
+        } : {}),
         source_ids: section.source_ids.slice(),
       })),
       sources: guide.sources.map((source) => ({ ...source })),
@@ -163,15 +168,25 @@ export function createLearningCompassService(snapshot) {
 
     /** 供 AI 问答（B 批）检索：返回全部 published 指南的逐字原文块投影。 */
     retrievalChunks() {
-      return snapshot.guides.flatMap((guide) =>
-        (guide.retrieval || []).map((chunk) => ({
-          guide_id: guide.id,
-          guide_title: guide.title,
-          chunk_id: chunk.id,
-          source_file_id: chunk.source_file_id,
-          location: chunk.location,
-          text: chunk.text,
-        })),
+      // Legacy snapshots are built from published guides only. Explicit drafts
+      // in newer snapshots must never become evidence.
+      return snapshot.guides.filter((guide) => !guide.status || guide.status === "published").flatMap((guide) =>
+        (guide.retrieval || []).filter((chunk) => sourcesById.has(chunk.source_file_id)).map((chunk) => {
+          const variant = (guide.variant_details || []).find((item) => item.source_file_id === chunk.source_file_id);
+          return {
+            guide_id: guide.id,
+            guide_title: guide.title,
+            applicable_scope: guide.applicable_scope,
+            time_status: guide.time_status,
+            aliases: (guide.aliases || []).slice(),
+            variant_id: variant?.id || "",
+            variant_title: variant?.title || "",
+            chunk_id: chunk.id,
+            source_file_id: chunk.source_file_id,
+            location: chunk.location,
+            text: chunk.text,
+          };
+        }),
       );
     },
 

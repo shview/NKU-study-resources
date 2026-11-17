@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const target=process.argv[2]||'server/data/learning-compass-snapshot.json';
+const addition=JSON.parse(fs.readFileSync(new URL('../content/survival-handbook.json',import.meta.url),'utf8'));
+const snapshot=JSON.parse(fs.readFileSync(target,'utf8'));
+const ids=new Set(addition.guides.map(g=>g.id));
+snapshot.guides=[...snapshot.guides.filter(g=>!ids.has(g.id)),...addition.guides];
+snapshot.version=snapshot.version.replace(/-handbook(?:-richtext)?-20261117$/,'')+'-'+addition.version;
+snapshot.content_updated_at=addition.compiled_at || '2026-11-17T20:00:00+08:00';
+fs.writeFileSync(target,JSON.stringify(snapshot,null,1)+'\n');
+console.log(`Guides: ${snapshot.guides.length}; student experiences: ${addition.guides.length}`);

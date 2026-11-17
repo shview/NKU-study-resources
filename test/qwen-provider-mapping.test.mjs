@@ -21,7 +21,8 @@ test("settings provider maps snake_case runtime config to client fields (regress
   const seen = [];
   await withFetchStub(async (url, init) => {
     seen.push({ url: String(url), auth: init.headers.authorization, body: JSON.parse(init.body) });
-    return { ok: true, json: async () => ({ choices: [{ message: { content: "ok" } }] }) };
+    assert.equal(init.redirect, "error");
+    return { ok: true, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "ok" } }] }) };
   }, async () => {
     const provider = createQwenProviderFromSettings(() => runtime);
     const output = await provider([{ role: "user", content: "hi" }], { timeoutMs: 1000 });

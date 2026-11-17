@@ -200,3 +200,7 @@ const snapshot = {
 writeFileSync(outputPath, JSON.stringify(snapshot, null, 1) + "\n");
 console.log(`snapshot written: ${outputPath}`);
 console.log(`version=${version} guides=${guides.length} variants=${guides.find((g) => g.id === TRANSFER_GUIDE_ID).variants.length} chunks=${chunkCount} sources=${raw.source_files.length} conflicts=${conflicts.length}`);
+
+// Preserve reviewed student handbooks when rebuilding the official snapshot.
+const { execFileSync } = await import("node:child_process");
+execFileSync(process.execPath, [path.join(here, "merge-survival-handbook.mjs"), outputPath], { stdio: "inherit" });

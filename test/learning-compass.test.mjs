@@ -16,16 +16,16 @@ function collectObjectKeys(value, keys = new Set()) {
   return keys;
 }
 
-test("snapshot has validated counts: 5 categories, 18 guides, 29 variants, 205 chunks, 35 sources", () => {
+test("snapshot has validated counts: 5 categories, 33 guides, 29 variants, 205 chunks, 35 sources", () => {
   assert.equal(service.categories().length, 5);
   const list = service.guides(new URLSearchParams("page=1&page_size=100"));
-  assert.equal(list.total, 18);
+  assert.equal(list.total, 33);
   const counts = Object.fromEntries(list.facets.categories.map((item) => [item.value, item.count]));
   assert.deepEqual(counts, {
-    "course-study": 3,
+    "course-study": 10,
     "exam-grade": 3,
     "student-status-graduation": 4,
-    "academic-development": 5,
+    "academic-development": 13,
     "rules-rights": 3,
   });
   assert.equal(service.retrievalChunks().length, 205);
@@ -78,9 +78,9 @@ test("variant endpoint isolates college content and validates ids", () => {
   assert.throws(() => service.guideVariant("missing-guide", "x"), /指南不存在/);
 });
 
-test("search projection lists 18 top-level guides with transfer exactly once", () => {
+test("search projection lists 33 top-level guides with transfer exactly once", () => {
   const items = service.searchItems();
-  assert.equal(items.length, 18);
+  assert.equal(items.length, 33);
   assert.equal(items.filter((item) => item.id === "transfer-major-2026").length, 1);
   const transfer = items.find((item) => item.id === "transfer-major-2026");
   assert.ok(transfer.tags.some((tag) => tag.includes("学院")), "学院名应进入搜索标签");

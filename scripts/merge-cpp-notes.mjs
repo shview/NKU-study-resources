@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const input = path.resolve(process.argv[2] || path.join(root, 'server/data/learning-compass-snapshot.json'));
+const output = path.resolve(process.argv[3] || path.join(root, 'artifacts/cpp-notes/candidate-snapshot.json'));
+if (input === output) throw new Error('Use a separate candidate output; never overwrite the live snapshot.');
+const snapshot = JSON.parse(fs.readFileSync(input, 'utf8'));
+const addition = JSON.parse(fs.readFileSync(path.join(root, 'content/cpp-notes.json'), 'utf8'));
+snapshot.guides = [...snapshot.guides.filter(g => !/^cpp-notes-\d{3}$/.test(g.id)), ...addition.guides];
+snapshot.version = snapshot.version.replace(/-cpp-notes-v1$/, '') + '-cpp-notes-v1';
+fs.writeFileSync(output, JSON.stringify(snapshot, null, 1)+'\n');
+console.log(JSON.stringify({ guides: snapshot.guides.length, cppChapters: addition.guides.length, output }));

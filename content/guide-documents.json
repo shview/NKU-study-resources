@@ -1,0 +1,58 @@
+[
+  {
+    "id": "nku-healthy-crawling-guide",
+    "title": "在 NKU 健康地爬行指南",
+    "description": "由南开学生共同整理的校园学习与生活经验，完整版共 81 页。",
+    "meta": "学生共建 · PDF · 81 页",
+    "file_type": "pdf",
+    "file_url": "https://resources.nkustudy.top/guide-sources/nku-healthy-crawling-guide.pdf"
+  },
+  {
+    "id": "nankai-course-selection-tutorial",
+    "title": "南开大学选课教程",
+    "description": "梳理课程分类、选课阶段、教务系统与常见操作，具体安排以当学期通知为准。",
+    "meta": "学生整理 · PDF · 5 页",
+    "file_type": "pdf",
+    "file_url": "https://resources.nkustudy.top/guide-sources/nankai-course-selection-tutorial.pdf"
+  },
+  {
+    "id": "nku-course-selection-and-general-courses",
+    "title": "选课、公共课与体育",
+    "description": "从课程类别、选课阶段到公共课、体育课与 E 课安排的学生经验汇总。",
+    "meta": "学生共建 · PDF · 3 页",
+    "file_type": "pdf",
+    "file_url": "https://resources.nkustudy.top/guide-sources/nku-course-selection-and-general-courses.pdf"
+  },
+  {
+    "id": "nku-college-courses-and-major-placement",
+    "title": "三学院课程与专业分流",
+    "description": "梳理计算机、软件、人工智能方向的课程地图与分流判断框架。",
+    "meta": "学生共建 · PDF · 3 页",
+    "file_type": "pdf",
+    "file_url": "https://resources.nkustudy.top/guide-sources/nku-college-courses-and-major-placement.pdf"
+  },
+  {
+    "id": "nku-ai-tools-and-research-starter",
+    "title": "AI 工具与科研入门",
+    "description": "安全使用 AI、建立学习工作流，并完成从方向探索到联系课题组的第一步。",
+    "meta": "学生共建 · PDF · 3 页",
+    "file_type": "pdf",
+    "file_url": "https://resources.nkustudy.top/guide-sources/nku-ai-tools-and-research-starter.pdf"
+  },
+  {
+    "id": "nku-minor-competitions-and-postgraduate-recommendation",
+    "title": "辅修、竞赛与推免准备",
+    "description": "用长期目标筛选辅修和竞赛投入，按年级规划推免资格与申请材料。",
+    "meta": "学生共建 · PDF · 3 页",
+    "file_type": "pdf",
+    "file_url": "https://resources.nkustudy.top/guide-sources/nku-minor-competitions-and-postgraduate-recommendation.pdf"
+  },
+  {
+    "id": "nku-postgraduate-entrance-exam-roadmap",
+    "title": "计算机考研备考路线",
+    "description": "以真实上岸经验为样本，整理数学一、英语一、408、政治和复试节奏。",
+    "meta": "学生共建 · PDF · 3 页",
+    "file_type": "pdf",
+    "file_url": "https://resources.nkustudy.top/guide-sources/nku-postgraduate-entrance-exam-roadmap.pdf"
+  }
+]
