@@ -27,19 +27,26 @@ function timestamp(value, label) {
 
 // These expectations come from the reviewed input and committed content snapshot,
 // not from another call to the service being checked or a fixed guide count.
-export function validateGuideSnapshot(snapshot, sourceContent) {
+export function validateGuideSnapshot(snapshot, sourceContent, studentContent = null) {
   assert.ok(snapshot && sourceContent, "Guide snapshot and reviewed source content are required");
   assert.ok(snapshot.guides?.length > 0, "Guide snapshot must not be empty");
   unique(snapshot.guides, "snapshot guides");
   unique(snapshot.sources, "snapshot sources");
   assert.ok(typeof sourceContent.version === "string" && sourceContent.version, "Source build version missing");
   assert.equal(snapshot.source_build_version, sourceContent.version, "Guide source build version mismatch");
-  assert.equal(snapshot.version, hashVersion({ categories: snapshot.categories, guides: snapshot.guides, conflicts: snapshot.conflicts }), "Guide snapshot version checksum mismatch");
+  const officialGuides = snapshot.guides.filter((guide) => guide.content_type !== "student_experience");
+  const studentGuides = snapshot.guides.filter((guide) => guide.content_type === "student_experience");
+  const baseVersion = hashVersion({ categories: snapshot.categories, guides: officialGuides, conflicts: snapshot.conflicts });
+  if (studentGuides.length) {
+    assert.ok(studentContent?.version && Array.isArray(studentContent.guides), "Reviewed student content is required");
+    assert.deepEqual(studentGuides, studentContent.guides, "Student guide snapshot differs from reviewed content");
+    assert.equal(snapshot.version, `${baseVersion}-${studentContent.version}`, "Guide snapshot version checksum mismatch");
+  } else assert.equal(snapshot.version, baseVersion, "Guide snapshot version checksum mismatch");
   timestamp(snapshot.content_updated_at, "guide content version timestamp");
-  assert.equal(snapshot.content_updated_at, sourceContent.content_updated_at, "Guide content timestamp mismatch");
+  assert.equal(snapshot.content_updated_at, studentGuides.length ? studentContent.compiled_at : sourceContent.content_updated_at, "Guide content timestamp mismatch");
   const published = sourceContent.guides.filter((item) => item.status === "published");
   unique(published, "reviewed published guides");
-  assert.deepEqual(ids(snapshot.guides), ids(published), "Guide snapshot missing or unexpected published guide");
+  assert.deepEqual(ids(officialGuides), ids(published), "Guide snapshot missing or unexpected published guide");
   assert.deepEqual(snapshot.categories.map((item) => item.label).sort(), [...sourceContent.categories].sort(), "Guide categories differ from reviewed source");
   unique(sourceContent.source_files, "reviewed source files");
   assert.deepEqual(ids(snapshot.sources), ids(sourceContent.source_files), "Guide source file mapping incomplete");
@@ -53,7 +60,7 @@ export function validateGuideSnapshot(snapshot, sourceContent) {
     for (const field of ["title", "file_type", "file_name"]) assert.equal(source[field], original[field], `source ${source.id}: ${field} differs from reviewed source`);
     assert.equal(source.file_url, `${snapshot.public_origin}/${snapshot.guide_sources_prefix}/${encodeURIComponent(original.file_name)}`, `source ${source.id}: original file URL mismatch`);
   }
-  for (const guide of snapshot.guides) {
+  for (const guide of officialGuides) {
     const original = published.find((item) => item.id === guide.id);
     assert.equal(guide.title, original.title, `guide ${guide.id}: title differs from reviewed source`);
     assert.ok(snapshot.categories.some((category) => category.value === guide.category && category.label === guide.category_label), `guide ${guide.id}: category mismatch`);
@@ -86,8 +93,8 @@ function verifySectionsAndSources(actual, expected, snapshot, label) {
   assert.deepEqual(actual.sources, expected.sources, `${label}: source mapping mismatch`);
 }
 
-export async function verifyGuideApi({ request, snapshot, sourceContent, searchIndex }) {
-  validateGuideSnapshot(snapshot, sourceContent);
+export async function verifyGuideApi({ request, snapshot, sourceContent, studentContent, searchIndex }) {
+  validateGuideSnapshot(snapshot, sourceContent, studentContent);
   const get = async (route, status = 200, errorCode = null) => {
     const response = await request(route);
     assert.equal(response.status, status, `${route}: HTTP status mismatch`);
@@ -123,7 +130,16 @@ export async function verifyGuideApi({ request, snapshot, sourceContent, searchI
     const detail = await get(route);
     shape(detail, [...commonFields, "sections", "sources", "variants", "related_courses", "correction_url"], `guide ${summary.id} detail`);
     assert.deepEqual(pick(detail, commonFields), pick(summary, commonFields), `guide ${summary.id}: list/detail mismatch`);
-    verifySectionsAndSources(detail, expected, snapshot, `guide ${summary.id}`);
+    if (expected.content_type === "student_experience") {
+      const expectedSections = expected.sections.map((section) => ({
+        ...pick(section, sectionFields),
+        ...(section.render_format === "feishu-html-v1" && section.body_html ? {
+          render_format: section.render_format, body_html: section.body_html, body_outline: section.body_outline,
+        } : {}),
+      }));
+      assert.deepEqual(detail.sections, expectedSections, `guide ${summary.id}: student section content mismatch`);
+      assert.deepEqual(detail.sources, expected.sources, `guide ${summary.id}: student source mismatch`);
+    } else verifySectionsAndSources(detail, expected, snapshot, `guide ${summary.id}`);
     assert.deepEqual(detail.variants, expected.variants, `guide ${summary.id}: variant list mismatch`);
     // Compatibility fields in the current learning-compass DTO. This is a
     // snapshot contract assertion, not a restriction on future product features.

@@ -73,6 +73,7 @@ export async function runPublicApiSmoke() {
     await fs.writeFile(path.join(dataDir, "notify-settings.json"), JSON.stringify({ enabled: false }));
     const snapshot = JSON.parse(await fs.readFile(path.join(projectRoot, "server", "data", "learning-compass-snapshot.json"), "utf8"));
     const sourceContent = JSON.parse(await fs.readFile(path.join(projectRoot, "content", "learning-compass.generated.json"), "utf8"));
+    const studentContent = JSON.parse(await fs.readFile(path.join(projectRoot, "content", "survival-handbook.json"), "utf8"));
     const port = await freePort();
     child = spawn(process.execPath, [path.join(projectRoot, "server", "admin-server.mjs")], {
       cwd: projectRoot, env: smokeEnvironment(directory, port), stdio: ["ignore", "pipe", "pipe"],
@@ -108,7 +109,7 @@ export async function runPublicApiSmoke() {
     const searchIndex = (await cachedGet("/api/v1/search-index")).body;
     assert.equal(searchIndex.code, 0, "Search index response contract failed");
     await cachedGet("/api/v1/guides?page=1&page_size=5");
-    const guides = await verifyGuideApi({ request, snapshot, sourceContent, searchIndex: searchIndex.data });
+    const guides = await verifyGuideApi({ request, snapshot, sourceContent, studentContent, searchIndex: searchIndex.data });
     const blocked = await request("/api/v1/admin-api/manifest");
     assert.equal(blocked.status, 404, "A management path was exposed under /api/v1");
     const unsupportedAuth = await request("/api/v1/auth/wechat");
