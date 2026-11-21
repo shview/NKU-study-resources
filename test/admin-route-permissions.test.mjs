@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.resolve("server/admin-server.mjs"), "utf8");
 
 /** 与实现同构的静态路由提取：新增 /admin-api 静态路由未声明权限即失败。 */
 function extractStaticAdminRoutes(source) {
-  const pattern = /req\.method === "(GET|POST|DELETE|PUT)" && (?:\[[^\]]+\]\.includes\(url\.pathname\)|url\.pathname === "(\/admin-api\/[^"]+)")/g;
+  const pattern = /req\.method === "(GET|POST|DELETE|PUT|PATCH)" && (?:\[[^\]]+\]\.includes\(url\.pathname\)|url\.pathname === "(\/admin-api\/[^"]+)")/g;
   const routes = new Set();
   for (const match of source.matchAll(pattern)) {
     if (match[2]) routes.add(`${match[1]} ${match[2]}`);

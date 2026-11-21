@@ -4,6 +4,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 
 const queues = new Map();
+const quarantinedWrites = new Set();
 
 function isWithin(root, target) {
   const relative = path.relative(root, target);
@@ -77,7 +78,7 @@ export class AtomicJsonStore {
     return this.#enqueue(filePath, async () => this.#writeUnlocked(await this.#safeTarget(filePath, { createParent: true }), value, options));
   }
 
-  update(filePath, updater, { initialize, afterWrite, rollbackOnAfterWriteError = false, ...writeOptions } = {}) {
+  update(filePath, updater, { initialize, afterWrite, afterCommit, rollbackOnAfterWriteError = false, ...writeOptions } = {}) {
     return this.#enqueue(filePath, async () => {
       const target = await this.#safeTarget(filePath, { createParent: initialize !== undefined });
       let current;
@@ -101,6 +102,18 @@ export class AtomicJsonStore {
           throw error;
         }
       }
+      // Finalize durable journals before another writer enters this file's queue.
+      // A failure here must not roll back data after its external publication.
+      if (afterCommit) {
+        try {
+          await afterCommit(structuredClone(next), structuredClone(current));
+        } catch (error) {
+          // Keep the persisted revision pinned to its unresolved publication journal.
+          // Startup recovery in a fresh process must reconcile it before more writes.
+          quarantinedWrites.add(path.resolve(filePath));
+          throw error;
+        }
+      }
       return structuredClone(next);
     });
   }
@@ -108,7 +121,12 @@ export class AtomicJsonStore {
   #enqueue(filePath, operation) {
     const key = path.resolve(filePath);
     const previous = queues.get(key) || Promise.resolve();
-    const current = previous.catch(() => {}).then(operation);
+    const current = previous.catch(() => {}).then(() => {
+      if (quarantinedWrites.has(key)) {
+        throw Object.assign(new Error("Content publication needs recovery before further writes."), { statusCode: 503, code: "PUBLISH_RECOVERY_REQUIRED" });
+      }
+      return operation();
+    });
     queues.set(key, current);
     return current.finally(() => {
       if (queues.get(key) === current) queues.delete(key);

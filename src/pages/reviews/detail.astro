@@ -3,7 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 ---
 
 <Layout title="评价详情" eyebrow="Review Detail">
-  <section class="content">
+  <section class="content review-detail-page">
     <div class="panel">
       <div class="panel-header review-detail-head">
         <div>
@@ -49,6 +49,10 @@ import Layout from "../../layouts/Layout.astro";
       </div>
     </div>
   </section>
+
+  <style is:global>
+    .review-detail-page .review-card-foot { flex-wrap: wrap; gap: 8px; }
+  </style>
 
   <script>
     import MarkdownIt from "markdown-it";
@@ -196,6 +200,7 @@ import Layout from "../../layouts/Layout.astro";
             <small class="muted review-card-foot">
               <span>${escapeHtml(String(review.createdAt ?? "").slice(0, 10))}</span>
               <strong class="floor-badge">${floor}F</strong>
+              <a href="/report/?${escapeHtml(new URLSearchParams({ reportTarget: String(review.id || keyFor(review)), reportUrl: window.location.pathname + window.location.search }).toString())}">私密举报此评价</a>
             </small>
           </article>
         `;

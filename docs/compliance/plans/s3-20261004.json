@@ -1,0 +1,1407 @@
+{
+  "kind": "S3_IMPLEMENTATION_AND_ACCEPTANCE_RECORD",
+  "date": "2026-10-04",
+  "status": "LOCAL_AUTO_AND_PARTIAL_BROWSER_VERIFIED_PRODUCTION_PENDING",
+  "closeout20261007": {
+    "recordId": "E-20261007-001",
+    "status": "LOCAL_VERIFIED_PRODUCTION_PENDING",
+    "fixedCommit": "以本记录所在提交和交付包RELEASE.json为准，旧8ff88cc回执不代表本候选通过。",
+    "scope": "保留历史公开普通反馈及回复，新投稿遵循S3；更新两个间接依赖。本轮不合并、部署或实施S4/S5/S6。",
+    "verification": {
+      "fullSuite": { "command": "TMPDIR=/private/tmp npm test", "tests": 396, "pass": 396, "fail": 0, "skip": 0 },
+      "apiRoutes": 130,
+      "fixtureBuildPages": 14,
+      "fixtureValidation": "PASS",
+      "dependencyBoundaryTests": { "pass": 3, "fail": 0 },
+      "npmAudit": { "all": 0, "production": 0, "meaning": "当前公告范围计数，不是无漏洞证明。" },
+      "installation": "npm ci首次下载ECONNRESET，重试成功。"
+    },
+    "independentReviews": [
+      "历史迁移来源、私密gate、真实HTTP重启复核未发现阻塞问题。",
+      "锁文件、安装版本、有界输入和正常构建调用复核未发现阻塞问题。"
+    ],
+    "dependencyScope": {
+      "http-cache-semantics": "4.2.0到4.3.0；max-stale公告有上游争议，升级未改变该语义，不声称已实证修复。Astro仅在构建远程图片调用storable/timeToLive。",
+      "source-map-js": "1.2.1到1.2.2；非法offset构造拒绝、正常映射通过。magicast内联旧副本在astro add路径，本补丁未改。",
+      "directDependencies": "package.json未改；Astro7.2.8/sharp0.35.5不变。"
+    },
+    "browserFollowup": {
+      "status": "BLOCKED_AUTOMATIC_APPROVAL_TRANSPORT_FAILURE",
+      "meaning": "本轮新浏览器验收未执行：本机页面自动审批因网络流中断未放行，未判定页面不安全，未绕过；旧证据保留。"
+    },
+    "remaining": [
+      "新候选生产只读预览确认历史反馈及回复before/preserved相等；同源预期8反馈/1477评价保持公开，不重审原文。",
+      "授权维护窗口后停写复核、私密备份、Linux复跑、正式迁移及缓存检查。",
+      "真实微信/手机及矩阵未覆盖组合；批量未实现，真实通知/私密R2暂缓。",
+      "QA-21类型检查1691历史错误仍未关闭；本轮未重跑。"
+    ],
+    "evidenceDirectory": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-closeout-20261007/"
+  },
+  "deliveryReadiness20261005": {
+    "status": "LOCAL_VERIFIED_PRODUCTION_READONLY_PREVIEW_PENDING",
+    "coreCommit": "98304954038735b8e437a43ea2a84f3b48816c94",
+    "candidateCommitReference": "后续修复的固定提交及源码树以交付包RELEASE.json为准；本记录随该提交保存，未声称推送或生产部署。",
+    "changes": [
+      "启动先校验原始root/rules/集合，再添加默认值；两份文档均先预检，格式错误时不迁移任何一份。",
+      "只读预览匹配启动默认值；失败只输出固定错误码与文档名，不输出解析器原文、账号/条目ID或路径。",
+      "预览拒绝非法UTF-8、结构/版本、重复ID和直接符号链接；alreadyMigrated要求v2且规范化后语义不变。",
+      "操作单明确只读预览、停写后复核source hash、私密原始备份、v2兼容回退和生产缓存关卡。"
+    ],
+    "verification": {
+      "startupBeforeFix": "六类坏结构均意外启动，真实子进程回归失败；负控制TAP保留。",
+      "startupAfterFixAndS3Contracts": {
+        "tests": 12,
+        "pass": 12,
+        "fail": 0
+      },
+      "previewCli": {
+        "tests": 25,
+        "pass": 25,
+        "fail": 0
+      },
+      "fullSuite": {
+        "command": "TMPDIR=/private/tmp npm test",
+        "tests": 386,
+        "pass": 386,
+        "fail": 0,
+        "skip": 0
+      },
+      "apiDocs": {
+        "registeredMethodPathPairs": 130,
+        "result": "PASS"
+      },
+      "fixtures": "PASS: 1 synthetic course, 0 files",
+      "buildFixtures": {
+        "pages": 14,
+        "result": "PASS_NOT_DEPLOYED"
+      },
+      "syntaxAndWhitespace": "两个修改的mjs均node --check通过；git diff --check通过。",
+      "typecheck": "本次未改前端，未重跑；沿用S3核心1691历史错误/新增归一诊断0记录，不表示类型检查通过。"
+    },
+    "evidenceDirectory": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-readiness-20261005/",
+    "limits": [
+      "未读取生产JSON或执行迁移，真实历史影响数量仍未知。",
+      "预览不加维护锁，不提供两文件共同时间点快照；sourceSha256是原始字节，previewSha256不是apply锁或启动后文件hash。",
+      "双文件迁移不是跨文件事务；拒绝坏输入不代表后续I/O错误可原子回滚两文件。",
+      "其他浏览器/真实微信/手机待验保持不变；真实通知与私密R2暂缓。"
+    ]
+  },
+  "sourceBaseline": "383237cd01b1994192fe6498f1c7e52a7d6f46e6",
+  "scope": "用户2026-10-04确认按原有规则自动公开课程评价并授权S3实施；本地实现与验收，未授权生产迁移/部署。",
+  "principles": [
+    "公开性是安全属性，处理完成不是批准公开；回复也不是批准公开。",
+    "private由服务端根据原始提交决定并永久保留；页面只展示，不提供解除私密或改原始类型。",
+    "用户提交原文、联系方式、原始类型、归属只读；管理员回复与处置是独立数据。",
+    "一个保存意图只提交该条显式变更；规则和其他条目草稿不属于本次保存。",
+    "匿名受理与站内回复可达是两个事实；无账号关联不声称有站内送达。",
+    "界面成功必须来自服务端持久成功；错误/断网/冲突保留草稿，不假成功。"
+  ],
+  "currentFacts": [
+    {
+      "file": "src/pages/admin.astro",
+      "lines": [
+        1448,
+        1525,
+        3163,
+        3272,
+        3288,
+        3330,
+        5314
+      ],
+      "fact": "普通反馈、举报专页、规则和批量共用feedbackState；POST /admin-api/feedback {data,expectedRevision}全量保存；改状态自动提交，编辑回复可隐式completed；原文标题/内容/contact/type可编辑；没有逐条取消和刷新未保存保护。"
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "lines": [
+        1504,
+        1530,
+        3256,
+        3262
+      ],
+      "fact": "后台创建并显示handled_by/handled_at蛇形字段；服务端stampContentActor保护camel handledBy/handledAt，因此当前显示未完全使用可信服务端值。"
+    },
+    {
+      "file": "server/admin-audit.mjs",
+      "lines": [
+        33
+      ],
+      "fact": "合成纯函数验证：客户端handled_by=forged-client/handled_at=1900仍保留，同时服务端生成handledBy=real-server/handledAt=2026-10-04T00:00:00.000Z。新审核入口必须拒绝旧snake字段，页面统一读服务端camel元数据。"
+    },
+    {
+      "file": "server/admin-server.mjs",
+      "lines": [
+        1532,
+        1536,
+        2394,
+        2473,
+        2991
+      ],
+      "fact": "publicFeedback已使用白名单；已有private=true在全量POST与publish preserve中保留。当前仍completed可公开、启动open→approved；历史举报无private仍可能改type逃逸；不能把台账旧spread风险当作现状。"
+    },
+    {
+      "file": "src/pages/feedback.astro",
+      "lines": [
+        39,
+        308,
+        330
+      ],
+      "fact": "仅bug/feature/content表单；公共列表GET /feedback-api/feedback，普通提交POST /feedback-api/submit；失败通常保留表单，成功reset；没有投诉举报专门入口、认证状态指引。"
+    },
+    {
+      "file": "src/pages/me.astro",
+      "lines": [
+        294,
+        323
+      ],
+      "fact": "GET /api/v1/me/feedback?page=1&page_size=50已调用，但网页仅展示标题/正文摘要/旧status/createdAt，不展示服务端已返回的reply/repliedAt；请求错误被转换成空列表，可能误导为没有反馈。"
+    },
+    {
+      "file": "server/public-api-service.mjs",
+      "lines": [
+        514
+      ],
+      "fact": "getMyFeedback按user_id归属过滤，DTO包含reply/repliedAt；它不是匿名查询接口。"
+    },
+    {
+      "file": "server/admin-server.mjs",
+      "lines": [
+        1587,
+        1600,
+        1647
+      ],
+      "fact": "S1已允许无凭证举报，固定新举报private=true、user_id=null；提供凭证则仍须有效，有效登录投诉可以关联本人；普通投稿依旧requirePhoneVerifiedUgcUser。"
+    },
+    {
+      "file": "src/pages/privacy.astro",
+      "lines": [
+        23
+      ],
+      "fact": "投诉举报按钮当前链接/feedback/，但该页没有举报类型或举报表单。"
+    },
+    {
+      "file": "src/pages/admin.astro",
+      "lines": [
+        2968,
+        3080,
+        5240
+      ],
+      "fact": "评价管理也有免审配置、正文/老师/评分/课程原文编辑和全量批量保存；MOD-04/ADM-07不能只改反馈就标整项完成。"
+    },
+    {
+      "file": "server/review-submission-service.mjs",
+      "lines": [
+        129,
+        141
+      ],
+      "fact": "联系方式/关键词检测仅在keywordFilter.enabled=true时应用于评价正文；moderationRequired=false且无命中会自动approved；普通反馈未共用识别器。"
+    }
+  ],
+  "model": {
+    "status": "implemented locally; automated and scoped browser evidence recorded per acceptance row; production acceptance pending",
+    "storageVersion": 2,
+    "immutableFeedback": [
+      "id",
+      "title",
+      "content",
+      "type",
+      "contact",
+      "resourceRef",
+      "report_url",
+      "report_target",
+      "user_id",
+      "createdAt",
+      "private",
+      "ipHash",
+      "userAgent",
+      "publicationBlocked",
+      "publicationBlockedReason",
+      "privacySource",
+      "legacyStatus",
+      "legacyVisibilitySource",
+      "legacyVisibilityImportedAt"
+    ],
+    "immutableReview": [
+      "id",
+      "courseTitle",
+      "teacher",
+      "rating",
+      "tags",
+      "content",
+      "user_id",
+      "createdAt",
+      "ipHash",
+      "userAgent"
+    ],
+    "private": "新report/complaint及已知私密来源始终私密；v1旧公开普通反馈依C-14继承历史公开状态；其他未知历史来源由publicationBlocked阻止批准，不能只据当前type判断可公开。",
+    "handlingStatus": [
+      "open",
+      "processing",
+      "completed",
+      "rejected",
+      "parked"
+    ],
+    "publicationState": [
+      "pending",
+      "approved",
+      "rejected"
+    ],
+    "feedbackFields": [
+      "handlingStatus",
+      "publicationState",
+      "reviewedBy",
+      "reviewedAt",
+      "updatedBy",
+      "updatedAt",
+      "handledBy",
+      "handledAt",
+      "reply",
+      "replyVisibility",
+      "repliedBy",
+      "repliedAt",
+      "decisionSource",
+      "privacySource",
+      "legacyStatus",
+      "legacyVisibilitySource",
+      "legacyVisibilityImportedAt"
+    ],
+    "reviewFields": [
+      "publicationState",
+      "reviewedBy",
+      "reviewedAt",
+      "updatedBy",
+      "updatedAt",
+      "hidden",
+      "decisionSource",
+      "ruleSnapshot",
+      "ruleHash",
+      "ruleSource",
+      "ruleConfiguredAt",
+      "ruleConfiguredBy"
+    ],
+    "reply": "复用已有reply:string/repliedAt/repliedBy；新增replyVisibility=submitter|public。空字符串明确清空。默认submitter；private强制submitter；public需管理员明确选择且条目公共gate成立。回复、处理、隐藏的变更不改变publicationState。不引入replyRecord双模型。",
+    "replyMaxLength": 2000,
+    "lengths": "长度按现有JS .length口径；新入口对超长拒绝并保留用户本地输入，不再悄悄slice后声称完整保存。标题120、正文2000、联系120、URL300、对象120、资源引用200；评论教师80/课程120/标签最多12x40延续现有边界。",
+    "approval": "明确publicationDecision=approve/reject/revoke生成admin_decision与真实服务端actor/time；课程评价沿用原moderationRequired及启用keywordFilter，在持久锁内按最新规则决定automatic_rules，记录system、规则hash/快照与配置来源。首次旧规则为legacy_configuration_import；旧approved/通过评价为legacy_visibility_import，不伪造历史管理员。",
+    "gate": "共享gate要求schemaVersion=2、publicationState=approved及可信服务端决定或v1历史公开导入证据，非私密/举报、非blocked、非hidden。反馈另须可信原始来源，不能借课程评价automatic_rules/legacy_visibility_import；新内容handlingStatus不参与公开决定。",
+    "itemRevision": "反馈hash规范化权威单条；评价hash原文+审核字段，排除helpfulBy/helpfulCount与派生DTO/兼容status，避免正常点赞触发无关审核冲突。revision不是鉴权凭证。",
+    "settingsRevision": "独立hash规范化title/announcement/rules（评价rules），排除items/reviews和每日updated；与单条revision分开。",
+    "authorityValidation": "读入/启动校验schema与唯一ID；v1历史公开导入需旧公开条件与独立迁移证据，v2旧status/处理完成不授予公开。未知内部字段不进入公共DTO。",
+    "decisionSource": [
+      "submission_pending",
+      "legacy_unconfirmed",
+      "admin_decision",
+      "automatic_rules",
+      "legacy_visibility_import",
+      "legacy_feedback_visibility_import"
+    ],
+    "privacySource": [
+      "server_report_submission",
+      "server_feedback_submission",
+      "legacy_private_origin",
+      "legacy_privacy_unconfirmed",
+      "verified_legacy_feedback_origin"
+    ],
+    "ruleSource": [
+      "legacy_configuration_import",
+      "admin_settings"
+    ],
+    "sourceDefinitions": "来源以server/moderation-model.mjs为准。verified_legacy_feedback_origin由v1旧公开普通反馈迁移生成，须legacyStatus与legacyVisibilitySource/ImportedAt一致，无手工解除block入口。legacy_feedback_visibility_import保留旧公开反馈和回复，不伪造reviewedBy/At；legacy_visibility_import保留旧公开评价，system与时间仅说明本次迁移。"
+  },
+  "apiContracts": [
+    {
+      "route": "POST /feedback-api/report",
+      "auth": "可匿名；提供凭证须有效；有效未认证用户可关联本人；user_id只能服务器产生",
+      "request": {
+        "title": "标题",
+        "content": "原因/原文",
+        "reportUrl": "可选URL",
+        "reportTarget": "可选对象/ID",
+        "resourceRef": "可选资源ID",
+        "contact": "可选联系",
+        "website": "反滥用蜜罐"
+      },
+      "response": {
+        "ok": true,
+        "accepted": true,
+        "private": true,
+        "receiptId": "随机回执ID",
+        "replyAvailable": false
+      },
+      "notes": "服务端固定private=true/type=report、handlingStatus=open、publicationState=pending；replyAvailable:boolean按实际已保存账号归属确定，不是通知已送达。匿名无裸ID查询接口/匿名凭证。有效受理成功必须持久后才accepted:true。",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "POST /feedback-api/submit",
+      "auth": "普通反馈继续有效登录+手机号认证+未封禁；旧type=report/complaint别名调用同一私密受理服务",
+      "request": "保留现有payload；公开字段private/user_id/status无权威；举报字段type只用于分流",
+      "response": "保持{ok:true}兼容，新增accepted/private/receiptId/replyAvailable可选",
+      "notes": "普通submissionOpen/指南开关与普通minLength不影响投诉；拒绝未知公开type。旧新举报入口同一举报quota，不能利用两入口翻倍。",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "GET /admin-api/feedback",
+      "auth": "有效管理员及既有content.read；C-08仅保持law-query/export对全部有效管理员可用",
+      "response": "保留{ok:true,data,revision}，增加itemRevisions:{ID:hash},settingsRevision；每条DTO提供publicationBlocked/Reason及publicEligible，由服务端计算；camel元数据权威。",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "GET /admin-api/feedback/:id",
+      "auth": "有效管理员及既有content.read；C-08仅保持law-query/export对全部有效管理员可用",
+      "response": "{ok:true,data:item,itemRevision}；不存在404",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "PATCH /admin-api/feedback/:id",
+      "auth": "有效管理员+现content.moderate；现同源Origin/Fetch-Site/header/JSON检查继续",
+      "request": {
+        "expectedItemRevision": "hash",
+        "changes": {
+          "handlingStatus": "可选",
+          "hidden": "可选boolean",
+          "publicationDecision": "可选approve|reject|revoke",
+          "reply": "可选string或空串",
+          "replyVisibility": "可选submitter|public"
+        }
+      },
+      "response": "200 {ok:true,data:item,itemRevision,publicEligible}；只返回这一条，不替换其他草稿",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "PATCH /admin-api/feedback/settings",
+      "auth": "有效管理员+现content.moderate",
+      "request": {
+        "expectedSettingsRevision": "hash",
+        "changes": {
+          "title": "可选",
+          "announcement": "可选",
+          "rules": "只含允许设置字段"
+        }
+      },
+      "response": "{ok:true,data:settings,settingsRevision}；路径先于/:id匹配",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "POST /admin-api/feedback/batch",
+      "auth": "有效管理员+content.moderate",
+      "request": "{items:[{id,expectedItemRevision}],changes:{handlingStatus?,hidden?,publicationDecision?}}；最多100，明确选中对象与共同行为，禁止原文/规则/广播回复",
+      "response": "全部校验后原子执行；任何冲突409 {code:'ITEM_CONFLICT',conflicts:[{id,currentItem,currentItemRevision}]}且全部不写；成功返回仅选中条目新base/token",
+      "implementationStatus": "DEFERRED_NOT_IMPLEMENTED",
+      "notes": "保留原计划以说明未交付项：没有batch端点，批量处置和合并按钮已去掉；旧全量POST拒绝多条或条目+设置混写。不得把单条CAS验收称作批量验收。"
+    },
+    {
+      "route": "GET /admin-api/reviews 与 GET /admin-api/reviews/:id",
+      "auth": "有效管理员及既有content.read；写入保持既有content.edit",
+      "response": "与feedback同构revision；原文course/teacher/rating/tags/content不可编辑",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "PATCH /admin-api/reviews/:id",
+      "auth": "有效管理员+保持现content.edit；不顺带重定评价写权限",
+      "request": "{expectedItemRevision,changes:{hidden?,publicationDecision?}}",
+      "response": "与feedback单条同构；不增加评价回复/处理业务",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "PATCH /admin-api/reviews/settings",
+      "auth": "有效管理员+现content.edit",
+      "request": "{expectedSettingsRevision,changes:{rules:<allowlisted rules>}}",
+      "response": "{ok:true,data:settings,settingsRevision,rulesProvenance}；以实际保存的rules及规则来源为权威，不返回拟议的effectivePublicationMode",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "GET /api/v1/me/feedback 与 /api/v1/me/reviews",
+      "auth": "有效本人Cookie/Bearer，服务器取ID并严格正整数归属筛选；no-store",
+      "response": "保留旧DTO字段，补handlingStatus/publicationState/private/允许本人查看的reply/repliedAt；不返回IP、userAgent、管理员账号与内部审计材料。匿名举报不在任何账号列表出现。",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    },
+    {
+      "route": "GET /admin-api/law-query 与 /admin-api/law-export",
+      "auth": "继续C-08所有有效管理员；no-store且成功/拒绝/失败审计",
+      "response": "继续完整授权查询/导出；新永久私密含义不阻断管理员查询。S4交付分页/文书流程本轮不扩大。",
+      "implementationStatus": "IMPLEMENTED_LOCAL"
+    }
+  ],
+  "errors": {
+    "badRequest": "400 INVALID_MODERATION_CHANGE / IMMUTABLE_FIELD / IMMUTABLE_ITEM_SET / REPLY_TOO_LONG / PUBLIC_REPLY_NOT_ALLOWED / LEGACY_MIXED_WRITE / LEGACY_PUBLICATION_DECISION_REQUIRED；见server/moderation-service.mjs",
+    "missingRevision": "400 ITEM_REVISION_REQUIRED / SETTINGS_REVISION_REQUIRED",
+    "privateApprove": "400 PUBLICATION_BLOCKED；已知私密或历史隐私来源待核验均不能批准，仍可处理/隐藏/回复。",
+    "legacyUnconfirmedApprove": "400 PUBLICATION_BLOCKED；不改变原文、私密、处理/回复状态。",
+    "conflict": "409 {ok:false,code:'ITEM_CONFLICT',error:'此条记录已被修改，未保存本次内容。',currentItem,currentItemRevision}；客户端保留base/draft，手动三方核对，不自动重试覆盖。",
+    "settingsConflict": "409 {ok:false,code:'SETTINGS_CONFLICT',currentSettings,currentSettingsRevision}",
+    "identity": "401无效会话/普通账号；403无写权限/不符来源；429持续限流；503现BACKUP_BUSY、存储/审计准入不可用；错误返回不含用户原文/联系。",
+    "legacyConflict": "409 LEGACY_DOCUMENT_CONFLICT；旧全库expectedRevision冲突只返回currentRevision，不整表覆盖。"
+  },
+  "legacyCompatibility": [
+    "保留公开/本人客户端现有payload形状与reply字符串；status仅派生展示字段，所有公共权威判断使用新版gate。反馈public status可按handlingStatus供旧过滤器使用；owner/admin保留有文档的兼容映射并同时给新字段；review旧status从publicationState派生，旧通过=approved仅用于显示。",
+    "旧全量POST /admin-api/feedback 与 /admin-api/reviews保留过渡适配器，不再整表替换。服务器在同文件锁内比对原始ID集合/不可变原文；丢行、增行、换ID、原文/联系/归属/私密变化拒绝400。",
+    "全库revision仍按旧expectedRevision校验；一次payload只允许恰好一条允许的处置/回复变化，且规则/页面元数据未变，或仅设置变化且零行变化。两条变化或条目+设置混合全部400；零变化可幂等返回，无效后端值不能改列表base。",
+    "旧actor/time字段包括snake aliases一律不当权威；适配器可剥离这些弃用字段并给compatibilityWarnings；新版PATCH对任何这些输入严格拒绝。旧client timestamp不能当作内容冲突或公开证据。",
+    "旧status=completed/processing/rejected/parked仅映射handlingStatus；旧hidden仅映射hidden；旧approved/通过无法作为新明确批准，返回LEGACY_PUBLICATION_DECISION_REQUIRED，引导新界面。撤销等只允许安全收窄，不能偷偷借status扩张可见范围。",
+    "旧管理员多条批量请求已拒绝LEGACY_MIXED_WRITE；当前没有batch端点，批量处置/合并按钮有意去掉，未实现。保留原全量POST的多条覆盖语义会违反单条隔离，因此不能承诺批量已交付。",
+    "旧公开投稿type=report/complaint别名与新举报入口使用同一强制私密服务/规则/频控；既有小程序服务端真实源码/真机仍需独立验收。"
+  ],
+  "submissionAbuse": [
+    "保留PersistentRateLimiter的IP/global attempt准入、蜜罐、readPublicBody严格UTF-8/JSON/体积边界。新增入口必须接attachSubmissionAudit，intent/结果report.submit、target feedback:ID，日志只存服务端对象和安全代码，不存正文/URL。",
+    "投诉有独立固定或单独配置的minLength=5/maxLength=2000和提交限额，初始沿用3/hour、15/day量级；与普通投稿分scope，不让普通投稿关闭或高minLength封死举报。新旧举报路由共用同一scope、同时保留聚合attempt防刷。",
+    "联系方式/违规原文/敏感词允许出现在私密投诉，标记供管理员识别但不因此自动拒绝；未知新字段/超长给明确400。投诉URL只保存与显示转义文本，不由后端抓取。",
+    "真实notify保持本轮暂缓；以后如恢复，通知载荷不能携带私密投诉正文、联系或关联URL。此项是未来方案，本任务不连通知。"
+  ],
+  "migration": {
+    "mode": "本地启动先预检两份来源，再分别持久化v2规范化；非跨文件事务。生产仍S2，旧候选只读预览已回执，新候选须再预览后备份部署。",
+    "proposedPaths": [
+      "server/moderation-model.mjs",
+      "scripts/preview-moderation-migration.mjs"
+    ],
+    "requirements": [
+      "移除open→approved启动迁移；version=2初始化/迁移必须await完成；失败或不支持schema明确拒绝启动/公共读取，不吞错误。Schema迁移可在维护窗口用dry-run计划、源文件哈希、私密原始备份、maintenance lock、expectedPlanHash、原子写入和私密回执。",
+      "保持全部ID、原文、账号归属、联系方式、举报关联及数量，不以删数据规避隐私验收。重复ID/无ID/非法结构报错隔离处理，不自动改ID打破私密历史。",
+      "已知私密来源取并集：private===true、type=report/complaint、report_url/report_target（含历史camel别名）、可核实原始提交审计report.submit。设private=true并冻结，处理旧status与批准状态分离。",
+      "v1旧版实际公开且无已知私密/举报/隐藏证据的普通反馈，按C-14保留公开状态；其他未知历史来源保持publicationBlocked。新稿及v2已有blocked/撤销状态不借旧status解封；审核PATCH不可修改来源或private。",
+      "历史普通反馈approved/completed且原来公开时，记录legacy_feedback_visibility_import、verified_legacy_feedback_origin及legacyVisibilitySource/ImportedAt；不写reviewedBy/At，不补造历史审批。历史评价approved/通过继续legacy_visibility_import。",
+      "旧处理状态对应handlingStatus，旧隐藏保持；legacyStatus只与独立迁移证据共同证明旧公开资格，不能单独授权。v2不再从status/handlingStatus重新迁移。",
+      "旧公开反馈已有reply/repliedAt原样保留且replyVisibility=public；旧未公开/私密回复保留submitter。后续改回复仍需显式公开决定。旧snake元数据保存在私密原始备份，不当作可信actor。",
+      "迁移重复两次不改ID/原文/新批准/回复/元数据，不重复加时间戳；失败/中断后不能出现部分旧status公开。恢复旧备份须先再次迁移并复用私密/撤销决定记录；禁止直接恢复旧版public gate来回滚。",
+      "报告脱敏的数量/待人工批准量/blocked来源量、源目标hash与回执，不将投诉原文、联系或操作秘密写共享报告。"
+    ],
+    "implementationNotes": [
+      "preview-moderation-migration.mjs输出脱敏统计/源与预览hash；feedback新增legacyPublicBefore/Preserved及legacyPublicRepliesBefore/Preserved，核对历史公开原文与回复展示保持，不重新审核内容。",
+      "importedLegacyVisibility计两类历史导入来源；上述四项仅统计本次v1导入，已有v2四项0不代表撤下。",
+      "8ff88cc旧预览已收到但不能用于新迁移验收；同源预期反馈8公开、评价1477公开。两份source hash仍需停写后重核。未提供apply锁或跨文件事务。"
+    ]
+  },
+  "publicationExportsAndRevocation": {
+    "immediateDefinition": "成功处置响应之后的新网络请求/重新加载必须读到撤销或隐藏结果；已下载到用户设备的数据不能由服务端追回。生产缓存旧策略的清理必须作为部署验收，不用本地过滤替代。",
+    "gatePaths": [
+      "server/admin-server.mjs visibleFeedback/approvedReviews/publicFeedback/publicReview",
+      "server/public-api-dto.mjs approvedReview/buildReviewGroups，影响course ratings/teachers、reviews/groups/home、search-index/search-data",
+      "src/lib/reviews.ts approvedReviews与所有未来静态构建入口",
+      "src/pages/feedback.astro以及reviews/index/detail的运行GET及浏览器本地搜索",
+      "server/public-api-service.mjs getMyFeedback仅本人；law-query/export为有效管理员，不是公共出口"
+    ],
+    "http": [
+      "首选最小可执行控制：所有依赖UGC批准的公开GET用Cache-Control:no-store，不生成可复用304，并在代理/CDN对相应路径禁缓存。不更改与审核无关的guides/resources/about等缓存。",
+      "具体v1范围：/api/v1/home、/api/v1/courses、/api/v1/courses/:id、/api/v1/review-groups、/api/v1/review-groups/:key、/api/v1/search-index、/api/v1/search-data；legacy /feedback-api/feedback、/review-api/reviews维持no-store。",
+      "仅改新响应头无法驱逐旧max-age60/SWR300缓存；S3部署时需授权清理这些API与受影响HTML的CDN/代理旧缓存，或以新URL版本/强制网络更新方式切流，并验收实际入口headers、旧ETag不会304带回旧体。没有生产清缓存证据不能宣称立即撤销已验收。"
+    ],
+    "processCache": [
+      "复用每次请求检查reviews文件指纹的既有SnapshotCache；新增invalidate方法和PublicApiService.invalidateSnapshot，在成功持久审核写/迁移后同步调用，变更schema/gate也进入版本。",
+      "不把3秒TTL当立即失效证据；原子更新结束后首个home/course/group/search请求就必须删掉被撤销条目及其统计/教师派生；文件读取/版本故障必须失败不回旧快照。",
+      "继续单写入进程部署前提；若扩为多进程，需各实例版本检测或共享失效通知，不能沿用仅本进程invalidate即声称全部失效。"
+    ],
+    "static": [
+      "当前页面只静态输出feedback配置，不输出UGC行；建议固定这条边界，构建只接同一gate后的公共投影/配置，所有正文列表在运行请求读取。readBuildData不能将raw items/reviews注入script/JSON/sourcemap/public文件。",
+      "以合成哨兵分别放原文、reply、contact、report URL、type变化和未知字段，检查所有dist HTML/JS/JSON/sourcemap不存在私密/未批准哨兵；管理员bundle不夹带运行库。还要检查当前正式部署旧HTML及旧生成URL，而不是仅新build。",
+      "新版不嵌入UGC时，单条处理保存不需要为用户行触发整站构建；settings title/announcement变更仍走现ContentPublishService+StaticReleasePublisher的CAS/持久journal/构建回滚。",
+      "如果以后生成含UGC的静态快照，撤销必须同时禁止/清理旧静态出口，再构建并原子切换/清缓存；不能承诺异步build完成前已消失。build失败不能把安全撤销静默回滚为公开；需要fail-closed页面或明确失败状态与待发布回执。最小S3不增加这种静态正文快照。",
+      "最终发布仍由主窗口/维护者另行授权；本次不触发buildAndDeploy、Caddy/CDN或R2变更。"
+    ],
+    "outputWhitelists": {
+      "publicFeedback": "id,title,content,type,handlingStatus,publicationState,createdAt,updatedAt；旧status派生；reply仅replyVisibility=public且公共gate成立时加reply/repliedAt。永不加contact,user_id,report_url,report_target,resourceRef,ipHash,userAgent,private元证据或admin actor。",
+      "publicReview": "现公开id/courseTitle/teacher/rating/tags/content/helpfulCount/createdAt等白名单与v1DTO保持；publication gate一致；无原始身份和审计字段。",
+      "owner": "服务器归属验证后原文及本人可见reply；contact/report字段若需要回显也只能从本人DTO单独白名单，最小版本维持现DTO范围；不加管理员内部备注/审计。",
+      "admin": "有效管理员可以完整查询已授权举报、联系/资源信息及审计；no-store；无需admin之间拆query/export权限。"
+    }
+  },
+  "contentChecks": {
+    "actualPublicText": [
+      "公开评价courseTitle/teacher/tags/content",
+      "公开普通反馈title/content",
+      "明确public的管理员reply",
+      "反馈页面title/announcement（管理员设置）"
+    ],
+    "checks": "保留现行reviewKeywordMatch及keywordFilter.enabled总开关：开启时正文命中现有检测规则则待审，关闭时不悄悄启用新检测。保存检测版本及实际规则快照。普通反馈和管理员公开回复仍需明确人工决定，不宣称其已由课程评价自动规则覆盖。私密投诉可以包含违规词/联系，照常受理并永不公开。",
+    "nickname": "目前public review/feedback DTO不含用户nickname。账号nickname属于登录/本人/受限服务信息；S3不擅自新增昵称公开。捐赠页另有明确公开的nickname和自动支付记录，需在实际公开文本清单中单列边界，不能宣称全站所有昵称已自动治理；不把捐赠/注销业务混入本批。",
+    "unsupportedClaims": [
+      "所有字段自动审核",
+      "未命中关键词等于合规",
+      "联系号码一律拒绝",
+      "私密举报会公开回复",
+      "现管理员时间页面已完全由服务端权威提供"
+    ]
+  },
+  "pages": {
+    "adminFeedback": {
+      "summary": "每条卡片三部分：只读用户原文；已保存处理/公开/隐藏状态；本条管理员处置及回复草稿。",
+      "fields": "标题、正文、联系、原始type、账号归属、举报URL/对象和提交时间均静态展示。处理状态独立选择；公开决定单独控件；隐藏独立复选。reply为独立textarea/Markdown编辑器，展示2000字限制和replyVisibility。",
+      "publicLabels": "区分待批准公开/已批准公开/公开被拒绝，与待处理/处理中/完成/不予完成/搁置。不能把hidden=false写成公开显示。",
+      "save": "改变控件仅产生本条草稿，按钮保存本条提交dirty允许字段；成功仅替换本条base/itemRevision并清理该条草稿，保留B和规则草稿。",
+      "cancel": "取消本条恢复本条最新已知base；不影响其他条、规则、选择范围。",
+      "readOnlyRoles": "无写权限可读卡片并显示状态，写控件与保存禁用；C-08查询/导出不另拆权限，仍遵守既有管理写职责。",
+      "filters": "处理、公开和隐藏独立筛选；查询基于已保存base，草稿变化不使条目提前消失。翻页/搜索/切tab保留按id保存的草稿。",
+      "settings": "页面title/announcement/rules独立草稿、独立保存设置/取消设置；删除顶部保存全部反馈按钮或改为明确设置保存。",
+      "batch": "本轮未交付批量处置或合并；相关按钮有意去掉。单条保存/取消不夹带其他条目或设置草稿。",
+      "history": "历史公开反馈显示保留历史公开状态；其他publicationBlocked行仍不可公开，无解除永久私密按钮。"
+    },
+    "adminReports": {
+      "membership": "按服务端private原始属性归类（旧type仅兼容辅助），避免只按当前type过滤而漏历史私密记录。",
+      "alwaysPrivate": "每条显著始终不公开，不渲染approve控件；仍可逐条处理、隐藏、回复、保存、取消。",
+      "replyHint": "关联账号：提交者可在我的反馈查看；匿名：仅保存管理员回复记录，未关联账号无法站内查看，不显示送达。",
+      "trustedMetadata": "读服务端camel handledBy/handledAt/repliedBy/repliedAt；不再显示或写旧snake字段。",
+      "sharedDrafts": "反馈与举报两个面板用同一个按ID的草稿库，切换面板不能出现两个不同版本或双保存。"
+    },
+    "publicFeedback": {
+      "purpose": "普通公开投稿；浏览匿名。表单告知登录、手机号已认证、未封禁及先审核后公开。",
+      "complaintCta": "明显投诉举报链接/report/，可匿名、始终私密。",
+      "submit": "继续普通POST /feedback-api/submit；前端maxlength/必填同步server；401/403/400/429/500/断网保留输入，成功仅在服务端明确保存后reset。",
+      "status": "公共列表只显示server返回已批准条目，以handlingStatus显示处理进度。reply只有server允许公开时渲染。",
+      "loadErrors": "加载失败显示错误与重试，不能伪装成还没有公开反馈。",
+      "editor": "保留正常Vditor路径并给可靠textarea fallback；保存与切换不能重复挂载或清空内容。"
+    },
+    "report": {
+      "form": "标题/举报原因正文、关联URL或ID/对象、可选联系方式；textarea即可提交，不依赖外部编辑器。明确这些字段仅管理员和允许的本人访问。",
+      "anonymity": "未登录可直接提交；已登录未认证也可提交并归属本人。后台用null表示匿名；页面不伪造user_id或已认证。无效/过期/封禁凭证明确失败并保留表单，不暗中降级成匿名。",
+      "successAnonymous": "已受理，投诉举报始终不公开。未关联账号，无法在我的反馈查看站内回复；可选联系方式只用于管理员后续核对。",
+      "successAuthenticated": "已受理，始终不公开，可到我的反馈查看处理状态和管理员已保存的回复；不把可查看称为已送达。",
+      "privacyLink": "privacy.astro投诉举报按钮改为/report/；/feedback/、忘记密码现有入口提供可发现的私密受理CTA。"
+    },
+    "myFeedback": {
+      "fields": "标题、可展开原文、handlingStatus、普通反馈publicationState或始终私密徽标、创建时间、管理员reply及可信repliedAt。HTML仅转义或安全Markdown。",
+      "pagination": "复用page/page_size，展示页码和总数；现只拉前50条应补分页，避免投诉旧记录不可发现。",
+      "errors": "认证过期与加载失败分别显示可重试状态；不得将error当作空列表。",
+      "ownership": "不新增任意ID查看别人的反馈接口；始终仅用/me/feedback，由服务端验证当前user_id。",
+      "contact": "不必为显示回复给本人下发其他账号身份、IP、userAgent、内部操作者权限或公共不必要联系方式。"
+    }
+  },
+  "draftState": {
+    "key": "Map<contentKind + ':' + itemId, DraftState>",
+    "stateFields": [
+      "baseItem",
+      "baseItemRevision",
+      "draftChanges",
+      "dirtyFields",
+      "phase:clean|dirty|saving|error|conflict",
+      "error",
+      "conflictServerItem",
+      "conflictServerRevision"
+    ],
+    "settingsState": "独立SettingsDraft(baseSettings,settingsRevision,changes,phase)。",
+    "serialization": "只从dirtyFields生成允许changes，不能JSON.stringify整个baseItem、feedbackState或DOM全部输入。",
+    "saving": "保存开始冻结本次payload；本条可暂时禁用编辑/重复保存，其他条仍可编辑；finally必定退出saving。",
+    "errors": "400/401/403/429/500/断网/超时/非JSON响应都保留draftChanges；不更新base/revision，不显示已保存。401重认证过程不得清空draftMap。",
+    "conflict": "保存base、自己的draft和最新server三方对照；不能直接刷新覆盖草稿。用户逐字段选择保留自己的改变或接受server，形成最新revision上的新draft，手动再次保存；无自动覆盖重试。",
+    "navigation": "有dirty/error/conflict草稿时刷新/离开触发beforeunload，面板重载/退出有明确未保存提示。取消或全部成功才解除提示。",
+    "privacy": "私密草稿仅内存，不未经说明写localStorage；用户明确放弃/离开才丢弃。失败保留不等于跨浏览器会话自动留存。",
+    "implementation": "src/lib/moderation-drafts.js使用每类独立store、按id记录saved/revision/changes/saving/submitted/conflict；本节stateFields是原设计概念，并非实际字段名。保存冻结submitted，成功只清掉仍等于本次提交值的字段，保留请求进行期间的新输入。"
+  },
+  "layoutPlan": {
+    "widths": [
+      1440,
+      390,
+      320
+    ],
+    "targets": [
+      "/admin/反馈",
+      "/admin/举报处置",
+      "/feedback/",
+      "/report/",
+      "/me/我的反馈"
+    ],
+    "css": "卡片/表单/编辑器grid子项min-width:0;输入width:100%、max-width:100%;窄屏操作纵向/换行；移除内联搜索min-width:220px在窄容器中的强约束；长URL/ID/标题/联系overflow-wrap:anywhere；reply/footer状态换行；Vditor工具栏容器内滚动/换行且不推宽页面。",
+    "pass": "documentElement/body及主内容scrollWidth <= clientWidth + 1；卡片、字段、编辑器和按钮bounds在内容容器内；不通过body overflow-x:hidden裁掉操作来假装无溢出。",
+    "contentCases": [
+      "最大长标题",
+      "2000字正文/回复",
+      "无断点长URL与资源ID",
+      "长联系方式",
+      "长管理员名/错误信息",
+      "编辑器展开与预览",
+      "409三方对照",
+      "批量反馈"
+    ],
+    "accessibility": "字段有可见label；错误aria-live；保存禁用与焦点可理解；手机触控按钮不被隐藏/截断。"
+  },
+  "acceptanceMatrix": [
+    {
+      "id": "AUTO-01",
+      "tasks": [
+        "MOD-04"
+      ],
+      "method": "真实HTTP+JSON读回+重启",
+      "steps": "合成普通反馈pending分别仅reply、仅completed、仅hidden=false；GET公共反馈与刷新/重启读回",
+      "expected": "都不因这些动作公开；只有明确publicationDecision=approve且非私密未隐藏才出现",
+      "evidence": "请求/响应状态、字段、重启读回，正文用合成内容",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "服务单测及真实HTTP证明completed+reply不公开、明确approve才出现、公开回复须另选、revoke后取消隐藏/完成不再公开。",
+      "evidenceFiles": [
+        "test/moderation-service.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "尚未单独在上述新增普通反馈处置后重启读回全部组合；浏览器刷新见WEB-11。"
+    },
+    {
+      "id": "AUTO-02",
+      "tasks": [
+        "MOD-04"
+      ],
+      "method": "服务/迁移+真实HTTP",
+      "steps": "v1旧公开approved/completed普通反馈和回复迁移两次；真实HTTP隐藏/撤销后重启；新投稿伪造历史来源、v2 blocked对照；8反馈/1477评价合成CLI预览。",
+      "expected": "依C-14保留旧已公开正文和回复；其他旧来源默认不公开；隐藏/撤销不被重启反转，新投稿不能冒充历史。",
+      "status": "PASSED_LOCAL",
+      "actual": "2026-10-07模型/服务/真实HTTP/CLI通过：8条合成旧公开反馈及回复保持原文/时间/ID，无伪造历史审核人；隐藏/撤销重启仍不可见；v2既有block不解除；新提交伪造迁移字段无效；8/1477只读预览源字节及mtime未变。旧策略验收仅属历史，已由C-14覆盖。新证据见closeout20261007/full-suite.tap。",
+      "evidenceFiles": [
+        "test/moderation-model.test.mjs",
+        "test/moderation-service.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "新固定候选生产只读预览、私密备份及生产恢复另验，不重新审核历史原文。"
+    },
+    {
+      "id": "AUTO-03",
+      "tasks": [
+        "REP-05"
+      ],
+      "method": "组合接口测试",
+      "steps": "历史report/complaint无private与新private=true；尝试改type、删除private、status=approved/completed、hidden=false、legacy全量写、PATCH批准",
+      "expected": "原始私密不可改；所有处理/隐藏/批准组合公共接口无投诉正文/回复/URL/对象/contact；有效admin读到，不删数据绕过",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "旧report/complaint及camel/snake举报引用迁移私密；新举报不能approve或public reply；legacy改type/删private/approved被拒；处理回复不进入公共列表，记录仍保存。 主窗口独立合成构建扫描亦验证8个非公开行哨兵不在27个产物中。",
+      "evidenceFiles": [
+        "test/moderation-model.test.mjs",
+        "test/moderation-service.test.mjs",
+        "test/s1-identity.integration.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap",
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/static-privacy.json",
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/static-build.log"
+      ],
+      "remaining": "未穷举所有状态与每个读取输出的交叉组合；生产历史HTML/API缓存及真实数据迁移待验。"
+    },
+    {
+      "id": "AUTO-04",
+      "tasks": [
+        "REP-05",
+        "ADM-07"
+      ],
+      "method": "真实HTTP账户A/B/匿名/失效admin",
+      "steps": "A提交私密投诉并回复；B GET /me/feedback；未登录/普通用户/失效admin请求管理读；有效admin按C-08读取与调取既有路径",
+      "expected": "本人A可读允许回复；B/匿名不能读A私密；失效admin拒绝；有效admin读取按既定权限，不拆查询/导出权限",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "真实HTTP本人A读到私密回复、B列表为空；普通用户管理读取401；有效管理员读取；既有law-query/export回归及失效管理员law-query拒绝继续通过。2026-10-07补证匿名管理读取401；新私密投诉回复后重启，本人回复仍在、B仍空、公众无私密回复。",
+      "evidenceFiles": [
+        "test/s3-moderation.integration.test.mjs",
+        "test/s2-admin-runtime.integration.test.mjs",
+        "test/public-api.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "新feedback单条读取的匿名/失效管理员全矩阵未单独断言；网站A/B可见性另见WEB-07。"
+    },
+    {
+      "id": "AUTO-05",
+      "tasks": [
+        "REP-06"
+      ],
+      "method": "真实HTTP+文件读回+重启",
+      "steps": "匿名POST /feedback-api/report，已登录未认证POST，关闭普通submissionOpen和guide开关后再投指南形状投诉",
+      "expected": "有效投诉都受理且永久private；匿名user_id=null、已登录归属正确；与ordinary开关无关；重启仍在；无裸ID查询",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "匿名新入口与旧report/complaint别名真实受理，普通提交关闭/minLength=1900/指南开关关闭不吞投诉；匿名null与已登录归属、replyAvailable及JSON读回验证。",
+      "evidenceFiles": [
+        "test/s1-identity.integration.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "2026-10-07已补登录未认证投诉处置回复后真实HTTP重启及本人/公众隔离；匿名无裸ID查询由路由/界面核对。全部匿名及别名逐一重启、完整网页链路仍未穷举。"
+    },
+    {
+      "id": "AUTO-06",
+      "tasks": [
+        "REP-06"
+      ],
+      "method": "真实HTTP拒绝/反滥用",
+      "steps": "构造空标题/正文<5/正文>2000/超限URL/website honeypot/新旧路由连续请求/无效Cookie或Bearer",
+      "expected": "边界校验明确；不静默裁剪长原文伪装已完整受理；频控共享；无效凭证不得降匿名；honeypot静默回执不能被UI当真实accepted 新举报入口只有持久有效提交后accepted=true；website蜂蜜罐不得显示真实受理成功。",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "真实HTTP正文过短400、无效Bearer401、蜜罐accepted=false、新旧路由共享3/hour且第四次429；前端控制器拒绝accepted=false伪成功；新反馈限额在持久锁内按最新规则429且无写入。",
+      "evidenceFiles": [
+        "test/s1-identity.integration.test.mjs",
+        "test/s3-moderation.integration.test.mjs",
+        "test/user-submissions-controller.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "空标题、2000/2001投诉正文、超限URL及无效Cookie的完整新入口边界尚未各别断言。"
+    },
+    {
+      "id": "AUTO-07",
+      "tasks": [
+        "ADM-07"
+      ],
+      "method": "真实PATCH和legacy请求",
+      "steps": "额外title/content/contact/type/user_id/private/createdAt/report_url、camel及snake actor/timestamp；reply2000/2001、清空",
+      "expected": "越权字段明确拒绝或按契约忽略且持久原文不变；2001拒绝不截断；清空需显式动作；服务端生成可信元数据",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "服务测试拒绝不可变字段、direct publicationState和列出的camel/snake元数据；legacy伪actor剥离；2000回复保存、2001拒绝、空串显式清空；真实HTTPcontent/handled_by/2001拒绝。",
+      "evidenceFiles": [
+        "test/moderation-service.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "每个SERVER_ACTOR_FIELDS/LEGACY_ACTOR_ALIASES及report_url在真实HTTP中的逐字段矩阵未全部执行；不能以代表字段覆盖称全矩阵。"
+    },
+    {
+      "id": "AUTO-08",
+      "tasks": [
+        "ADM-07",
+        "REP-05"
+      ],
+      "method": "真实HTTP DTO+安全渲染",
+      "steps": "私密/普通replyVisibility=submitter/public与未批准/批准/隐藏状态组合；回复含script/img onerror/链接",
+      "expected": "私密始终submitter；仅public gate允许公开回复；本人可读允许回复；JS不执行；DTO白名单不漏contact/IP/user_id",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "私密强制submitter；待审/隐藏/blocked不能public reply，批准后显式public才返回；A可读、B隔离；公共DTO白名单断言。 真实浏览器本人页展示已保存私密回复/时间，未执行XSS载荷。 后台Vditor保存包含img onerror与script标记的合成回复；后台与本人页标题不变，回复DOM无script/event handler，测试文字可见。",
+      "evidenceFiles": [
+        "test/moderation-service.test.mjs",
+        "test/moderation-model.test.mjs",
+        "test/public-api.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap",
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/browser-followup.json"
+      ],
+      "remaining": "安全渲染为两个代表载荷，非所有链接/编辑器组合穷举。"
+    },
+    {
+      "id": "AUTO-09",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实HTTP CAS",
+      "steps": "A/B/settings取各revision；两管理员同时改A；另一次只改B/新用户提交C/settings",
+      "expected": "A旧revision409且无覆盖；改B/C/settings不使A无故冲突；同一JSON并发更新不丢其他项；settings独立CAS",
+      "status": "PASSED_LOCAL",
+      "actual": "服务并发同条CAS锁内409；A/B/settings独立保存；settings旧token409；新投稿、点赞、另一行不使当前条目无故冲突且不丢行；真实HTTP旧token409；settings build锁内保留排队条目写。",
+      "evidenceFiles": [
+        "test/moderation-service.test.mjs",
+        "test/s3-moderation.integration.test.mjs",
+        "test/content-publish-service.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "生产单写入进程及真实并发配置仍待部署验收。"
+    },
+    {
+      "id": "AUTO-10",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "草稿控制器单元测试（拟新增）",
+      "steps": "A/B/settings同时改，serialize A、cancel A、保存B成功、A请求500/409/网络reject",
+      "expected": "payload只含A dirty允许字段；cancel仅A；B/settings草稿保留；所有错误退出saving保留草稿；不把原文和actor序列化",
+      "status": "PASSED_LOCAL",
+      "actual": "控制器单元验证单条允许changes、取消/重新hydrate不丢B/settings，500/HTML/超时/网络错误退出saving留稿，409逐字段选择后手动保存；补充请求进行期间的新输入及回到旧值仍为新意图、缺ack不清稿。",
+      "evidenceFiles": [
+        "test/moderation-drafts.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "这是控制器单元证据；真实DOM/编辑器行为见WEB-01…05/10，不能由单元测试替代。"
+    },
+    {
+      "id": "AUTO-11",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "浏览器请求拦截+真实后端",
+      "steps": "勾选A/B批量completed，C及设置有草稿；A成功B409/500",
+      "expected": "只发送选中ID和handlingStatus字段；隐藏不被自动取消、回复/公开状态不变；逐项回报，B保留选择/草稿，不能泛化全部成功",
+      "status": "DEFERRED_NOT_IMPLEMENTED",
+      "actual": "批量处置和合并按钮已去掉；没有batch端点，旧全量POST多条变化明确拒绝。",
+      "evidenceFiles": [],
+      "evidenceLogs": [],
+      "remaining": "本用例未执行且本轮不交付，不能记为已通过。"
+    },
+    {
+      "id": "AUTO-12",
+      "tasks": [
+        "MOD-04",
+        "CNT-19"
+      ],
+      "method": "review所有入口真实HTTP",
+      "steps": "legacy/v1评价在moderationRequired=false、关键词开/关、联系方式命中/不命中提交；再明确批准、撤销、隐藏",
+      "expected": "公开投稿认证仍必需；按用户已确认的原有规则决定公开；普通旧status/处理/回复不能批准，已开启的规则命中才进入待审；公共评价/group/detail与本人状态一致，撤销隐藏按缓存契约生效。",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "模型/服务测试原规则开关及电话/合成关键词命中矩阵、快照/来源；真实HTTPlegacy免审与启用关键词待审、匿名401；隐藏/撤销后home/course/group/search的新请求no-store且不含撤销教师，owner状态回归。",
+      "evidenceFiles": [
+        "test/moderation-model.test.mjs",
+        "test/review-submission-service.test.mjs",
+        "test/public-api.test.mjs",
+        "test/s1-identity.integration.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "legacy与v1每个内容组合、group detail和course detail的真实HTTP全矩阵未全部执行；生产缓存清理未验。"
+    },
+    {
+      "id": "AUTO-13",
+      "tasks": [
+        "CNT-19"
+      ],
+      "method": "合成文本矩阵",
+      "steps": "评价/普通反馈/举报标题与正文/管理员公开回复/实际公开昵称分别含电话、邮箱、微信、合成关键词",
+      "expected": "公共文本检查范围清晰；课程评价自动规则按原开关执行并留痕，普通反馈/公开回复为管理员明确决定；私密正当投诉含联系方式/违规原文仍受理；未实现昵称自动检测不得声称覆盖",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "评价正文电话及合成关键词按keywordFilter.enabled决定待审；私密投诉携带contact/URL仍受理且不公开；普通反馈/公开回复需人工明确决定。",
+      "evidenceFiles": [
+        "test/moderation-model.test.mjs",
+        "test/review-submission-service.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "邮箱/微信/标题/课程教师tags/公开回复/捐赠昵称全部文本矩阵未执行；本轮未新增昵称自动检测，也未宣称全站文本自动治理。"
+    },
+    {
+      "id": "AUTO-14",
+      "tasks": [
+        "ADM-08",
+        "AUD-10"
+      ],
+      "method": "既有审计回归+新schema集成",
+      "steps": "成功/409/400/500审核、reply/publication/handling变化检查实际admin_audit_log",
+      "expected": "真实server actor、目标id、允许字段与小枚举变化/结果可查；无正文/联系方式/凭证；新字段不是一律other_fields",
+      "status": "PARTIALLY_VERIFIED_LOCAL",
+      "actual": "实际admin_audit_log核对200/409/400、真实username/target及无原文/回复/伪actor；服务审计准入失败不改变JSON，既有I/O/队列恢复回归仍通过。",
+      "evidenceFiles": [
+        "test/moderation-service.test.mjs",
+        "test/s2-admin-runtime.integration.test.mjs",
+        "test/s3-moderation.integration.test.mjs"
+      ],
+      "evidenceLogs": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-canonical-tmp.tap"
+      ],
+      "remaining": "S3各新字段的所有小枚举before/after及500审核结果的实际日志矩阵未逐项断言。"
+    },
+    {
+      "id": "WEB-01",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器+请求捕获+持久读回",
+      "steps": "A改回复、B改处理、设置改notes；只点保存A；刷新另一浏览器/读JSON",
+      "expected": "只A存入，B/settings未改变；页面B/settings草稿保留；A成功后元数据显示服务端",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "真实API+Astro dist-fixture：同时改A/B/设置，只保存A后JSON读回A=completed、B仍open、设置未变；B草稿和设置草稿仍在。 主窗口最终源JSON assert再次确认A=completed且publicationState=pending、B最终processing、settings.title仍Fixture feedback。",
+      "remaining": "未单独收另一个浏览器刷新及页面camel操作者/时间读回证据。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": []
+    },
+    {
+      "id": "WEB-02",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器",
+      "steps": "A/B同时有草稿；取消A；搜索、翻页、切反馈→举报→反馈",
+      "expected": "只A恢复；B继续；编辑器值与draftMap一致、不因重渲染丢稿；待保存status不影响已保存筛选",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "A/B同有草稿，取消A，反馈→举报→反馈并搜索B后，B仍保留completed草稿而已保存状态仍processing；重新加载列表后B草稿仍在，随后取消B。",
+      "remaining": "未执行带草稿翻页及每一种已保存筛选的完整组合。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/browser-followup.json"
+      ]
+    },
+    {
+      "id": "WEB-03",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器409注入+两个admin会话",
+      "steps": "第1会话A草稿，第2会话保存A，再第1保存；三方对照逐字段选择再保存",
+      "expected": "409停saving而保留草稿；不覆盖第2会话；显示可理解冲突、无自动重试；解决后手动保存正确值",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "第二客户端真实PATCH B=parked后，页面保留处理中草稿保存得409；显示当前搁置/草稿处理中，选择保留我的草稿→加载最新→再次手动保存成功。",
+      "remaining": "当前为页面与第二HTTP客户端同条冲突；未单独收两个浏览器管理员会话及多字段mine/server混合选择矩阵。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": []
+    },
+    {
+      "id": "WEB-04",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器500/HTML错误/断网/超时注入",
+      "steps": "草稿后分别返回500 JSON、500 HTML、浏览器离线/断连接，恢复保存",
+      "expected": "无已保存假提示；按钮恢复可用；草稿不丢；恢复后真实HTTP保存且刷新/重启读回",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "代理503保存B时页面保留处理中草稿、恢复保存按钮；移除故障后经过显式冲突解决再次保存成功。",
+      "remaining": "500 JSON/HTML、断网/断连接、超时分别注入及恢复后重启读回尚未执行。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": []
+    },
+    {
+      "id": "WEB-05",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器",
+      "steps": "有草稿点重载、刷新、离开、退出或401重新认证；取消离开；最后成功/取消所有草稿",
+      "expected": "提前提示未保存；取消导航草稿仍在；401保留；无草稿后不反复提示",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "有草稿重新加载列表保留B；取消最后B草稿后导航/me/成功，没有多余未保存提示。",
+      "remaining": "浏览器刷新/关闭的beforeunload取消离开、退出和401重认证保稿仍未实际操作。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/browser-followup.json"
+      ]
+    },
+    {
+      "id": "WEB-06",
+      "tasks": [
+        "REP-06"
+      ],
+      "method": "真实浏览器匿名上下文→admin上下文",
+      "steps": "从隐私页点举报；匿名填写并提交；admin读回处理/回复；匿名刷新公共反馈",
+      "expected": "表单真正可用，成功仅受理无站内送达/查询按钮；admin读到且可处理回复；任何公开页搜不到",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "匿名/report/真实提交取得receiptId且落盘；管理员私密report行无公开按钮并显示本条始终私密。 主窗口源JSON assert确认新增匿名report private=true、user_id=null。",
+      "remaining": "未单独收从privacy链接进入、处理/回复本次新匿名投诉及匿名公共页刷新搜索全过程。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/admin-private.jpg"
+      ]
+    },
+    {
+      "id": "WEB-07",
+      "tasks": [
+        "REP-06",
+        "ADM-07"
+      ],
+      "method": "真实浏览器用户A/B/admin",
+      "steps": "未认证A登录投诉，admin保存回复，A /me/刷新；B /me/刷新",
+      "expected": "A看到处理/回复和始终私密徽标；B不可见；reply读可信日期；多于50条可分页；错误不是空列表",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "登录已有合成账号/me/共15条且不含新匿名举报；本人第3条显示私密回复和回复时间；第二页11—15准确；注入GET503清空旧页并显示重试，重试恢复。",
+      "remaining": "未单独执行未认证账号A本次提交→admin回复→A与B两个浏览器账户对照；现为已有合成本人记录，不能称完整A/B端到端链路。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/owner-reply.jpg"
+      ]
+    },
+    {
+      "id": "WEB-08",
+      "tasks": [
+        "MOD-04",
+        "UGC-02"
+      ],
+      "method": "真实浏览器普通投稿认证",
+      "steps": "匿名、未认证、认证未封禁、封禁、提交途中会话过期分别普通反馈/评价",
+      "expected": "浏览可匿名；普通投稿认证边界保持，失败保留输入；按用户选定公开模式及真实服务器结果显示状态，不能由前端自行宣称已公开。",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "浏览器提交一条合成课程评价，界面显示已提交并公开、索引1→2。 主窗口实际源JSON assert确认publicationState=approved、decisionSource=automatic_rules、reviewedBy=system、user_id=1且ruleHash非空。 源JSON实际assert为approved、automatic_rules、reviewedBy=system、user_id=1、ruleHash非空。",
+      "remaining": "匿名/未认证/封禁/途中会话过期及普通反馈网页全矩阵未执行。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": []
+    },
+    {
+      "id": "WEB-09",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "真实浏览器截图+DOM bounds",
+      "steps": "1440/390/320宽，后台普通/举报与public反馈/report/me，展开长内容、长URL、正常Vditor/预览/冲突/按钮错误",
+      "expected": "无page横向溢出或被裁操作；scrollWidth<=clientWidth+1；键盘/手机可触发保存取消；截图记录各宽度",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "DOM检查/report/320/390、/me/320/390、/admin/320/1440均无横向溢出；主窗口视觉检查report/me/admin窄屏及保存admin桌面截图。",
+      "remaining": "缺/feedback/全部宽度、admin390、report/me1440；未覆盖正常Vditor/长URL全边界/预览/键盘触控/409所有布局。已测宽度数值见implementationAcceptance.browserDimensions，截图已固定；其余组合保持未测。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/admin-private.jpg"
+      ]
+    },
+    {
+      "id": "WEB-10",
+      "tasks": [
+        "REP-06",
+        "ADM-08"
+      ],
+      "method": "真实浏览器编辑器正常/加载失败",
+      "steps": "正常Vditor挂载测试输入保存；阻断编辑器资源重复表单操作；/report/无Vditor依赖提交",
+      "expected": "正常编辑器不清稿；fallback textarea仍可操作，私密投诉关键入口可提交；不以mock替代正常编辑器验收",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "/report/通过textarea在真实浏览器完成匿名提交，可不依赖Vditor。 正常Vditor source编辑器在真实后台输入回复并保存成功，保存/切面板后原文仍在。",
+      "remaining": "普通反馈编辑器和资源阻断fallback尚未实际验收。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/browser-followup.json"
+      ]
+    },
+    {
+      "id": "WEB-11",
+      "tasks": [
+        "MOD-04",
+        "REP-05"
+      ],
+      "method": "浏览器公开页与HTTP缓存",
+      "steps": "普通批准后公开、撤销/隐藏后用已有缓存标签和刷新访问；私密不同状态重复请求",
+      "expected": "普通旧内容及时停止公开，私密始终无缓存泄露；HTML构建产物不含私密测试正文/联系/回复",
+      "status": "PARTIALLY_VERIFIED_BROWSER",
+      "actual": "独立合成数据Astro构建14页；27个HTML/JS/JSON等产物共969307bytes无8个pending/rejected/hidden/private行哨兵；双public gate positive controls通过。HTTP撤销及no-store证据另见AUTO-01/12。",
+      "remaining": "真实浏览器公开页使用已有缓存标签→撤销/隐藏→刷新全过程未单独操作；生产历史HTML/CDN/代理旧缓存未清理验收。",
+      "executionContext": "主窗口2026-10-05实际浏览器，真实本地API+Astro dist-fixture、合成账号与数据；15条本人反馈含1私密，新增匿名投诉不归本人。",
+      "evidenceFiles": [
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/static-privacy.json",
+        "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/static-build.log"
+      ]
+    },
+    {
+      "id": "REAL-01",
+      "tasks": [
+        "MOD-04",
+        "REP-05",
+        "REP-06",
+        "ADM-07",
+        "ADM-08"
+      ],
+      "method": "实施后维护者授权生产合成验收",
+      "steps": "记录部署commit；合成匿名及认证投诉→有效admin读取/处理/回复→真实网页本人刷新→服务重启→公共匿名访问",
+      "expected": "HTTP、持久性、本人/公众边界与部署代码一致；未执行前保持需生产验证，不凭本地mock关闭",
+      "status": "PRODUCTION_OR_DEVICE_NOT_RUN",
+      "actual": "生产未部署；真实环境/微信真机/实际手机未在本轮执行。"
+    },
+    {
+      "id": "REAL-02",
+      "tasks": [
+        "WX-22",
+        "MOD-04",
+        "ADM-07"
+      ],
+      "method": "实施后网站/真实微信真机联调",
+      "steps": "用维护者可控测试账号验证普通认证投稿、私密本人投诉、状态/回复与网页及小程序一致",
+      "expected": "旧客户端兼容、不会因旧status或全量请求自动公开；未执行明确列待真实链路，不索要真实密码",
+      "status": "PRODUCTION_OR_DEVICE_NOT_RUN",
+      "actual": "生产未部署；真实环境/微信真机/实际手机未在本轮执行。"
+    },
+    {
+      "id": "REAL-03",
+      "tasks": [
+        "ADM-08"
+      ],
+      "method": "实施后实际手机390/320等效设备",
+      "steps": "真实网络与正常编辑器加载，长字段/键盘打开/保存取消/冲突反馈/返回",
+      "expected": "没有桌面模拟无法暴露的键盘遮挡或操作截断；留脱敏截图与设备宽度",
+      "status": "PRODUCTION_OR_DEVICE_NOT_RUN",
+      "actual": "生产未部署；真实环境/微信真机/实际手机未在本轮执行。"
+    }
+  ],
+  "productDecision": {
+    "id": "S3 review automatic publication",
+    "status": "CONFIRMED",
+    "date": "2026-10-04",
+    "mode": "configured_automatic_publication",
+    "requirements": [
+      "保留现有moderationRequired及keywordFilter语义：要求人工或命中已启用规则时待审，否则自动公开。",
+      "不额外要求每条人审；自动公开记录服务端时间、system来源、实际规则版本/快照，规则设置记录真实操作者。",
+      "当前用户决定授权本次规则模型迁移；不要求再次批准同一模式，不伪造历史管理员批准。",
+      "旧已公开课程评价可由受控迁移以legacy_visibility_import来源保持既有可见性，明确不是还原历史人审；保留原文/ID/隐藏状态。",
+      "私密投诉始终私密，普通反馈处理完成/回复不等于公开，事后下架留痕。"
+    ]
+  },
+  "integrationNotes": [
+    "用户已确认保留原有规则自动公开；本决定覆盖准备阶段所有待选或强制全量人工批准表述。",
+    "受控迁移前输出脱敏dry-run分类及影响计数。旧已公开课程评价以legacy_visibility_import来源维持既有可见性，不伪造历史审批；混合反馈的历史隐私来源按域和证据分析，已知举报永远私密，不可靠批准不得由completed/open推导。",
+    "S3实施采用按批次文件所有权；主窗口独占admin-server、admin-audit、route-permissions的接线及共享文档，子智能体产出模块/页面/专属测试，防止同文件竞争。",
+    "独立源码复查和修复已完成；自动矩阵3项通过/10项部分验证/1项未实现，真实浏览器9项部分验证/2项指定步骤未跑。28项不泛称全部通过，详见各行actual/remaining。",
+    "现有CSRF、认证、管理员写权限、日志耐久性和S1/S2安全断言继续有效；新PATCH必须走相同边界。C-08只决定查询导出不拆权限，不扩大写权限。",
+    "2026-10-04准备阶段307/307与13页构建仅为依赖升级历史证据；当前S3自动证据为354/354、修复专项25/25、发布恢复11/11和14页fixture构建。"
+  ],
+  "implementationBatches": [
+    {
+      "batch": "S3-A 契约/迁移与隐私gate",
+      "filesOwner": "模型/服务智能体原分工；实际模块server/moderation-model.mjs及模型测试，主窗口接线启动v2规范化和只读preview-moderation-migration.mjs；原计划独立apply脚本未交付。",
+      "work": "权威schema、冻结原文/永久private、处理/公开分离、历史fail-closed、全出口gate；按用户确认的原有规则自动公开模式固化",
+      "acceptance": "合成旧普通open/completed/approved/自动review和report无private等组合；两次迁移/故障恢复/数量和原文保持；只明确批准的普通条目可公开。"
+    },
+    {
+      "batch": "S3-B 单条写/设置/兼容",
+      "filesOwner": "后端智能体：server/moderation-service.mjs、单条/批量服务测试；主窗口：server/admin-server.mjs、server/admin-audit.mjs、server/admin-route-permissions.mjs、scripts/api-route-extractor.mjs及接线集成测试",
+      "work": "已实现单条item CAS、设置CAS、旧全量POST严格适配、回复长度/可见性/服务端metadata与脱敏审计；可选batch未实现，页面按钮已去掉。",
+      "acceptance": "A/B/设置只存A；两管理员同条冲突、不同条互不覆盖；新投稿/点赞不无关冲突；失败不假成功；原文/私密/actor各别名注入；匿名普通与失效admin拒绝。"
+    },
+    {
+      "batch": "S3-C 举报受理与本人链路",
+      "filesOwner": "后端受理智能体或主窗口：server/feedback-submission-service.mjs、server/public-api-service.mjs、相关合成集成测试；主窗口仍独占admin-server接线；前端智能体独占src/pages/admin.astro、feedback.astro、me.astro、privacy.astro、新report.astro及确需CSS",
+      "work": "新独立匿名入口+旧alias，独立限额/长度/开关与日志；前端原文只读、逐条草稿、回复显示/隐私文案",
+      "acceptance": "匿名/未认证登录投诉真实持久→后台处理回复→刷新重启；普通/指南关闭投诉仍通；本人A不能看B、匿名无裸ID查询；私密任何状态无公共输出。"
+    },
+    {
+      "batch": "S3-D 缓存/构建/回归与正式证据",
+      "filesOwner": "公开服务智能体：server/public-api-dto.mjs、server/snapshot-cache.mjs、server/public-api-router.mjs、src/lib/reviews.ts、公共cache测试；主窗口统一接线/共享docs/API.md、docs/public-api.md、docs/data-schema.md、docs/compliance/SECURITY_ASSESSMENT_READINESS.md和验收证据；文档不能多人争写",
+      "work": "批准gate统一、UGC HTTP no-store、同步进程失效、静态不嵌UGC约束、旧cache部署清理操作单、API文档与状态表",
+      "acceptance": "先公开并填充etag/快照/搜索→撤销/隐藏→第一新请求无原文/reply及派生统计；产物sentinel无泄露；构建/回归/真实刷新/重启；生产缓存与静态清理另由维护者回执。"
+    }
+  ],
+  "fileOwnership": {
+    "backendModelAndService": [
+      "server/moderation-model.mjs (new)",
+      "server/moderation-service.mjs (new)",
+      "scripts/preview-moderation-migration.mjs (new, read-only deployment preflight)",
+      "test/moderation-model.test.mjs (new)",
+      "test/moderation-service.test.mjs (new)",
+      "test/review-submission-service.test.mjs (new)"
+    ],
+    "frontend": [
+      "src/pages/admin.astro",
+      "src/pages/feedback.astro",
+      "src/pages/me.astro",
+      "src/pages/report.astro (new)",
+      "src/pages/privacy.astro",
+      "src/styles/global.css",
+      "src/lib/moderation-drafts.js (new)",
+      "test/moderation-drafts.test.mjs (new)",
+      "src/lib/user-submissions-controller.js (new)",
+      "test/user-submissions-controller.test.mjs (new)"
+    ],
+    "publicProjectionLaterBatch": [
+      "server/public-api-dto.mjs",
+      "server/public-api-service.mjs",
+      "server/public-api-router.mjs",
+      "server/snapshot-cache.mjs",
+      "src/lib/reviews.ts",
+      "public projection/cache tests"
+    ],
+    "mainCoordinator": [
+      "server/admin-server.mjs",
+      "server/admin-audit.mjs",
+      "server/admin-route-permissions.mjs",
+      "scripts/api-route-extractor.mjs if needed",
+      "integration tests",
+      "docs/API.md",
+      "docs/data-schema.md",
+      "docs/compliance/SECURITY_ASSESSMENT_READINESS.md",
+      "package.json",
+      "package-lock.json"
+    ]
+  },
+  "updatedAt": "2026-10-07",
+  "currentFactsContext": "2026-10-04实施前源码快照，作为历史问题依据保留；不得据此判断当前实现。当前实现与证据见implementationAcceptance。",
+  "acceptanceStatusDefinitions": {
+    "PASSED_LOCAL": "该行列出的自动步骤有实际通过证据；只代表本地合成范围。",
+    "PARTIALLY_VERIFIED_LOCAL": "列出的断言已通过，但原计划全步骤或交叉矩阵仍有未验证项。",
+    "DEFERRED_NOT_IMPLEMENTED": "功能未交付，用例未执行；不能视为通过。",
+    "BROWSER_EVIDENCE_PENDING": "真实浏览器结果待主窗口逐项写入。",
+    "PRODUCTION_OR_DEVICE_NOT_RUN": "真实生产或设备验收尚未执行。",
+    "PARTIALLY_VERIFIED_BROWSER": "真实浏览器已执行actual中的步骤；remaining内原计划其余步骤未验，不等同本用例全通过。",
+    "BROWSER_NOT_RUN": "本用例的指定真实浏览器步骤未执行；控制器单元证据单列。"
+  },
+  "implementationAcceptance": {
+    "recordId": "E-20261005-001",
+    "date": "2026-10-05",
+    "branch": "codex/s3-moderation-20261004",
+    "baseHead": "df6bdadddc47f5677b7eff0bfc345952e4ff0fd6",
+    "commitStatus": "SAMPLED_BEFORE_LOCAL_COMMIT",
+    "executionScope": "本地隔离合成账号/JSON/SQLite；未部署生产，未读取生产个人数据，真实通知/私密R2仍在本轮范围外。",
+    "verification": [
+      {
+        "command": "TMPDIR=/private/tmp npm test",
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-final-source.tap",
+        "tests": 354,
+        "pass": 354,
+        "fail": 0,
+        "meaning": "最终类型补正后的完整回归，354/354，0失败/取消/跳过；不能据总数推导28项全部验收。"
+      },
+      {
+        "command": "node --test test/content-publish-service.test.mjs test/moderation-drafts.test.mjs test/s3-moderation.integration.test.mjs",
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/review-fixes.tap",
+        "tests": 25,
+        "pass": 25,
+        "fail": 0
+      },
+      {
+        "command": "node --test test/content-publish-service.test.mjs",
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/recovery.tap",
+        "tests": 11,
+        "pass": 11,
+        "fail": 0
+      },
+      {
+        "command": "npm run build:fixtures",
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/build-final.log",
+        "pages": 14,
+        "meaning": "真实Astro fixture构建完成；不是浏览器、私密哨兵或生产构建验收。"
+      },
+      {
+        "command": "node scripts/check-api-docs.mjs",
+        "registeredMethodPathPairs": 130,
+        "result": "PASS",
+        "meaning": "本记录编写时只读核对文档与注册路由一致，不含未实现batch。"
+      },
+      {
+        "command": "主窗口独立合成数据Astro构建及全产物哨兵扫描",
+        "evidence": [
+          "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/static-privacy.json",
+          "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/static-build.log"
+        ],
+        "pages": 14,
+        "filesScanned": 27,
+        "bytesScanned": 969307,
+        "sourceNonPublicRows": 8,
+        "privateMarkersFound": 0,
+        "publicGatePositiveControls": 2,
+        "meaning": "合成全产物隐私哨兵与gate控制已通过；生产旧产物不在本证据范围。"
+      },
+      {
+        "command": "node scripts/preview-moderation-migration.mjs --data-dir <isolated synthetic v2 data>",
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/migration-preview.json",
+        "result": "PASS",
+        "meaning": "只读合成v2数据预览；alreadyMigrated=true、源/预览hash一致，不能解释为生产数据影响预览。"
+      },
+      {
+        "command": "node --test test/moderation-drafts.test.mjs test/user-submissions-controller.test.mjs",
+        "tests": 17,
+        "pass": 17,
+        "fail": 0,
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/ui-final.tap"
+      },
+      {
+        "command": "NODE_OPTIONS=--max-old-space-size=8192 npm run check (HEAD/candidate isolated copies, same synthetic DATA_DIR)",
+        "baselineErrors": 1971,
+        "candidateErrors": 1691,
+        "addedNormalizedErrors": 0,
+        "removedNormalizedErrors": 280,
+        "warnings": 0,
+        "candidateHints": 39,
+        "baselineHints": 34,
+        "result": "FAIL_EXISTING_ERRORS",
+        "evidence": [
+          "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/type-baseline.log",
+          "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/type-candidate.log",
+          "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/type-delta.final.json"
+        ]
+      }
+    ],
+    "independentReviewFixes": [
+      "保存请求进行期间的新输入不能被返回结果清除，含回到旧已保存值的显式新意图。",
+      "普通反馈限额在同文件持久锁内按最新配置消费；慢请求期间限额缩小后返回429且不写入。",
+      "设置发布已切换后journal afterCommit/finalization失败保留发布与journal，隔离该文件后续写入至重启恢复；不回滚已发布JSON，也不让后续写破坏恢复证明。"
+    ],
+    "automaticMatrixSummary": {
+      "passedLocal": 3,
+      "partiallyVerifiedLocal": 10,
+      "deferredNotImplemented": 1
+    },
+    "browserSummary": "11项均有PARTIALLY_VERIFIED_BROWSER证据，各项remaining仍为未测试组合；不泛称全部Web验收通过。",
+    "productionSummary": "3项未执行；部署commit、真实历史迁移预览/私密备份/回执、入口缓存清理、真机联调和实际手机仍待维护者。",
+    "nonDelivered": [
+      "批量处置与合并",
+      "匿名裸ID查询或匿名回复送达",
+      "新增回复通知或真实通知接通/发送",
+      "私密R2生产操作",
+      "全站昵称与所有字段自动检测"
+    ],
+    "evidenceRetention": "原始TAP/构建/浏览器步骤/截图已通过Codex Security artifact工具保留在本地目标绑定证据集合；不在Git源码内，不表示远端仓库或生产已收到。目录：/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/",
+    "browserMatrixSummary": {
+      "partiallyVerifiedBrowser": 11,
+      "browserNotRun": 0
+    },
+    "browserEvidence": [
+      "WEB-01",
+      "WEB-02",
+      "WEB-03",
+      "WEB-04",
+      "WEB-05",
+      "WEB-06",
+      "WEB-07",
+      "WEB-08",
+      "WEB-09",
+      "WEB-10",
+      "WEB-11"
+    ],
+    "announcementFollowup": "新默认公告已改为中性按当前规则，规范临时路径下最终354/354通过。现有自定义/已落盘公告不自动覆盖，生产维护者须核对公告与实际规则一致。",
+    "environmentLimitation": {
+      "defaultMacTmpdir": "默认macOS TMPDIR完整回归出现4个static-release-publisher失败，均为/var与/private/var路径别名；不能称默认命令全绿。",
+      "headReproduction": {
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/static-release-baseline.tap",
+        "tests": 13,
+        "pass": 9,
+        "fail": 4,
+        "meaning": "独立HEAD复现同4个失败，属于既存路径比较限制；未据此放宽或删除断言。"
+      },
+      "normalizedTmpdirRerun": {
+        "command": "TMPDIR=/private/tmp npm test",
+        "tests": 354,
+        "pass": 354,
+        "fail": 0,
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-final-source.tap"
+      },
+      "earlierFullSuite": "已读354/354 TAP保留为此前自动回归证据；公告一行修正后的最终复跑结果另记，不静默替换失败记录。",
+      "candidateDefaultRun": {
+        "tests": 354,
+        "pass": 350,
+        "fail": 4,
+        "evidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/full-suite-final.tap"
+      }
+    },
+    "browserRecords": [
+      "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/browser-evidence.json",
+      "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/browser-followup.json"
+    ],
+    "browserDimensions": [
+      {
+        "page": "report",
+        "viewport": 320,
+        "documentScrollWidth": 305
+      },
+      {
+        "page": "report",
+        "viewport": 390,
+        "documentScrollWidth": 375
+      },
+      {
+        "page": "me",
+        "viewport": 320,
+        "documentScrollWidth": 305
+      },
+      {
+        "page": "me",
+        "viewport": 390,
+        "documentScrollWidth": 375
+      },
+      {
+        "page": "admin",
+        "viewport": 320,
+        "documentScrollWidth": 305
+      },
+      {
+        "page": "admin",
+        "viewport": 1440,
+        "documentScrollWidth": 1425
+      }
+    ],
+    "fixedCommitEvidence": "/Users/carlos/.codex/state/plugins/codex-security/scans/NKU-study-resources-s2/artifacts-f5e1d761a6a1a30e993a46b63582ea9efa75a9e3d0d33220a827afae5cc0872f/artifacts/s3-20261005/fix-summary.md",
+    "typecheck": "HEAD与最终候选都exit1；按文件+TS code+诊断文字归一后新增0、减少280。当前1691历史错误未修完，不表示类型检查通过。"
+  },
+  "historicalPublicationDecision20261006": {
+    "userDecision": "历史已公开普通反馈、评价和已有公开回复继续保留，不重新内容审核、不批量撤下；新投稿用S3规则。2026-10-07授权收尾并更新PR #3。",
+    "supersedes": "旧版候选8ff88cc的未知旧反馈一律blocked策略；其预览与386/386证据保留为历史，不代表此新候选验收。",
+    "expectedOnSameProductionInput": {
+      "feedbackPublicBefore": 8,
+      "feedbackPublicAfter": 8,
+      "reviewsPublicAfter": 1477
+    },
+    "maintainerPreviewReceipt": "8ff88cc在2026-10-06只读预览exit0，feedback8条blocked、reviews1477公开；同日公开入口实读反馈8条（approved4/completed4）。原生产未改；新候选预览尚待执行。",
+    "newCandidateStatus": "LOCAL_VERIFIED_AWAITING_NEW_PRODUCTION_READONLY_PREVIEW",
+    "limits": "不解除v2已blocked记录，不伪造历史管理员批准，不放开新投稿或已知私密/举报；不实施S4/S5/S6，不发送真实通知或启用私密R2。"
+  }
+}

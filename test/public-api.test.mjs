@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizeReviewsDocument } from "../server/moderation-model.mjs";
 import { PublicApiService } from "../server/public-api-service.mjs";
 import { createLearningCompassService } from "../server/learning-compass-service.mjs";
 
@@ -57,7 +58,7 @@ function fixture() {
   const submissions = [];
   const reviewSubmissionService = {
     assertAttempt(ip) { submissions.push({ attempt: ip }); },
-    async submit(input, context) { submissions.push({ input, context }); return { pending: true }; },
+    async submit(input, context) { submissions.push({ input, context }); return { pending: true, reviewId: "synthetic-submitted" }; },
   };
   const service = new PublicApiService({
     readManifest: () => structuredClone(manifest),
@@ -216,7 +217,7 @@ test("mini-program review body maps into the shared submission service", async (
   const { service, submissions } = fixture();
   service.assertReviewAttempt("actor");
   const result = await service.submitReview({ course_id: uidA, teacher: "张老师", rating: 5, tags: ["讲解清晰"], body: "足够长的课程评价正文内容。", anonymous: true }, { clientIp: "actor", userAgent: "wx" });
-  assert.deepEqual(result, { submitted: true, pending: true });
+  assert.deepEqual(result, { submitted: true, accepted: true, pending: true });
   assert.equal(submissions[0].attempt, "actor");
   assert.equal(submissions[1].input.courseTitle, "中文课程");
   assert.equal(submissions[1].input.content, "足够长的课程评价正文内容。");
@@ -227,7 +228,7 @@ test("mini-program can review a historical group by exact course_title", async (
   const { service, submissions } = fixture();
   service.assertReviewAttempt("actor2");
   const result = await service.submitReview({ course_title: "历史未匹配课程", teacher: "李老师", rating: 4, body: "给历史课程组的新的评价内容。" }, { clientIp: "actor2", userAgent: "wx" });
-  assert.deepEqual(result, { submitted: true, pending: true });
+  assert.deepEqual(result, { submitted: true, accepted: true, pending: true });
   assert.equal(submissions[1].input.courseTitle, "历史未匹配课程");
   await assert.rejects(() => service.submitReview({ course_title: "不存在的课程名", teacher: "张老师", rating: 5, body: "随便写的正文。" }, { clientIp: "actor2", userAgent: "wx" }), (error) => error.code === "REVIEW_GROUP_NOT_FOUND");
 });
@@ -253,7 +254,7 @@ test("review groups merge punctuation variants and resolve catalog aliases", asy
       { id: "r4", courseTitle: "人工智能与创新（C++）", teacher: "李四", rating: 3, content: "d", status: "approved", createdAt: "2026-01-04" },
     ],
   };
-  const groups = buildReviewGroups(manifest, reviewData);
+  const groups = buildReviewGroups(manifest, normalizeReviewsDocument(reviewData));
   assert.equal(groups.length, 2, "punctuation variants merge into one group each");
   const guang = groups.find((g) => g.courseTitle === "光、视觉与艺术");
   assert.equal(guang.reviews.length, 2);
@@ -263,14 +264,14 @@ test("review groups merge punctuation variants and resolve catalog aliases", asy
   const fakeCatalog = { find: (name) => (name.includes("视觉") ? { name: "光、视觉与艺术", aliases: [] } : null) };
   const manifest2 = { courses: [{ id: "c2", uid: "u2", title: "光、视觉与艺术" }] };
   const reviewData2 = { reviews: [{ id: "r5", courseTitle: "光，视觉与艺术", teacher: "王五", rating: 5, content: "e", status: "approved", createdAt: "2026-01-05" }] };
-  const groups2 = buildReviewGroups(manifest2, reviewData2, fakeCatalog);
+  const groups2 = buildReviewGroups(manifest2, normalizeReviewsDocument(reviewData2), fakeCatalog);
   assert.equal(groups2[0].course?.id, "c2", "catalog alias resolution attaches unmatched titles");
 });
 
 test("about() returns sanitized about-page content for the mini-program", () => {
   const manifest = { resourceRoot: "https://resources.nkustudy.top/resources/", courses: [] };
   const reviews = { version: 1, rules: {}, reviews: [] };
-  const reviewSubmissionService = { assertAttempt() {}, async submit() { return { pending: true }; } };
+  const reviewSubmissionService = { assertAttempt() {}, async submit() { return { pending: true, reviewId: "synthetic-submitted" }; } };
   const make = (readAbout) => new PublicApiService({
     readManifest: () => structuredClone(manifest),
     readReviews: () => structuredClone(reviews),

@@ -5,7 +5,7 @@ import "vditor/dist/index.css";
 ---
 
 <Layout title="评价" eyebrow="Teacher Reviews">
-  <section class="content">
+  <section class="content public-reviews-page">
     <div class="panel review-public-notice" id="review-public-announcement-panel" hidden>
       <div class="panel-header review-head">
         <h2>评价公告</h2>
@@ -19,7 +19,10 @@ import "vditor/dist/index.css";
     <div class="panel">
       <div class="panel-header review-head">
         <h2>评价索引</h2>
-        <button class="button" id="open-review-form" type="button">提交新的评价</button>
+        <div class="header-actions">
+          <a class="button secondary" href="/report/">私密投诉举报</a>
+          <button class="button" id="open-review-form" type="button">提交新的评价</button>
+        </div>
       </div>
       <div class="panel-body">
         <div class="filter-row">
@@ -39,11 +42,12 @@ import "vditor/dist/index.css";
       </div>
       <div class="panel-body">
         <div class="review-announcement" id="review-announcement"></div>
+        <p class="field-hint">提交评价需登录、手机号已认证且账号未封禁。公开时间由当前规则和内容检查决定；提交后可在<a href="/me/">我的评价</a>查看状态。投诉举报可<a href="/report/">匿名私密提交</a>。</p>
         <p class="muted review-submission-hint" id="review-submission-hint" hidden></p>
         <form class="review-form" id="review-form">
           <label class="admin-field">
             <span>课程</span>
-            <input name="courseTitle" list="course-title-options" placeholder="课程名称" autocomplete="off" required />
+            <input name="courseTitle" maxlength="120" list="course-title-options" placeholder="课程名称" autocomplete="off" required />
             <small class="field-hint">可以填写资源库里还没有的课程，提交时会询问是否新建评价索引。</small>
             <datalist id="course-title-options">
               {courses.map((course) => <option value={course.title} />)}
@@ -51,7 +55,7 @@ import "vditor/dist/index.css";
           </label>
           <label class="admin-field">
             <span>老师</span>
-            <input name="teacher" placeholder="老师姓名" autocomplete="off" required />
+            <input name="teacher" maxlength="80" placeholder="老师姓名" autocomplete="off" required />
             <small class="field-hint">请填写任课老师姓名，同一课程的不同老师会分开统计。</small>
           </label>
           <label class="admin-field">
@@ -71,7 +75,7 @@ import "vditor/dist/index.css";
           </div>
           <label class="admin-field">
             <span>评价</span>
-            <textarea class="review-basic-editor" id="review-basic-content" placeholder="可以写授课风格、作业考试情况、适合人群等"></textarea>
+            <textarea class="review-basic-editor" id="review-basic-content" maxlength="2000" placeholder="可以写授课风格、作业考试情况、适合人群等"></textarea>
             <small class="field-hint">直接输入文本即可；如果需要标题、列表、加粗等格式，请打开高级编辑。</small>
           </label>
           <div class="admin-field" id="review-advanced-editor-panel" hidden>
@@ -83,33 +87,42 @@ import "vditor/dist/index.css";
             <small class="field-hint" id="review-advanced-mode-hint">当前为即时渲染单栏模式，适合手机编辑。</small>
           </div>
           <input type="hidden" name="content" id="review-content-value" />
-          <small class="field-hint" id="review-content-hint">最短允许 5 字；内容会先进入审核。</small>
+          <small class="field-hint" id="review-content-hint">最短允许 5 字，最多 2000 字；公开时间由当前规则和内容检查决定。</small>
           <input class="review-honeypot" name="website" tabindex="-1" autocomplete="off" />
           <div class="filter-row">
-            <button class="button" type="submit">提交到审核</button>
-            <span class="muted" id="review-submit-status"></span>
+            <button class="button" id="review-submit" type="submit">提交评价</button>
+            <span class="muted" id="review-submit-status" role="status" aria-live="polite"></span>
           </div>
         </form>
       </div>
     </div>
   </section>
 
+  <style is:global>
+    .public-reviews-page .review-head, .public-reviews-page .filter-row, .public-reviews-page .pagination { flex-wrap: wrap; }
+    .public-reviews-page .review-form, .public-reviews-page .admin-field, .public-reviews-page .markdown-editor { min-width: 0; max-width: 100%; }
+    .public-reviews-page .review-index-main, .public-reviews-page #review-submit-status { overflow-wrap: anywhere; }
+    .public-reviews-page .review-load-error { display: grid; gap: 10px; justify-items: start; }
+    @media (max-width: 420px) { .public-reviews-page .header-actions { width: 100%; flex-wrap: wrap; } .public-reviews-page .header-actions .button { flex: 1 1 100%; } }
+  </style>
+
   <script>
     import Vditor from "vditor";
     import MarkdownIt from "markdown-it";
     import { normalizeMarkdown } from "../lib/markdown";
+    import { requestUserJson, reviewSubmissionMessage } from "../lib/user-submissions-controller.js";
 
     const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
     const pageSize = 10;
     const existingCourses = new Set(Array.from(document.querySelectorAll("#course-title-options option")).map((option) => option.value));
-    const indexEl = document.querySelector("#review-index");
-    const pagination = document.querySelector("#review-pagination");
+    const indexEl = document.querySelector<HTMLElement>("#review-index")!;
+    const pagination = document.querySelector<HTMLElement>("#review-pagination")!;
     const search = document.querySelector("#review-search");
     const openButton = document.querySelector("#open-review-form");
     const closeButton = document.querySelector("#close-review-form");
     const panel = document.querySelector("#review-submit-panel");
     const form = document.querySelector("#review-form");
-    const statusEl = document.querySelector("#review-submit-status");
+    const statusEl = document.querySelector<HTMLElement>("#review-submit-status")!;
     const announcement = document.querySelector("#review-announcement");
     const publicAnnouncement = document.querySelector("#review-public-announcement");
     const publicAnnouncementPanel = document.querySelector("#review-public-announcement-panel");
@@ -126,11 +139,14 @@ import "vditor/dist/index.css";
     const urlParams = new URLSearchParams(window.location.search);
     let reviews = [];
     let currentPage = 1;
-    let contentEditor = null;
+    let contentEditor: Vditor | null = null;
     let advancedEditorMounted = false;
     let advancedEditorVisible = false;
     let contentEditorMode = "ir";
     let editorSettings = null;
+    let contentEditorReady = false;
+    let saving = false;
+    let loadFailed = false;
 
     const escapeHtml = (value) => String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -153,8 +169,7 @@ import "vditor/dist/index.css";
 
     async function loadEditorSettings() {
       try {
-        const response = await fetch("/editor-settings");
-        const data = await response.json();
+        const data = await requestUserJson("/editor-settings");
         editorSettings = data.data || null;
       } catch {
         editorSettings = null;
@@ -201,7 +216,14 @@ import "vditor/dist/index.css";
 
     function mountContentEditor() {
       if (!contentEditorNode || contentEditor) return;
-      contentEditor = new Vditor(contentEditorNode, {
+      const fallback = () => {
+        if (contentEditorReady) return;
+        setAdvancedEditorVisible(false);
+        if (editorModeHint) editorModeHint.textContent = "Markdown 编辑器未就绪，可继续使用普通文本编辑并提交。";
+      };
+      const fallbackTimer = window.setTimeout(fallback, 8000);
+      try {
+        contentEditor = new Vditor(contentEditorNode, {
         mode: contentEditorMode,
         value: String(contentValue?.value || basicEditor?.value || ""),
         height: contentEditorMode === "ir" ? 260 : 320,
@@ -216,16 +238,25 @@ import "vditor/dist/index.css";
           },
         },
         after() {
+          window.clearTimeout(fallbackTimer);
+          contentEditorReady = true;
           enhanceVditorToolbar(contentEditorNode);
-          if (contentValue?.value) contentEditor.setValue?.(contentValue.value);
+          contentEditor!.setValue?.(String(contentValue?.value || basicEditor?.value || ""));
+          if (saving) contentEditor!.disabled?.();
           if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
         },
         input(value) {
+          if (!contentEditorReady || !advancedEditorVisible) return;
           if (basicEditor && basicEditor.value !== value) basicEditor.value = value;
           if (contentValue) contentValue.value = value;
         },
-      });
-      advancedEditorMounted = true;
+        });
+        advancedEditorMounted = true;
+      } catch {
+        window.clearTimeout(fallbackTimer);
+        contentEditor = null;
+        fallback();
+      }
     }
 
     function updateEditorModeUi() {
@@ -240,25 +271,26 @@ import "vditor/dist/index.css";
     }
 
     function remountContentEditor(nextMode, { focus = true } = {}) {
-      const current = contentEditor?.getValue?.() || String(contentValue?.value || basicEditor?.value || "");
+      const current = (contentEditorReady ? contentEditor?.getValue?.() : "") || String(contentValue?.value || basicEditor?.value || "");
       contentEditorMode = nextMode;
       if (contentValue) contentValue.value = current;
       try {
         contentEditor?.destroy?.();
       } catch {}
       contentEditor = null;
+      contentEditorReady = false;
       advancedEditorMounted = false;
       if (contentEditorNode) contentEditorNode.innerHTML = "";
       updateEditorModeUi();
       mountContentEditor();
-      contentEditor?.setValue?.(current);
+      if (contentEditorReady) contentEditor?.setValue?.(current);
       if (focus) requestAnimationFrame(() => contentEditor?.focus?.());
     }
 
     function syncReviewContent(value) {
       if (contentValue) contentValue.value = value;
       if (basicEditor && basicEditor.value !== value) basicEditor.value = value;
-      if (contentEditor && contentEditor.getValue?.() !== value) {
+      if (contentEditorReady && contentEditor && contentEditor.getValue?.() !== value) {
         contentEditor.setValue?.(value);
       }
     }
@@ -275,10 +307,10 @@ import "vditor/dist/index.css";
       if (visible) {
         updateEditorModeUi();
         mountContentEditor();
-        contentEditor?.setValue?.(String(contentValue?.value || basicEditor?.value || ""));
+        if (contentEditorReady) contentEditor?.setValue?.(String(contentValue?.value || basicEditor?.value || ""));
         if (focus) requestAnimationFrame(() => contentEditor?.focus?.());
       } else {
-        const current = contentEditor?.getValue?.() || String(basicEditor?.value || contentValue?.value || "");
+        const current = (contentEditorReady ? contentEditor?.getValue?.() : "") || String(basicEditor?.value || contentValue?.value || "");
         syncReviewContent(current);
         if (focus) basicEditor?.focus?.();
       }
@@ -377,6 +409,7 @@ import "vditor/dist/index.css";
     }
 
     function renderIndex() {
+      if (loadFailed) return;
       const groups = filteredGroups();
       if (!groups.length) {
         indexEl.innerHTML = `<p class="empty">${reviews.length ? "没有找到匹配的课程-老师索引。" : "还没有已公开的课程-老师评价索引。"}</p>`;
@@ -426,12 +459,13 @@ import "vditor/dist/index.css";
 
     async function loadReviews() {
       try {
-        const response = await fetch("/review-api/reviews");
-        const data = await response.json();
+        const data = await requestUserJson("/review-api/reviews");
+        if (data.ok !== true || !Array.isArray(data.reviews)) throw new Error("评价列表返回结果不完整。请重试。");
         reviews = data.reviews || [];
+        loadFailed = false;
         const announcementText = data.rules?.announcement || "";
         const minLength = Number(data.rules?.minLength || 5);
-        if (contentHint) contentHint.textContent = `最短允许 ${minLength} 字；内容会先进入审核。`;
+        if (contentHint) contentHint.textContent = `最短允许 ${minLength} 字，最多 2000 字；${data.rules?.moderationRequired === false ? "按当前规则，符合内容检查要求的评价可自动公开，其余等待审核。" : "提交后等待审核。"}`;
         announcement.innerHTML = markdownToHtml(announcementText);
         announcement.hidden = !announcementText;
         const hint = data.rules?.submission_hint || "";
@@ -444,8 +478,12 @@ import "vditor/dist/index.css";
         publicAnnouncement.innerHTML = markdownToHtml(announcementText);
         publicAnnouncementPanel.dataset.announcement = announcementText;
         publicAnnouncementPanel.hidden = !announcementText || dismissed;
-      } catch {
-        reviews = [];
+      } catch (error) {
+        loadFailed = true;
+        indexEl.innerHTML = `<div class="review-load-error"><p class="empty">${escapeHtml((error as Error).message || "评价加载失败，请重试。")}</p><button class="button secondary" id="review-retry" type="button">重试加载</button></div>`;
+        pagination.hidden = true;
+        document.querySelector("#review-retry")?.addEventListener("click", () => loadReviews());
+        return;
       }
       renderIndex();
     }
@@ -482,21 +520,27 @@ import "vditor/dist/index.css";
 
     form?.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (saving) return;
       const data = new FormData(form);
       const courseTitle = String(data.get("courseTitle") || "").trim();
-      const content = advancedEditorVisible
+      const content = advancedEditorVisible && contentEditorReady
         ? String(contentEditor?.getValue?.() || contentValue?.value || "").trim()
         : String(basicEditor?.value || contentValue?.value || data.get("content") || "").trim();
       if (!content.trim()) {
         statusEl.textContent = "请先填写评价内容。";
         return;
       }
+      if (content.length > 2000) { statusEl.textContent = "评价内容最多 2000 字，请缩短后提交。输入已保留。"; return; }
       if (!existingCourses.has(courseTitle) && !confirm(`课程“${courseTitle}”还不在资源库中，仍然提交并创建新的评价索引吗？`)) {
         return;
       }
-      statusEl.textContent = "提交中...";
+      saving = true;
+      const lockedFields = Array.from(form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLButtonElement>("input,textarea,select,button")).map((field) => ({ field, disabled: field.disabled }));
+      lockedFields.forEach(({ field }) => { field.disabled = true; });
+      if (contentEditorReady) contentEditor?.disabled?.();
+      statusEl.textContent = "提交中…";
       try {
-        const response = await fetch("/review-api/submit", {
+        const result = await requestUserJson("/review-api/submit", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -507,17 +551,19 @@ import "vditor/dist/index.css";
             website: data.get("website"),
           }),
         });
-        const result = await response.json();
-        if (!response.ok || result.ok === false) throw new Error(result.error || "提交失败");
-        statusEl.textContent = result.review?.status === "approved" ? "已提交并公开" : "已提交，等待审核";
+        statusEl.textContent = reviewSubmissionMessage(result);
         form.reset();
-        contentEditor?.setValue?.("");
+        if (contentEditorReady) contentEditor?.setValue?.("");
         if (basicEditor) basicEditor.value = "";
         if (contentValue) contentValue.value = "";
         setAdvancedEditorVisible(false);
         await loadReviews();
       } catch (error) {
         statusEl.textContent = error.message;
+      } finally {
+        saving = false;
+        lockedFields.forEach(({ field, disabled }) => { field.disabled = disabled; });
+        if (contentEditorReady) contentEditor?.enable?.();
       }
     });
 

@@ -130,39 +130,48 @@ export class ContentPublishService {
     return { data, revision: manifestRevision(data) };
   }
 
-  publish(filePath, incoming, { expectedRevision, normalize = (value) => value, preserve = (next) => next } = {}) {
+  publish(filePath, incoming, { expectedRevision, normalize = (value) => value, preserve = (next) => next, mutate, shouldBuild = () => true } = {}) {
     return this.mutationQueue.enqueue(async () => {
       this.journal ||= new ContentPublishJournal({ store: this.store, dataDir: path.dirname(filePath) });
       let nextRevision;
       let journalRecord;
       let deploymentSucceeded = false;
       let deploymentProof;
+      let requiresDeployment = true;
       try {
         const data = await this.store.update(filePath, async (persisted) => {
           const current = normalize(structuredClone(persisted));
           const currentRevision = manifestRevision(current);
-          if (!expectedRevision) {
+          if (!mutate && !expectedRevision) {
             const error = new Error("expectedRevision is required; reload this content before saving.");
             error.statusCode = 400;
             throw error;
           }
-          if (expectedRevision !== currentRevision) {
+          if (!mutate && expectedRevision !== currentRevision) {
             throw new ManifestConflictError("Content changed after it was loaded; no changes were written. Refresh and retry.", currentRevision);
           }
-          const next = preserve(normalize(structuredClone(incoming)), current);
+          // A scoped mutator performs its own item/settings CAS inside this lock.
+          const next = mutate ? await mutate(current) : preserve(normalize(structuredClone(incoming)), current);
+          requiresDeployment = shouldBuild(next, current);
           nextRevision = manifestRevision(next);
-          journalRecord = await this.journal.prepare(filePath, persisted, next, { requiresDeployment: true });
+          if (requiresDeployment) journalRecord = await this.journal.prepare(filePath, persisted, next, { requiresDeployment: true });
           return next;
         }, {
           mode: 0o600,
           afterWrite: async () => {
-            deploymentProof = await this.buildAndDeploy();
-            deploymentSucceeded = true;
+            if (requiresDeployment) {
+              deploymentProof = await this.buildAndDeploy();
+              deploymentSucceeded = true;
+            }
           },
           rollbackOnAfterWriteError: true,
+          afterCommit: async () => {
+            if (journalRecord) {
+              journalRecord = await this.journal.markPublished(journalRecord, deploymentProof);
+              await this.journal.complete(journalRecord);
+            }
+          },
         });
-        journalRecord = await this.journal.markPublished(journalRecord, deploymentProof);
-        await this.journal.complete(journalRecord);
         const warnings = Array.isArray(deploymentProof?.warnings) ? deploymentProof.warnings.filter((warning) => typeof warning === "string") : [];
         return { ok: true, data, revision: nextRevision, ...(warnings.length ? { warnings } : {}) };
       } catch (error) {

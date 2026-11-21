@@ -164,7 +164,7 @@ test("changing source versions during a load retries, then fails closed and reco
   assert.equal(cache.get(), version);
 });
 
-test("cached public routes retain ETag behavior and sanitize refresh failures", async (t) => {
+test("UGC public responses avoid HTTP reuse while in-process snapshots refresh and sanitize failures", async (t) => {
   const f = fixture(t);
   const handler = createPublicApiHandler({ service: f.service, readBody: async () => ({}), clientIp: () => "actor" });
   async function invoke(headers = {}) {
@@ -176,13 +176,15 @@ test("cached public routes retain ETag behavior and sanitize refresh failures", 
     return res;
   }
   const first = await invoke();
-  assert.equal((await invoke({ "if-none-match": first.headers.etag })).status, 304);
+  assert.equal((await invoke({ "if-none-match": '"legacy-etag"' })).status, 200);
+  assert.equal(first.headers["cache-control"], "no-store");
+  assert.equal(first.headers.etag, undefined);
   assert.equal(f.reads.reviews, 1);
   f.manifest.courses[0].title = "课程乙";
   replaceJson(f.manifestPath, f.manifest);
   const changed = await invoke({ "if-none-match": first.headers.etag });
   assert.equal(changed.status, 200);
-  assert.notEqual(changed.headers.etag, first.headers.etag);
+  assert.notEqual(changed.body, first.body);
   fs.writeFileSync(f.reviewsPath, "secret-malformed-json");
   const failure = await invoke();
   assert.equal(failure.status, 500);

@@ -55,7 +55,23 @@ import Layout from "../layouts/Layout.astro";
     justify-content: space-between;
     align-items: baseline;
     gap: 10px;
+    flex-wrap: wrap;
   }
+  .me-row-main, .me-row-main strong, .me-row-main p { overflow-wrap: anywhere; }
+  .me-scope .panel-header, .me-scope .filter-row, .me-scope .header-actions { flex-wrap: wrap; }
+  .me-scope .panel-header > div { min-width: 0; }
+  .me-row-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .me-row-chips .me-chip { white-space: normal; }
+  .me-original { margin: 8px 0; }
+  .me-original summary { cursor: pointer; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .me-original p, .me-reply p { white-space: pre-wrap; line-height: 1.65; overflow-wrap: anywhere; margin: 8px 0; }
+  .me-reply { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 12px; }
+  .me-reply-heading { font-size: 13px; }
+  .me-list-error { display: grid; gap: 10px; justify-items: start; padding: 8px 0; }
+  .me-list-error p { margin: 0; overflow-wrap: anywhere; }
+  .me-pagination { display: flex; justify-content: center; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+  .me-pagination[hidden] { display: none; }
+  @media (max-width: 420px) { .me-scope .me-row { flex-wrap: wrap; } .me-pagination .button { flex: 1 1 100px; } }
   .me-status { font-size: 13px; font-weight: 600; }
   .me-status.ok { color: #16a34a; }
   .me-status.err { color: #dc2626; }
@@ -91,27 +107,51 @@ import Layout from "../layouts/Layout.astro";
 </style>
 
 <script>
+  import { createOwnerListController, requestUserJson } from "../lib/user-submissions-controller.js";
+
+  type FavoriteItem = { name: string; term?: string; resource_count?: number };
+  type ReviewItem = { course_title: string; teacher_name: string; body: string; status: string; publicationState?: string; hidden?: boolean; created_at: string };
+  type FeedbackItem = { title: string; content: string; type: string; status: string; private?: boolean; publicationState?: string; handlingStatus?: string; hidden?: boolean; createdAt: string; reply?: string; repliedAt?: string };
+
   async function api(path, options = {}) {
-    const response = await fetch(`/api/v1${path}`, {
+    const data = await requestUserJson(`/api/v1${path}`, {
       ...options,
       headers: { "content-type": "application/json", ...(options.headers || {}) },
     });
-    const data = await response.json();
-    if (!response.ok || data.code !== 0) throw new Error(data.message || "请求失败");
+    if (data.code !== 0) throw new Error(data.message || "请求失败");
     return data.data;
   }
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const chip = (s) => ({ pending: ["待审", "warn"], approved: ["已通过", "ok"], hidden: ["已隐藏", "err"], open: ["待处理", "warn"], completed: ["已完成", "ok"], rejected: ["不予完成", "err"], parked: ["搁置", ""] }[s] || [s, ""]);
+  const handlingChip = (s: string): [string, string] => (({ open: ["待处理", "warn"], processing: ["处理中", "warn"], completed: ["已完成", "ok"], rejected: ["不予完成", "err"], parked: ["搁置", ""] } as Record<string, [string, string]>)[s] || ["处理状态待确认", ""]);
+  const publicationChip = (s: string): [string, string] => (({ pending: ["待批准公开", "warn"], approved: ["已批准公开", "ok"], rejected: ["公开被拒绝", "err"] } as Record<string, [string, string]>)[s] || ["公开状态待确认", ""]);
+  const dateText = (value: string | number) => {
+    const date = new Date(value || "");
+    if (!value || Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  };
+  const originalText = (value: unknown) => {
+    const text = String(value || "");
+    return `<details class="me-original"><summary>${esc(text.slice(0, 100) || "查看提交原文")}${text.length > 100 ? "…" : ""} · 展开原文</summary><p>${esc(text)}</p></details>`;
+  };
+  const badge = ([label, tone]: [string, string]) => `<span class="me-chip ${tone}">${esc(label)}</span>`;
 
   async function init() {
-    const app = document.querySelector("#me-app");
+    const app = document.querySelector<HTMLElement>("#me-app")!;
+    app.innerHTML = '<p class="muted" role="status" style="text-align:center;padding:40px;">正在读取当前账号…</p>';
     let user = null;
+    let sessionError: Error | null = null;
     // 空 web-login 请求 = 通过 httpOnly cookie 恢复会话
     try {
       const d = await api("/auth/web-login", { method: "POST", body: "{}" });
       if (d?.user?.nickname) user = d.user;
-    } catch {}
+    } catch (error) { if ((error as Error & { status?: number }).status !== 401) sessionError = error as Error; }
+
+    if (sessionError) {
+      app.innerHTML = `<div class="me-scope"><div class="panel"><div class="panel-header"><h2>暂时无法读取账号</h2></div><div class="panel-body me-list-error"><p>${esc(sessionError.message || "账号加载失败，请重试。")}</p><button class="button secondary" id="me-session-retry" type="button">重试加载</button><a href="/report/">匿名私密投诉举报</a></div></div></div>`;
+      document.querySelector("#me-session-retry")?.addEventListener("click", () => init());
+      return;
+    }
 
     if (!user) {
       app.innerHTML = `
@@ -123,6 +163,7 @@ import Layout from "../layouts/Layout.astro";
               <div class="filter-row" style="justify-content:center;border-left:none;background:none;padding:0;">
                 <button type="button" class="button" id="me-open-login">登录 / 注册</button>
                 <a class="button secondary" href="/">返回首页</a>
+                <a class="button secondary" href="/report/">匿名私密投诉举报</a>
               </div>
             </div>
           </div>
@@ -143,6 +184,7 @@ import Layout from "../layouts/Layout.astro";
             </div>
             <div class="header-actions">
               <button type="button" class="button secondary" id="logout-btn">退出登录</button>
+              <span class="me-status" id="logout-status" role="status"></span>
             </div>
           </div>
         </div>
@@ -196,7 +238,7 @@ import Layout from "../layouts/Layout.astro";
             <h2>我的收藏</h2>
             <span class="me-chip" id="fav-count">…</span>
           </div>
-          <div class="panel-body"><div class="me-rows" id="fav-list"><p class="muted" style="padding:6px 0;">加载中…</p></div></div>
+          <div class="panel-body"><div class="me-rows" id="fav-list"><p class="muted" style="padding:6px 0;">加载中…</p></div><div class="me-pagination" id="fav-pagination" hidden></div></div>
         </div>
 
         <div class="panel">
@@ -204,7 +246,7 @@ import Layout from "../layouts/Layout.astro";
             <h2>我的评价</h2>
             <span class="me-chip" id="rev-count">…</span>
           </div>
-          <div class="panel-body"><div class="me-rows" id="rev-list"><p class="muted" style="padding:6px 0;">加载中…</p></div></div>
+          <div class="panel-body"><div class="me-rows" id="rev-list"><p class="muted" style="padding:6px 0;">加载中…</p></div><div class="me-pagination" id="rev-pagination" hidden></div></div>
         </div>
 
         <div class="panel">
@@ -212,7 +254,7 @@ import Layout from "../layouts/Layout.astro";
             <h2>我的反馈</h2>
             <span class="me-chip" id="fb-count">…</span>
           </div>
-          <div class="panel-body"><div class="me-rows" id="fb-list"><p class="muted" style="padding:6px 0;">加载中…</p></div></div>
+          <div class="panel-body"><p class="field-hint">仅展示提交时关联本账号的记录。匿名投诉举报不会出现在账号列表中。<a href="/report/">提交私密投诉举报</a></p><div class="me-rows" id="fb-list"><p class="muted" style="padding:6px 0;">加载中…</p></div><div class="me-pagination" id="fb-pagination" hidden></div></div>
         </div>
 
         <div class="panel me-danger-panel">
@@ -290,62 +332,87 @@ import Layout from "../layouts/Layout.astro";
     });
 
     // —— 列表加载 ——
-    const loadLists = async () => {
-      const [favorites, reviews, feedback] = await Promise.all([
-        api("/me/favorites?page=1&page_size=50").catch(() => ({ items: [] })),
-        api("/me/reviews?page=1&page_size=50").catch(() => ({ items: [] })),
-        api("/me/feedback?page=1&page_size=50").catch(() => ({ items: [] })),
-      ]);
+    function mountList<T>({ prefix, path, unit, empty, renderItem }: { prefix: string; path: string; unit: string; empty: string; renderItem: (item: T) => string }) {
+      const count = document.querySelector<HTMLElement>(`#${prefix}-count`)!;
+      const list = document.querySelector<HTMLElement>(`#${prefix}-list`)!;
+      const pager = document.querySelector<HTMLElement>(`#${prefix}-pagination`)!;
+      const controller = createOwnerListController({ path, pageSize: 10, onState(state) {
+        if (state.phase === "loading") {
+          list.innerHTML = '<p class="muted" role="status">加载中…</p>';
+          count.textContent = "加载中";
+          pager.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+          return;
+        }
+        if (state.phase === "error") {
+          count.textContent = "未加载";
+          pager.hidden = true;
+          list.innerHTML = `<div class="me-list-error" role="alert"><p>${esc(state.error)}</p><div class="filter-row"><button class="button secondary" data-list-retry type="button">重试加载</button>${state.authExpired ? '<button class="button" data-list-login type="button">重新登录</button>' : ""}</div></div>`;
+          list.querySelector("[data-list-retry]")?.addEventListener("click", () => controller.retry());
+          list.querySelector("[data-list-login]")?.addEventListener("click", () => document.querySelector<HTMLDialogElement>("#auth-modal")?.showModal());
+          return;
+        }
+        if (state.phase !== "ready") return;
+        count.textContent = `共 ${state.total} ${unit}`;
+        list.innerHTML = state.items.length ? (state.items as T[]).map(renderItem).join("") : `<p class="muted">${esc(empty)}</p>`;
+        const pages = Math.max(1, Math.ceil(state.total / state.pageSize));
+        pager.hidden = pages <= 1;
+        pager.innerHTML = "";
+        if (pages <= 1) return;
+        const previous = document.createElement("button");
+        previous.type = "button";
+        previous.className = "button secondary";
+        previous.textContent = "上一页";
+        previous.disabled = state.page <= 1;
+        previous.addEventListener("click", () => controller.load(state.page - 1));
+        const next = document.createElement("button");
+        next.type = "button";
+        next.className = "button secondary";
+        next.textContent = "下一页";
+        next.disabled = state.page >= pages;
+        next.addEventListener("click", () => controller.load(state.page + 1));
+        const label = document.createElement("span");
+        label.className = "field-hint";
+        label.textContent = `第 ${state.page} / ${pages} 页，共 ${state.total} ${unit}`;
+        pager.append(previous, label, next);
+      } });
+      return controller.load();
+    }
 
-      document.querySelector("#fav-count").textContent = `共 ${favorites.total ?? favorites.items.length} 门`;
-      document.querySelector("#fav-list").innerHTML = favorites.items.length ? favorites.items.map((f) => `
-        <div class="me-row">
-          <a href="/courses/${encodeURIComponent(f.name)}/" style="color:inherit;text-decoration:none;font-weight:700;">${esc(f.name)}</a>
-          <span class="muted" style="font-size:12px;">${esc(f.term || "")} · ${f.resource_count || 0} 份资料</span>
-        </div>`).join("") : '<p class="muted" style="padding:6px 0;">暂无收藏</p>';
+    mountList<FavoriteItem>({ prefix: "fav", path: "/api/v1/me/favorites", unit: "门", empty: "暂无收藏", renderItem: (f) => `
+      <div class="me-row"><a class="me-row-main" href="/courses/${encodeURIComponent(f.name)}/" style="color:inherit;text-decoration:none;font-weight:700;">${esc(f.name)}</a><span class="muted" style="font-size:12px;">${esc(f.term || "")} · ${Number(f.resource_count) || 0} 份资料</span></div>` });
 
-      document.querySelector("#rev-count").textContent = `共 ${reviews.total ?? reviews.items.length} 条`;
-      document.querySelector("#rev-list").innerHTML = reviews.items.length ? reviews.items.map((r) => {
-        const [label, tone] = chip(r.status);
-        return `
-        <div class="me-row" style="align-items:flex-start;">
-          <div class="me-row-main">
-            <div class="me-row-top">
-              <strong>${esc(r.course_title)} · ${esc(r.teacher_name)}</strong>
-              <span class="me-chip ${tone}">${esc(label)}${r.hidden ? " · 已隐藏" : ""}</span>
-            </div>
-            <p class="muted" style="margin:4px 0 0;font-size:13px;line-height:1.55;">${esc(r.body.slice(0, 100))}${r.body.length > 100 ? "…" : ""}</p>
-          </div>
-        </div>`;
-      }).join("") : '<p class="muted" style="padding:6px 0;">暂无评价</p>';
+    mountList<ReviewItem>({ prefix: "rev", path: "/api/v1/me/reviews", unit: "条", empty: "暂无评价", renderItem: (r) => `
+      <article class="me-row"><div class="me-row-main"><div class="me-row-top"><strong>${esc(r.course_title)} · ${esc(r.teacher_name)}</strong><div class="me-row-chips">${badge(publicationChip(r.publicationState || r.status))}${r.hidden ? badge(["已隐藏", "err"]) : ""}</div></div>${originalText(r.body)}<time class="field-hint" datetime="${esc(r.created_at)}">提交于 ${esc(dateText(r.created_at))}</time></div></article>` });
 
-      document.querySelector("#fb-count").textContent = `共 ${feedback.total ?? feedback.items.length} 条`;
-      document.querySelector("#fb-list").innerHTML = feedback.items.length ? feedback.items.map((f) => {
-        const [label, tone] = chip(f.status);
-        return `
-        <div class="me-row" style="align-items:flex-start;">
-          <div class="me-row-main">
-            <div class="me-row-top">
-              <strong>${esc(f.title)}</strong>
-              <span class="me-chip ${tone}">${esc(label)}</span>
-            </div>
-            <p class="muted" style="margin:4px 0 0;font-size:13px;line-height:1.55;">${esc(f.content.slice(0, 100))}${f.content.length > 100 ? "…" : ""}</p>
-            <span class="field-hint">${esc(f.createdAt)}</span>
-          </div>
-        </div>`;
-      }).join("") : '<p class="muted" style="padding:6px 0;">暂无反馈</p>';
-    };
-    loadLists();
+    mountList<FeedbackItem>({ prefix: "fb", path: "/api/v1/me/feedback", unit: "条", empty: "暂无反馈或已关联的投诉举报", renderItem: (f) => {
+      const isPrivate = f.private === true || ["report", "complaint"].includes(f.type);
+      const publication = f.publicationState || (["pending", "approved", "rejected"].includes(f.status) ? f.status : "");
+      const handling = f.handlingStatus || (["open", "processing", "completed", "rejected", "parked"].includes(f.status) ? f.status : "open");
+      return `<article class="me-row"><div class="me-row-main"><div class="me-row-top"><strong>${esc(f.title)}</strong><div class="me-row-chips">${badge(handlingChip(handling))}${isPrivate ? badge(["始终私密", ""]) : badge(publicationChip(publication))}${f.hidden ? badge(["已隐藏", "err"]) : ""}</div></div>${originalText(f.content)}<time class="field-hint" datetime="${esc(f.createdAt)}">提交于 ${esc(dateText(f.createdAt))}</time>${f.reply ? `<div class="me-reply"><strong class="me-reply-heading">管理员回复</strong><p>${esc(f.reply)}</p>${f.repliedAt ? `<time class="field-hint" datetime="${esc(f.repliedAt)}">回复于 ${esc(dateText(f.repliedAt))}</time>` : ""}</div>` : ""}</div></article>`;
+    } });
 
     // —— 退出登录 ——
     document.querySelector("#logout-btn")?.addEventListener("click", async () => {
       if (!confirm("确定退出登录？")) return;
-      await fetch("/api/v1/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => {});
-      location.href = "/";
+      const button = document.querySelector<HTMLButtonElement>("#logout-btn");
+      const status = document.querySelector<HTMLElement>("#logout-status")!;
+      if (button) button.disabled = true;
+      try {
+        await api("/auth/logout", { method: "POST", body: "{}" });
+        location.href = "/";
+      } catch (error) {
+        status.textContent = (error as Error).message || "退出登录失败，请重试。";
+        status.classList.add("err");
+      } finally {
+        if (button) button.disabled = false;
+      }
     });
   }
 
   init().catch(() => {
     document.querySelector("#me-app").innerHTML = '<p style="text-align:center;padding:40px;">加载失败，请刷新重试。</p>';
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) init().catch(() => { document.querySelector("#me-app").innerHTML = '<p role="alert">账号加载失败，请刷新重试。</p>'; });
   });
 </script>

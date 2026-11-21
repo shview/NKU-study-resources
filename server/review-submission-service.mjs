@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { PublicApiError } from "./public-api-errors.mjs";
-import { reviewKeywordMatch } from "./review-keyword-filter.mjs";
+import { isReviewPublicEligible, normalizeReviewsDocument, reviewPublicationFields } from "./moderation-model.mjs";
 
 function cleanText(value, max) {
   return String(value ?? "").trim().slice(0, max);
@@ -9,6 +9,14 @@ function cleanText(value, max) {
 function cleanTags(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((tag) => cleanText(tag, 40)).filter(Boolean))].slice(0, 12);
+}
+
+function positiveInteger(value, fallback, max = Number.MAX_SAFE_INTEGER) {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (!/^\d+$/.test(String(value))) throw new PublicApiError(400, "分页参数必须为正整数。", "INVALID_PAGINATION");
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 1 || number > max) throw new PublicApiError(400, "分页参数超出允许范围。", "INVALID_PAGINATION");
+  return number;
 }
 
 /**
@@ -62,18 +70,12 @@ export class ReviewSubmissionService {
       throw new PublicApiError(400, "仅支持「有帮助」反应。", "UNSUPPORTED_REACTION");
     }
     const id = cleanText(reviewId, 160);
-    const existing = (this.readReviews().reviews || []).find((item) => cleanText(item.id, 160) === id);
-    if (!existing) return null;
-    const marked = new Set((Array.isArray(existing.helpfulBy) ? existing.helpfulBy : []).map(Number));
     const shouldMark = reaction === "up";
-    if (shouldMark === marked.has(userId)) {
-      return { review_id: id, helpful_count: marked.size, viewer_reaction: shouldMark ? "up" : null };
-    }
     let outcome = null;
     await this.store.update(this.reviewsPath, (current) => {
       current.reviews = Array.isArray(current.reviews) ? current.reviews : [];
       const review = current.reviews.find((item) => cleanText(item.id, 160) === id);
-      if (!review) return current;
+      if (!review || !isReviewPublicEligible(review)) return current;
       const voters = new Set((Array.isArray(review.helpfulBy) ? review.helpfulBy : []).map(Number));
       if (shouldMark) voters.add(userId);
       else voters.delete(userId);
@@ -104,61 +106,51 @@ export class ReviewSubmissionService {
     if (!rules.submissionOpen) {
       throw new PublicApiError(409, "评价提交暂未开放。", "SUBMISSION_CLOSED");
     }
-    if (input?.website) return { pending: true };
+    if (input?.website) return { pending: true, accepted: false };
 
     const courseTitle = cleanText(input?.courseTitle, 120);
     const teacher = cleanText(input?.teacher, 80);
     const content = cleanText(input?.content, 2000);
     const rating = Number(input?.rating);
     const tags = cleanTags(input?.tags);
-    const minimumLength = Math.max(1, Number(rules.minLength || 12));
-    if (!courseTitle || !teacher || !Number.isInteger(rating) || rating < 1 || rating > 5 || content.length < minimumLength) {
+    if (!courseTitle || !teacher || !Number.isInteger(rating) || rating < 1 || rating > 5) {
       throw new PublicApiError(400, "请填写课程、老师、1 至 5 分的评分，并补充更完整的评价内容。", "INVALID_REVIEW");
     }
-    if (!this.consumeSubmission(clientIp, rules)) {
-      throw new PublicApiError(429, "提交太频繁，请稍后再试。", "RATE_LIMITED");
-    }
-    const options = rules.submissionOptions || {};
-    if (options.allowCustomCourse === false && this.validateCourseTitle) {
-      this.validateCourseTitle(courseTitle);
-    }
-    if (options.allowCustomTeacher === false && this.validateTeacher) {
-      this.validateTeacher(courseTitle, teacher);
-    }
-
-    const keywordFilter = rules.keywordFilter || {};
-    const keywordHits = keywordFilter.enabled === true
-      ? reviewKeywordMatch(content, Array.isArray(keywordFilter.words) ? keywordFilter.words : [])
-      : [];
-    const now = this.nowIso();
-    const review = {
-      id: this.createId(),
-      courseTitle,
-      teacher,
-      rating,
-      ...(tags.length ? { tags } : {}),
-      content,
-      status: rules.moderationRequired || keywordHits.length ? "pending" : "approved",
-      hidden: false,
-      ...(keywordHits.length ? { flagged: keywordHits.join("|").slice(0, 80) } : {}),
-      createdAt: now,
-      updatedAt: now,
-      ipHash: this.actorHash(clientIp),
-      userAgent: cleanText(userAgent, 240),
-      ...(Number.isSafeInteger(userId) && userId > 0 ? { user_id: userId } : {}),
-    };
-    await this.store.update(this.reviewsPath, (current) => {
-      current.reviews = Array.isArray(current.reviews) ? current.reviews : [];
+    let review;
+    await this.store.update(this.reviewsPath, (persisted) => {
+      const now = this.nowIso();
+      const current = normalizeReviewsDocument(persisted, { nowIso: now });
+      // Settings may have changed while this request awaited the file lock. Validation,
+      // limits and the publication decision all use the same rules that are persisted here.
+      const currentRules = current.rules || {};
+      if (!currentRules.submissionOpen) throw new PublicApiError(409, "评价提交暂未开放。", "SUBMISSION_CLOSED");
+      if (content.length < Math.max(1, Number(currentRules.minLength || 12))) {
+        throw new PublicApiError(400, "请填写课程、老师、1 至 5 分的评分，并补充更完整的评价内容。", "INVALID_REVIEW");
+      }
+      const options = currentRules.submissionOptions || {};
+      if (options.allowCustomCourse === false && this.validateCourseTitle) this.validateCourseTitle(courseTitle);
+      if (options.allowCustomTeacher === false && this.validateTeacher) this.validateTeacher(courseTitle, teacher);
+      if (!this.consumeSubmission(clientIp, currentRules)) throw new PublicApiError(429, "提交太频繁，请稍后再试。", "RATE_LIMITED");
+      review = {
+        id: this.createId(), courseTitle, teacher, rating,
+        ...(tags.length ? { tags } : {}), content,
+        ...reviewPublicationFields({ rules: currentRules, rulesProvenance: current.rulesProvenance, content, now }),
+        hidden: false,
+        createdAt: now, updatedAt: now,
+        ipHash: this.actorHash(clientIp), userAgent: cleanText(userAgent, 240),
+        ...(Number.isSafeInteger(userId) && userId > 0 ? { user_id: userId } : {}),
+      };
       current.reviews.unshift(review);
       current.updated = this.today();
       return current;
     }, { mode: 0o600 });
-    return { pending: review.status === "pending", reviewId: review.id || "", notify: { title: review.courseTitle, teacher: review.teacher, rating: review.rating, content: review.content } };
+    return { accepted: true, pending: review.publicationState === "pending", reviewId: review.id || "", notify: { title: review.courseTitle, teacher: review.teacher, rating: review.rating, content: review.content } };
   }
 
   listByUser(userId, { page = 1, pageSize = 20 } = {}) {
-    const safePage = Math.max(1, Number(page) || 1);
-    const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new PublicApiError(401, "请先登录。", "AUTH_REQUIRED");
+    const safePage = positiveInteger(page, 1);
+    const safePageSize = positiveInteger(pageSize, 20, 100);
     const data = this.readReviews();
     const reviews = (data.reviews || [])
       .filter((review) => Number(review.user_id) === Number(userId))
@@ -173,7 +165,8 @@ export class ReviewSubmissionService {
         rating: Number(review.rating) || 0,
         tags: Array.isArray(review.tags) ? review.tags : [],
         body: review.content,
-        status: String(review.status || "pending"),
+        status: String(review.publicationState || "pending"),
+        publicationState: String(review.publicationState || "pending"),
         hidden: review.hidden === true,
         created_at: review.createdAt || "",
         updated_at: review.updatedAt || "",

@@ -77,6 +77,12 @@ export const ADMIN_ROUTE_PERMISSIONS = Object.freeze({
   "POST /admin-api/notify-settings": "backup.manage",
   "POST /admin-api/notify-bots": "backup.manage",
   "POST /admin-api/notify-test": "backup.manage",
+  "PATCH /admin-api/feedback/settings": "content.moderate",
+  "GET /admin-api/feedback/:id": "content.read",
+  "PATCH /admin-api/feedback/:id": "content.moderate",
+  "PATCH /admin-api/reviews/settings": "content.edit",
+  "GET /admin-api/reviews/:id": "content.read",
+  "PATCH /admin-api/reviews/:id": "content.edit",
   // 审计与依法调取
   "GET /admin-api/audit": "audit.read",
   "GET /admin-api/law-query": "law.manage",

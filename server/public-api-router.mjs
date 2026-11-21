@@ -19,6 +19,11 @@ export const USER_EVENT_ACTIONS = Object.freeze({
       "POST /api/v1/reviews": "review.submit",
 });
 
+function dependsOnModeratedContent(pathname) {
+  return ["/api/v1/home", "/api/v1/search-index", "/api/v1/search-data", "/api/v1/courses", "/api/v1/review-groups"].includes(pathname)
+    || /^\/api\/v1\/(?:courses|review-groups)\/[^/]+$/.test(pathname);
+}
+
 function responseBody(data) {
   return JSON.stringify({ code: 0, data });
 }
@@ -421,7 +426,7 @@ export function createPublicApiHandler({ service, mpAuthService = null, mpFavori
       }
       }
       }
-      response = { status: 200, body: responseBody(data), options: { cache: req.method === "GET" && !authorizationOf(req) && !url.pathname.startsWith("/api/v1/me") && !url.pathname.startsWith("/api/v1/auth/") && !url.pathname.startsWith("/api/v1/donate/order-status") && url.pathname !== "/api/v1/health", setCookies } };
+      response = { status: 200, body: responseBody(data), options: { cache: req.method === "GET" && !dependsOnModeratedContent(url.pathname) && !authorizationOf(req) && !url.pathname.startsWith("/api/v1/me") && !url.pathname.startsWith("/api/v1/auth/") && !url.pathname.startsWith("/api/v1/donate/order-status") && url.pathname !== "/api/v1/health", setCookies } };
     } catch (error) {
       const statusCode = error instanceof PublicApiError ? error.statusCode : 500;
       const code = error instanceof PublicApiError ? error.code : "INTERNAL_ERROR";

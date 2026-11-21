@@ -66,14 +66,20 @@ test("public router exposes exactly the documented route set and no management r
   }
 });
 
-test("GET cache emits a stable ETag, honors If-None-Match, and health stays no-store", async () => {
+test("non-UGC GET retains ETag while moderated views and health cannot reuse responses", async () => {
   const handler = createPublicApiHandler({ service: serviceFixture(), readBody: async () => ({}), clientIp: () => "actor" });
-  const first = await invoke(handler, "GET", "/api/v1/courses");
+  const first = await invoke(handler, "GET", "/api/v1/guides");
   assert.equal(first.headers["cache-control"].startsWith("public"), true);
   assert.equal(typeof first.headers.etag, "string");
-  const second = await invoke(handler, "GET", "/api/v1/courses", { "if-none-match": first.headers.etag });
+  const second = await invoke(handler, "GET", "/api/v1/guides", { "if-none-match": first.headers.etag });
   assert.equal(second.status, 304);
   assert.equal(second.body, "");
+  for (const route of ["/api/v1/home", "/api/v1/courses", "/api/v1/courses/id", "/api/v1/search-index", "/api/v1/search-data", "/api/v1/review-groups", "/api/v1/review-groups/key"]) {
+    const current = await invoke(handler, "GET", route, { "if-none-match": '"old-cache"' });
+    assert.equal(current.status, 200, route);
+    assert.equal(current.headers["cache-control"], "no-store", route);
+    assert.equal(current.headers.etag, undefined, route);
+  }
   assert.equal((await invoke(handler, "GET", "/api/v1/health")).headers["cache-control"], "no-store");
 });
 
@@ -183,5 +189,5 @@ test("search-data returns compact searchable payload", async () => {
   const data = JSON.parse(response.body).data;
   assert.deepEqual(Object.keys(data), ["courses", "catalog", "groups"]);
   assert.deepEqual(data.courses, [{ id: "uid-1", name: "高等数学A（上）" }]);
-  assert.match(String(response.headers.etag || ""), /^".+"$/);
+  assert.equal(response.headers["cache-control"], "no-store");
 });
